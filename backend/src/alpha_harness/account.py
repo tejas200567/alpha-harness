@@ -133,6 +133,28 @@ class AuthService:
         await self._warm_operators()
         return restored
 
+    async def login_with_cookie(self, cookie_value: str, *, domain: str = "api.worldquantbrain.com") -> SessionInfo:
+        """Sign in by restoring a cookie pasted from an already-authenticated browser.
+
+        Reuses Authenticator.restore, the same path startup uses to reuse a cached
+        session -- a cookie from a browser that has already completed identity
+        verification restores cleanly here without re-triggering that check, per
+        Authenticator.restore's own docstring.
+        """
+        async with self._lock:
+            cookies = [{"name": "t", "value": cookie_value, "domain": domain, "path": "/"}]
+            restored = await self.auth.restore(cookies)
+            if restored is None or not restored.authenticated:
+                self._session = restored or SessionInfo.anonymous(
+                    detail="That cookie is not valid or has expired."
+                )
+                return self._session
+            self._session = restored
+            await self._save_cookies(restored)
+            await self.get_user_profile()
+            await self._warm_operators()
+            return restored
+
     async def login(self, email: str | None = None, password: str | None = None) -> SessionInfo:
         """Sign in, storing the credential if it was supplied here and accepted."""
         async with self._lock:
