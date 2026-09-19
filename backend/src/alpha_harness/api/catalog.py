@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from ..brain.settings_schema import valid_values
 from ..catalog.pyramids import pyramid_grid
+from ..catalog.description_rules import is_metadata_field, build_expression
 from ..catalog.queries import FieldFilter, Tuple4
 from ..catalog.sync import SyncTarget
 from ..schemas import Out, SyncAllRun
@@ -315,6 +316,46 @@ async def facets(
 ) -> CatalogFacets:
     """Categories / subcategories / datasets / types with counts under the other filters."""
     return CatalogFacets.model_validate(await state.queries.facets(scope, filters))
+
+
+class DescAwareCandidate(Out):
+    field_id: str
+    description: str
+    classification: str
+    expression: str
+
+
+class DescAwareSweepResult(Out):
+    candidates: list[DescAwareCandidate]
+    excluded_metadata_count: int
+    total_fields: int
+
+
+@router.post("/description-aware-sweep")
+async def description_aware_sweep(
+    scope: Scope,
+    state: State,
+    filters: Annotated[FieldFilter, Body()] = DEFAULT_FIELD_FILTER,
+) -> DescAwareSweepResult:
+    """Classify each field by its real description, route it to the expression
+    shape suited to what it represents, instead of sweeping one tree uniformly
+    across every field."""
+    page = await state.queries.fields(scope, filters)
+    candidates = []
+    excluded = 0
+    for f in page["results"]:
+        desc = f.get("description") or ""
+        if is_metadata_field(desc):
+            excluded += 1
+            continue
+        expr, reason = build_expression(f["field_id"], desc, f.get("field_type", "MATRIX"))
+        candidates.append(DescAwareCandidate(
+            field_id=f["field_id"], description=desc,
+            classification=reason, expression=expr,
+        ))
+    return DescAwareSweepResult(
+        candidates=candidates, excluded_metadata_count=excluded, total_fields=page["total"],
+    )
 
 
 @router.get("/fields/{field_id}")
