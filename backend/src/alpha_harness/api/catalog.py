@@ -322,6 +322,7 @@ class DescAwareCandidate(Out):
     field_id: str
     description: str
     classification: str
+    template_used: str
     expression: str
 
 
@@ -348,10 +349,10 @@ async def description_aware_sweep(
         if is_metadata_field(desc):
             excluded += 1
             continue
-        expr, reason = build_expression(f["field_id"], desc, f.get("field_type", "MATRIX"))
+        expr, reason, template_used = build_expression(f["field_id"], desc, f.get("field_type", "MATRIX"))
         candidates.append(DescAwareCandidate(
             field_id=f["field_id"], description=desc,
-            classification=reason, expression=expr,
+            classification=reason, template_used=template_used, expression=expr,
         ))
     return DescAwareSweepResult(
         candidates=candidates, excluded_metadata_count=excluded, total_fields=page["total"],
