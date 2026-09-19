@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from ..brain.settings_schema import valid_values
 from ..catalog.pyramids import pyramid_grid
 from ..catalog.description_rules import is_metadata_field, build_expression
+from ..catalog.field_intelligence import field_intelligence
 from ..catalog.queries import FieldFilter, Tuple4
 from ..catalog.sync import SyncTarget
 from ..schemas import Out, SyncAllRun
@@ -357,6 +358,35 @@ async def description_aware_sweep(
     return DescAwareSweepResult(
         candidates=candidates, excluded_metadata_count=excluded, total_fields=page["total"],
     )
+
+
+class FieldPerformanceRecord(Out):
+    scope: str
+    n: int
+    mean_sharpe: float | None
+    mean_fitness: float | None
+
+
+class NeutralizationSignal(Out):
+    neutralization: str
+    n: int
+    mean_sharpe: float | None
+    mean_fitness: float | None
+
+
+class FieldIntelligence(Out):
+    performance: list[FieldPerformanceRecord]
+    neutralization_works: list[NeutralizationSignal]
+    neutralization_fails: list[NeutralizationSignal]
+
+
+@router.get("/fields/{field_id}/intelligence")
+async def field_intelligence_route(field_id: str) -> FieldIntelligence:
+    """Real evidence for one field from the community/paper knowledge graph:
+    Sharpe/fitness history by scope (PERFORMS_IN), and which neutralizations
+    have historically worked or failed for it. Independent of the account's
+    own catalog sync -- this is external, aggregated community evidence."""
+    return FieldIntelligence.model_validate(field_intelligence(field_id))
 
 
 @router.get("/fields/{field_id}")
