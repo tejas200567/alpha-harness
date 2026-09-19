@@ -29,6 +29,7 @@ import {
 } from '@/screens/research-labs/lab-task'
 import { DatasetsPanel, SettingsPanel } from '@/screens/research-labs/task-settings'
 import {
+  descriptionAwareSweep,
   type TemplateLabRequest,
   type TemplateSummary,
   templateLab,
@@ -325,6 +326,13 @@ export function TemplateLabScreen() {
         )}
       </Panel>
 
+      <DescriptionAwarePanel
+        region={draft.region}
+        delay={draft.delay}
+        universe={draft.universe}
+        datasetIds={draft.datasetIds}
+      />
+
       <Builder
         doc={doc}
         blocks={blocks}
@@ -526,5 +534,107 @@ function NameDialog({
         {error ? <ErrorNotice error={error} title="Could not save the template" /> : null}
       </form>
     </Dialog>
+  )
+}
+
+function DescriptionAwarePanel({
+  region,
+  delay,
+  universe,
+  datasetIds,
+}: {
+  region: string
+  delay: number
+  universe: string
+  datasetIds: string[]
+}) {
+  const [search, setSearch] = useState('')
+  const sweep = useMutation({
+    mutationFn: () =>
+      descriptionAwareSweep({
+        region,
+        delay,
+        universe,
+        search: search || undefined,
+        dataset_ids: datasetIds.length ? datasetIds : undefined,
+        limit: 50,
+      }),
+    onError: (error) => toast.error(errorMessage(error)),
+  })
+  const result = sweep.data
+
+  return (
+    <Panel
+      title="Description-Aware Sweep"
+      actions={
+        <Button size="sm" onClick={() => sweep.mutate()} disabled={sweep.isPending}>
+          Run Sweep
+        </Button>
+      }
+    >
+      <Field label="Search fields">
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="e.g. eps, revenue, sentiment"
+        />
+      </Field>
+      {sweep.isError ? (
+        <ErrorNotice error={sweep.error} title="Sweep failed" />
+      ) : sweep.isPending ? (
+        <Skeleton className="h-40" />
+      ) : !result ? (
+        <Empty title="No results yet">Run a sweep to see classified candidates.</Empty>
+      ) : result.candidates.length === 0 ? (
+        <Empty title="No candidates">
+          {result.excludedMetadataCount} metadata fields excluded, {result.totalFields} total fields
+          matched.
+        </Empty>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <div className="text-sm text-muted-foreground">
+            {result.candidates.length} candidates &middot; {result.excludedMetadataCount} metadata
+            fields excluded &middot; {result.totalFields} total fields matched
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left">
+                  <th className="pr-4">Field</th>
+                  <th className="pr-4">Description</th>
+                  <th className="pr-4">Classification</th>
+                  <th className="pr-4">Template</th>
+                  <th className="pr-4">Expression</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {result.candidates.map((c) => (
+                  <tr key={c.fieldId} className="border-t">
+                    <td className="pr-4 font-mono">{c.fieldId}</td>
+                    <td className="pr-4">{c.description}</td>
+                    <td className="pr-4">{c.classification}</td>
+                    <td className="pr-4">{c.templateUsed}</td>
+                    <td className="pr-4 font-mono">{c.expression}</td>
+                    <td>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(c.expression)
+                          toast.success('Copied')
+                        }}
+                      >
+                        Copy
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </Panel>
   )
 }

@@ -42,3 +42,22 @@ export const templateLab = {
   addTask: (body: TemplateLabRequest & { simulations: number }) =>
     http.post<Schemas['AddedTask']>(`${B}/tasks`, body),
 }
+
+/** Catalog-scoped, not Template Lab's own -- classifies fields by their real description
+ * and routes each to the best-matching existing template. Free; queues nothing. */
+export interface DescAwareSweepRequest {
+  region: string
+  delay: number
+  universe: string
+  search?: string
+  dataset_ids?: string[]
+  limit?: number
+}
+
+export const descriptionAwareSweep = (req: DescAwareSweepRequest) => {
+  const { region, delay, universe, ...body } = req
+  return http.post<Schemas['DescAwareSweepResult']>(
+    `/api/catalog/description-aware-sweep${qs({ region, delay, universe })}`,
+    body,
+  )
+}
