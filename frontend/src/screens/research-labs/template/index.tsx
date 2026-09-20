@@ -30,6 +30,7 @@ import {
 import { DatasetsPanel, SettingsPanel } from '@/screens/research-labs/task-settings'
 import {
   descriptionAwareSweep,
+  fieldIntelligence,
   type TemplateLabRequest,
   type TemplateSummary,
   templateLab,
@@ -562,6 +563,12 @@ function DescriptionAwarePanel({
     onError: (error) => toast.error(errorMessage(error)),
   })
   const result = sweep.data
+  const [inspecting, setInspecting] = useState<string | null>(null)
+  const evidence = useQuery({
+    queryKey: ['field-intelligence', inspecting],
+    queryFn: () => fieldIntelligence(inspecting as string),
+    enabled: inspecting !== null,
+  })
 
   return (
     <Panel
@@ -627,6 +634,9 @@ function DescriptionAwarePanel({
                       >
                         Copy
                       </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setInspecting(c.fieldId)}>
+                        Evidence
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -635,6 +645,45 @@ function DescriptionAwarePanel({
           </div>
         </div>
       )}
+      <Dialog
+        open={inspecting !== null}
+        onOpenChange={(open) => !open && setInspecting(null)}
+        title={inspecting ?? ''}
+      >
+        {evidence.isPending ? (
+          <Skeleton className="h-24" />
+        ) : evidence.isError ? (
+          <ErrorNotice error={evidence.error} title="Could not load evidence" />
+        ) : !evidence.data || evidence.data.performance.length === 0 ? (
+          <Empty title="No evidence yet">No community graph data for this field.</Empty>
+        ) : (
+          <div className="flex flex-col gap-3 p-4 text-sm">
+            <div>
+              <div className="font-medium">Performance by scope</div>
+              {evidence.data.performance.map((p) => (
+                <div key={p.scope} className="flex justify-between">
+                  <span>{p.scope}</span>
+                  <span>
+                    sharpe {p.meanSharpe?.toFixed(2) ?? '-'} &middot; fitness{' '}
+                    {p.meanFitness?.toFixed(2) ?? '-'} &middot; n={p.n}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {evidence.data.neutralizationWorks.length > 0 && (
+              <div>
+                <div className="font-medium">Neutralizations that work</div>
+                {evidence.data.neutralizationWorks.map((w) => (
+                  <div key={w.neutralization} className="flex justify-between">
+                    <span>{w.neutralization}</span>
+                    <span>n={w.n}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </Dialog>
     </Panel>
   )
 }

@@ -61,3 +61,8 @@ export const descriptionAwareSweep = (req: DescAwareSweepRequest) => {
     body,
   )
 }
+
+export type FieldIntelligence = Schemas['FieldIntelligence']
+
+export const fieldIntelligence = (fieldId: string) =>
+  http.get<FieldIntelligence>(`/api/catalog/fields/${fieldId}/intelligence`)

@@ -314,6 +314,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/catalog/fields/{field_id}/intelligence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Field Intelligence Route
+         * @description Real evidence for one field from the community/paper knowledge graph:
+         *     Sharpe/fitness history by scope (PERFORMS_IN), and which neutralizations
+         *     have historically worked or failed for it. Independent of the account's
+         *     own catalog sync -- this is external, aggregated community evidence.
+         */
+        get: operations["field_intelligence_route_api_catalog_fields__field_id__intelligence_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/catalog/fields/{field_id}": {
         parameters: {
             query?: never;
@@ -2608,6 +2631,15 @@ export interface components {
              */
             offset: number;
         };
+        /** FieldIntelligence */
+        FieldIntelligence: {
+            /** Performance */
+            performance: components["schemas"]["FieldPerformanceRecord"][];
+            /** Neutralizationworks */
+            neutralizationWorks: components["schemas"]["NeutralizationSignal"][];
+            /** Neutralizationfails */
+            neutralizationFails: components["schemas"]["NeutralizationSignal"][];
+        };
         /** FieldPage */
         FieldPage: {
             /** Total */
@@ -2618,6 +2650,17 @@ export interface components {
             offset: number;
             /** Results */
             results: components["schemas"]["DataFieldRow"][];
+        };
+        /** FieldPerformanceRecord */
+        FieldPerformanceRecord: {
+            /** Scope */
+            scope: string;
+            /** N */
+            n: number;
+            /** Meansharpe */
+            meanSharpe: number | null;
+            /** Meanfitness */
+            meanFitness: number | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -3017,6 +3060,17 @@ export interface components {
             chat: string;
             /** Deep */
             deep: string;
+        };
+        /** NeutralizationSignal */
+        NeutralizationSignal: {
+            /** Neutralization */
+            neutralization: string;
+            /** N */
+            n: number;
+            /** Meansharpe */
+            meanSharpe: number | null;
+            /** Meanfitness */
+            meanFitness: number | null;
         };
         /** OperatorsRead */
         OperatorsRead: {
@@ -4680,6 +4734,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DescAwareSweepResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    field_intelligence_route_api_catalog_fields__field_id__intelligence_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                field_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldIntelligence"];
                 };
             };
             /** @description Validation Error */
