@@ -68,7 +68,7 @@ export const fieldIntelligence = (fieldId: string) =>
   http.get<FieldIntelligence>(`/api/catalog/fields/${fieldId}/intelligence`)
 
 export interface DescAwareTaskCandidate {
-  fieldId: string
+  field_id: string
   expression: string
 }
 

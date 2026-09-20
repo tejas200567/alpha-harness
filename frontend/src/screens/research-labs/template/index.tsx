@@ -576,7 +576,7 @@ function DescriptionAwarePanel({
     mutationFn: () =>
       descriptionAwareSweepTask(region, delay, universe, {
         candidates: (result?.candidates ?? []).map((c) => ({
-          fieldId: c.fieldId,
+          field_id: c.fieldId,
           expression: c.expression,
         })),
       }),
