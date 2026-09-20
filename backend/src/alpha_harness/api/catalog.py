@@ -12,6 +12,12 @@ from ..brain.settings_schema import valid_values
 from ..catalog.pyramids import pyramid_grid
 from ..catalog.description_rules import is_metadata_field, build_expression
 from ..catalog.field_intelligence import field_intelligence
+from ..brain.schemas import SimulationRequest, SimulationSettings
+from ..db.models import utcnow
+from ..engine.packer import MAX_BATCH
+from ..labs.launch import AddedTask, add_study
+from ..labs.params import DESC_AWARE_SAMPLER, DescAwareParams
+from ..tools import settings_sampler
 from ..catalog.queries import FieldFilter, Tuple4
 from ..catalog.sync import SyncTarget
 from ..schemas import Out, SyncAllRun
@@ -387,6 +393,68 @@ async def field_intelligence_route(field_id: str) -> FieldIntelligence:
     have historically worked or failed for it. Independent of the account's
     own catalog sync -- this is external, aggregated community evidence."""
     return FieldIntelligence.model_validate(field_intelligence(field_id))
+
+
+class DescAwareCandidateInput(BaseModel):
+    field_id: str
+    expression: str
+
+
+class DescAwareTaskRequest(BaseModel):
+    candidates: list[DescAwareCandidateInput]
+    decay: int = 6
+    truncation: float = 0.08
+    neutralization: str = "NONE"
+    cores: int = 4
+
+
+@router.post("/description-aware-sweep/task", status_code=201)
+async def description_aware_sweep_task(
+    scope: Scope, body: DescAwareTaskRequest, state: State
+) -> AddedTask:
+    """Run every candidate from a description-aware sweep as a real, fixed-list task.
+
+    Reuses Settings Sampler's seed_trials/refill machinery as-is: both already implement
+    "every simulation is written up front, so nothing is sampled" -- exactly this shape,
+    just for pre-classified fields instead of one alpha across markets.
+    """
+    if not body.candidates:
+        raise refuse(422, "no_candidates", "No candidates to run.")
+    if body.cores > state.engine.slots:
+        raise refuse(
+            422, "too_many_cores",
+            f"The engine has {state.engine.slots} slots, so a task cannot hold {body.cores}.",
+        )
+
+    requests = [
+        SimulationRequest(
+            settings=SimulationSettings(
+                region=scope.region, universe=scope.universe, delay=scope.delay,
+                neutralization=body.neutralization, decay=body.decay, truncation=body.truncation,
+                max_trade="OFF", max_position="OFF",
+            ),
+            regular=c.expression,
+        )
+        for c in body.candidates
+    ]
+    row = await add_study(
+        state,
+        now=utcnow(),
+        lab="Description-Aware Sweep",
+        prefix="descaware",
+        sampler=DESC_AWARE_SAMPLER,
+        params=DescAwareParams(
+            region=scope.region, delay=scope.delay,
+            candidate_count=len(requests), cores=body.cores,
+        ),
+        objective="sharpe",
+        simulations=len(requests),
+        batch_size=(body.cores + 1) * MAX_BATCH,
+        template_source="description-aware-sweep",
+        template_name=f"Description-Aware Sweep · {scope.region}/{scope.universe}",
+        seeds=settings_sampler.seed_trials(requests),
+    )
+    return AddedTask(id=row.id, name=row.name)
 
 
 @router.get("/fields/{field_id}")

@@ -24,6 +24,8 @@ TEMPLATE_SAMPLER = "template"
 POWER_POOL_SAMPLER = "power-pool"
 #: Studies that re-run one proven expression across markets and settings (tools.settings_sampler).
 SETTINGS_SAMPLER = "settings-sampler"
+#: Studies that run a fixed list of pre-built expressions, one per field (catalog.description_rules).
+DESC_AWARE_SAMPLER = "description-aware"
 #: Studies that are research-lab tasks, run only from the Tasks tab, by their lab's name.
 TASK_SAMPLERS = {
     SEARCH_SAMPLER: "Search Lab",
@@ -31,6 +33,7 @@ TASK_SAMPLERS = {
     GA_SAMPLER: "Evolution Lab",
     POWER_POOL_SAMPLER: "LLM Power Pool Lab",
     SETTINGS_SAMPLER: "Settings Sampler",
+    DESC_AWARE_SAMPLER: "Description-Aware Sweep",
 }
 
 
@@ -131,12 +134,19 @@ class SettingsParams(TaskParams):
     )
 
 
+class DescAwareParams(TaskParams):
+    """Description-Aware Sweep: every simulation is a pre-built expression, so nothing is sampled."""
+
+    candidate_count: int = 0
+
+
 BY_SAMPLER: dict[str, type[TaskParams]] = {
     SEARCH_SAMPLER: SearchParams,
     TEMPLATE_SAMPLER: TemplateParams,
     GA_SAMPLER: EvolutionParams,
     POWER_POOL_SAMPLER: PowerPoolParams,
     SETTINGS_SAMPLER: SettingsParams,
+    DESC_AWARE_SAMPLER: DescAwareParams,
 }
 
 

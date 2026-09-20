@@ -19,6 +19,7 @@ from ..db.models import SimStatus, SimulationRecord, Study, StudyStatus, Trial, 
 from . import ga, search, template
 from .objectives import StudyNotFoundError
 from .params import (
+    DESC_AWARE_SAMPLER,
     GA_SAMPLER,
     POWER_POOL_SAMPLER,
     SETTINGS_SAMPLER,
@@ -207,6 +208,10 @@ async def advance(optimizer: Optimizer, study_id: int) -> int:
         return await power_pool.refill(optimizer, row, want, waiting)
     if row.sampler == SETTINGS_SAMPLER:
         from ..tools import settings_sampler  # same cycle: it builds on this module
+
+        return await settings_sampler.refill(optimizer, row, want, waiting)
+    if row.sampler == DESC_AWARE_SAMPLER:
+        from ..tools import settings_sampler  # generic seed/refill, reused as-is
 
         return await settings_sampler.refill(optimizer, row, want, waiting)
     if want <= 0:
