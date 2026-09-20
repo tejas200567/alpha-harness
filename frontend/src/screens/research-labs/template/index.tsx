@@ -34,6 +34,7 @@ import {
   fieldIntelligence,
   type TemplateLabRequest,
   type TemplateSummary,
+  taskPowerPoolEligibility,
   templateLab,
 } from '@/screens/research-labs/template/api'
 import type { Blocks, TemplateDoc } from '@/screens/research-labs/template/tree'
@@ -557,8 +558,8 @@ function DescriptionAwarePanel({
         region,
         delay,
         universe,
-        search: search || undefined,
-        dataset_ids: datasetIds.length ? datasetIds : undefined,
+        ...(search ? { search } : {}),
+        ...(datasetIds.length ? { dataset_ids: datasetIds } : {}),
         limit: 50,
       }),
     onError: (error) => toast.error(errorMessage(error)),
