@@ -337,6 +337,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/catalog/description-aware-sweep/task": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Description Aware Sweep Task
+         * @description Run every candidate from a description-aware sweep as a real, fixed-list task.
+         *
+         *     Reuses Settings Sampler's seed_trials/refill machinery as-is: both already implement
+         *     "every simulation is written up front, so nothing is sampled" -- exactly this shape,
+         *     just for pre-classified fields instead of one alpha across markets.
+         */
+        post: operations["description_aware_sweep_task_api_catalog_description_aware_sweep_task_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/catalog/fields/{field_id}": {
         parameters: {
             query?: never;
@@ -515,6 +539,29 @@ export interface paths {
          *     for the in-sample period, so they come from the cache unless ``refresh``.
          */
         get: operations["page_api_alphas__alpha_id__page_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/alphas/tasks/{study_id}/power-pool-eligibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Task Power Pool Eligibility
+         * @description Which Alphas from a finished task actually clear Power Pool's real bar.
+         *
+         *     Reuses page() directly -- the same AlphaInfo the Alpha detail screen already builds,
+         *     so power_pool_operators/data_fields/checks are computed exactly once, the same way.
+         */
+        get: operations["task_power_pool_eligibility_api_alphas_tasks__study_id__power_pool_eligibility_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2404,6 +2451,13 @@ export interface components {
             /** Expression */
             expression: string;
         };
+        /** DescAwareCandidateInput */
+        DescAwareCandidateInput: {
+            /** Field Id */
+            field_id: string;
+            /** Expression */
+            expression: string;
+        };
         /** DescAwareSweepResult */
         DescAwareSweepResult: {
             /** Candidates */
@@ -2412,6 +2466,31 @@ export interface components {
             excludedMetadataCount: number;
             /** Totalfields */
             totalFields: number;
+        };
+        /** DescAwareTaskRequest */
+        DescAwareTaskRequest: {
+            /** Candidates */
+            candidates: components["schemas"]["DescAwareCandidateInput"][];
+            /**
+             * Decay
+             * @default 6
+             */
+            decay: number;
+            /**
+             * Truncation
+             * @default 0.08
+             */
+            truncation: number;
+            /**
+             * Neutralization
+             * @default NONE
+             */
+            neutralization: string;
+            /**
+             * Cores
+             * @default 4
+             */
+            cores: number;
         };
         /** DropResult */
         DropResult: {
@@ -3191,6 +3270,27 @@ export interface components {
             curve: number[];
             /** Dates */
             dates: string[];
+        };
+        /** PowerPoolCandidate */
+        PowerPoolCandidate: {
+            /** Alphaid */
+            alphaId: string;
+            /** Sharpe */
+            sharpe: number | null;
+            /** Operators */
+            operators: number | null;
+            /** Fields */
+            fields: number | null;
+            /** Turnoverpass */
+            turnoverPass: boolean | null;
+            /** Subuniversepass */
+            subUniversePass: boolean | null;
+            /** Robustuniversepass */
+            robustUniversePass: boolean | null;
+            /** Powerpoolcorrelation */
+            powerPoolCorrelation: string | null;
+            /** Eligibleonknowncriteria */
+            eligibleOnKnownCriteria: boolean;
         };
         /** PowerPoolModel */
         PowerPoolModel: {
@@ -4020,6 +4120,15 @@ export interface components {
             /** Simulations */
             simulations?: number | null;
         };
+        /** TaskPowerPoolResult */
+        TaskPowerPoolResult: {
+            /** Candidates */
+            candidates: components["schemas"]["PowerPoolCandidate"][];
+            /** Checked */
+            checked: number;
+            /** Skipped */
+            skipped: number;
+        };
         /** TaskRemoved */
         TaskRemoved: {
             /** Removed */
@@ -4778,6 +4887,46 @@ export interface operations {
             };
         };
     };
+    description_aware_sweep_task_api_catalog_description_aware_sweep_task_post: {
+        parameters: {
+            query: {
+                /** @description e.g. USA, EUR, GLB */
+                region: string;
+                delay: number;
+                /** @description e.g. TOP3000 */
+                universe: string;
+                instrumentType?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DescAwareTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddedTask"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     field_detail_api_catalog_fields__field_id__get: {
         parameters: {
             query: {
@@ -5027,6 +5176,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AlphaView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    task_power_pool_eligibility_api_alphas_tasks__study_id__power_pool_eligibility_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskPowerPoolResult"];
                 };
             };
             /** @description Validation Error */

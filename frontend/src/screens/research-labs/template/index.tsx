@@ -572,6 +572,8 @@ function DescriptionAwarePanel({
   })
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [lastTaskId, setLastTaskId] = useState<number | null>(null)
+  const [showEligibility, setShowEligibility] = useState(false)
   const addTask = useMutation({
     mutationFn: () =>
       descriptionAwareSweepTask(region, delay, universe, {
@@ -580,7 +582,8 @@ function DescriptionAwarePanel({
           expression: c.expression,
         })),
       }),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      setLastTaskId(data.id)
       void queryClient.invalidateQueries({ queryKey: ['lab-tasks'] })
       toast.success('Task Added', {
         action: {
@@ -590,6 +593,11 @@ function DescriptionAwarePanel({
       })
     },
     onError: (error) => toast.error(errorMessage(error)),
+  })
+  const eligibility = useQuery({
+    queryKey: ['power-pool-eligibility', lastTaskId],
+    queryFn: () => taskPowerPoolEligibility(lastTaskId as number),
+    enabled: showEligibility && lastTaskId !== null,
   })
 
   return (
@@ -628,6 +636,11 @@ function DescriptionAwarePanel({
           <Button size="sm" onClick={() => addTask.mutate()} disabled={addTask.isPending}>
             Add All as Task
           </Button>
+          {lastTaskId !== null && (
+            <Button size="sm" variant="ghost" onClick={() => setShowEligibility(true)}>
+              Check Power Pool Eligibility
+            </Button>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -706,6 +719,40 @@ function DescriptionAwarePanel({
                 ))}
               </div>
             )}
+          </div>
+        )}
+      </Dialog>
+      <Dialog
+        open={showEligibility}
+        onOpenChange={setShowEligibility}
+        title="Power Pool Eligibility"
+      >
+        {eligibility.isPending ? (
+          <Skeleton className="h-24" />
+        ) : eligibility.isError ? (
+          <ErrorNotice error={eligibility.error} title="Could not check eligibility" />
+        ) : !eligibility.data || eligibility.data.candidates.length === 0 ? (
+          <Empty title="No results yet">Nothing to check.</Empty>
+        ) : (
+          <div className="flex flex-col gap-2 p-4 text-sm">
+            <div className="text-muted-foreground">
+              {eligibility.data.checked} checked, {eligibility.data.skipped} skipped
+            </div>
+            {eligibility.data.candidates.map((c) => (
+              <div key={c.alphaId} className="flex flex-col gap-1 border-t pt-2">
+                <div className="flex justify-between font-mono">
+                  <span>{c.alphaId}</span>
+                  <span className={c.eligibleOnKnownCriteria ? 'text-green-500' : 'text-red-500'}>
+                    {c.eligibleOnKnownCriteria ? 'Eligible' : 'Not eligible'}
+                  </span>
+                </div>
+                <div className="text-muted-foreground">
+                  sharpe {c.sharpe?.toFixed(2) ?? '-'} &middot; ops {c.operators ?? '-'} &middot;
+                  fields {c.fields ?? '-'} &middot; pp-correlation{' '}
+                  {c.powerPoolCorrelation ?? 'pending'}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </Dialog>

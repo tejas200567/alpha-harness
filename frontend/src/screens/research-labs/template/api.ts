@@ -87,3 +87,8 @@ export const descriptionAwareSweepTask = (
     `/api/catalog/description-aware-sweep/task${qs({ region, delay, universe })}`,
     body,
   )
+
+export type TaskPowerPoolResult = Schemas['TaskPowerPoolResult']
+
+export const taskPowerPoolEligibility = (studyId: number) =>
+  http.get<TaskPowerPoolResult>(`/api/alphas/tasks/${studyId}/power-pool-eligibility`)
