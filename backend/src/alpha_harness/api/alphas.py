@@ -387,6 +387,99 @@ async def page(alpha_id: str, state: State, refresh: Refresh = False) -> AlphaVi
     )
 
 
+class PowerPoolCandidate(Out):
+    alpha_id: str
+    sharpe: float | None
+    operators: int | None
+    fields: int | None
+    turnover_pass: bool | None
+    sub_universe_pass: bool | None
+    robust_universe_pass: bool | None
+    #: None when BRAIN has not computed it yet -- runs only with Check Submission.
+    power_pool_correlation: str | None
+    #: The six criteria this endpoint CAN check automatically. Power Pool correlation
+    #: (< 0.5, or Sharpe 10% above the most correlated Alpha) still needs Check
+    #: Submission run manually -- shown separately above, never folded into this.
+    eligible_on_known_criteria: bool
+
+
+class TaskPowerPoolResult(Out):
+    candidates: list[PowerPoolCandidate]
+    checked: int
+    skipped: int
+
+
+@router.get("/tasks/{study_id}/power-pool-eligibility")
+async def task_power_pool_eligibility(study_id: int, state: State) -> TaskPowerPoolResult:
+    """Which Alphas from a finished task actually clear Power Pool's real bar.
+
+    Reuses page() directly -- the same AlphaInfo the Alpha detail screen already builds,
+    so power_pool_operators/data_fields/checks are computed exactly once, the same way.
+    """
+    async with state.db.session() as session:
+        alpha_ids = (
+            await session.scalars(
+                select(Trial.alpha_id).where(
+                    Trial.study_id == study_id, Trial.alpha_id.is_not(None)
+                )
+            )
+        ).all()
+
+    candidates: list[PowerPoolCandidate] = []
+    skipped = 0
+    for alpha_id in alpha_ids:
+        try:
+            view = await page(str(alpha_id), state)
+        except Exception:
+            skipped += 1
+            continue
+        info = view.alpha
+        by_name = {str(c.get("name", "")).upper(): c for c in info.checks}
+
+        sharpe = by_name.get("LOW_SHARPE", {}).get("value")
+        ops = info.power_pool_operators
+        fields = len(info.data_fields) if info.data_fields is not None else None
+
+        turnover_pass = all(
+            by_name.get(n, {}).get("result") == "PASS"
+            for n in ("LOW_TURNOVER", "HIGH_TURNOVER")
+            if n in by_name
+        )
+        sub_universe_pass = by_name.get("LOW_SUB_UNIVERSE_SHARPE", {}).get("result") != "FAIL"
+        robust_key = next(
+            (k for k in by_name if k.startswith("LOW_ROBUST_UNIVERSE_SHARPE")), None
+        )
+        robust_pass = by_name.get(robust_key, {}).get("result") != "FAIL" if robust_key else True
+
+        pp_corr_key = next(
+            (k for k in by_name if "POWER_POOL" in k and "CORREL" in k), None
+        )
+        pp_correlation = by_name.get(pp_corr_key, {}).get("result") if pp_corr_key else None
+
+        eligible = (
+            sharpe is not None and sharpe >= 1.0
+            and ops is not None and ops <= 8
+            and fields is not None and fields <= 3
+            and turnover_pass and sub_universe_pass and robust_pass
+        )
+        candidates.append(
+            PowerPoolCandidate(
+                alpha_id=str(alpha_id),
+                sharpe=sharpe,
+                operators=ops,
+                fields=fields,
+                turnover_pass=turnover_pass,
+                sub_universe_pass=sub_universe_pass,
+                robust_universe_pass=robust_pass,
+                power_pool_correlation=pp_correlation,
+                eligible_on_known_criteria=eligible,
+            )
+        )
+    return TaskPowerPoolResult(
+        candidates=candidates, checked=len(candidates), skipped=skipped
+    )
+
+
 @router.patch("/{alpha_id}")
 async def update_properties(alpha_id: str, body: AlphaProperties, state: State) -> AlphaInfo:
     """Save the Alpha's name, category, colour, tags and description on BRAIN.
