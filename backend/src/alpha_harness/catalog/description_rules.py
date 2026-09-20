@@ -33,7 +33,7 @@ CLASSIFICATION_RULES = [
     (r"\bprice\b|\b52.?week\b|\bhigh\b|\blow\b", "price-type"),
     (r"\bnet\b|\btotal\b|\baggregat|\bassets\b|\bdebt\b|\bequity\b|\bexpense\b|\bincome\b"
      r"|\brevenue\b|\bcash flow\b|\bimpairment\b|\bwrite.?down\b|\bwrite.?off\b"
-     r"|\binterest\b|\bsum\b|\breduction\b|\bffo\b|\bminority\b", "level-fundamental-type"),
+     r"|\binterest\b|\bsum\b|\breduction\b|\bffo\b|\bminority\b|\beps\b|\bearnings per share\b", "level-fundamental-type"),
     (r"\bdeviation\b|\berror\b|\bmad\b|\bmae\b", "diagnostic-type"),
 ]
 DEFAULT_REASON = "default"
