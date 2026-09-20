@@ -30,6 +30,7 @@ import {
 import { DatasetsPanel, SettingsPanel } from '@/screens/research-labs/task-settings'
 import {
   descriptionAwareSweep,
+  descriptionAwareSweepTask,
   fieldIntelligence,
   type TemplateLabRequest,
   type TemplateSummary,
@@ -569,6 +570,27 @@ function DescriptionAwarePanel({
     queryFn: () => fieldIntelligence(inspecting as string),
     enabled: inspecting !== null,
   })
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const addTask = useMutation({
+    mutationFn: () =>
+      descriptionAwareSweepTask(region, delay, universe, {
+        candidates: (result?.candidates ?? []).map((c) => ({
+          fieldId: c.fieldId,
+          expression: c.expression,
+        })),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['lab-tasks'] })
+      toast.success('Task Added', {
+        action: {
+          label: 'Open Tasks',
+          onClick: () => void navigate({ to: '/tasks' }),
+        },
+      })
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  })
 
   return (
     <Panel
@@ -603,6 +625,9 @@ function DescriptionAwarePanel({
             {result.candidates.length} candidates &middot; {result.excludedMetadataCount} metadata
             fields excluded &middot; {result.totalFields} total fields matched
           </div>
+          <Button size="sm" onClick={() => addTask.mutate()} disabled={addTask.isPending}>
+            Add All as Task
+          </Button>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

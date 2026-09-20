@@ -66,3 +66,24 @@ export type FieldIntelligence = Schemas['FieldIntelligence']
 
 export const fieldIntelligence = (fieldId: string) =>
   http.get<FieldIntelligence>(`/api/catalog/fields/${fieldId}/intelligence`)
+
+export interface DescAwareTaskCandidate {
+  fieldId: string
+  expression: string
+}
+
+export interface DescAwareTaskRequest {
+  candidates: DescAwareTaskCandidate[]
+  cores?: number
+}
+
+export const descriptionAwareSweepTask = (
+  region: string,
+  delay: number,
+  universe: string,
+  body: DescAwareTaskRequest,
+) =>
+  http.post<{ id: number; name: string }>(
+    `/api/catalog/description-aware-sweep/task${qs({ region, delay, universe })}`,
+    body,
+  )
