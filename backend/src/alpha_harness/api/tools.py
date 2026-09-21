@@ -24,6 +24,7 @@ from ..labs.params import SETTINGS_SAMPLER, SettingsParams
 from ..schemas import Out
 from ..tools import settings_sampler, submission_planner
 from ..vault.yields import is_promising, is_submittable
+from .alphas import page as alpha_page
 from .deps import State, refuse
 
 router = APIRouter(prefix="/api/tools", tags=["tools"])
@@ -309,6 +310,92 @@ async def plan_submissions(body: PlanRequest, state: State) -> PlannedPortfolio:
         )
     # Every submission on the account, not just the ones these tasks produced. BRAIN measures
     # the ceiling against all of them, so a plan that ignores one is a plan it will refuse.
+    locked_ids = sorted(marked)
+    days = await state.alphas.daily_pnl(list(dict.fromkeys([*alpha_ids, *locked_ids])))
+    found = await asyncio.to_thread(submission_planner.plan, days, alpha_ids, locked_ids=locked_ids)
+    if not found["size"]:
+        raise refuse(422, *_why(found, len(alpha_ids)))
+    return PlannedPortfolio.model_validate(found)
+
+
+async def _power_pool_candidates(state: State, task_ids: list[int]) -> tuple[list[str], list[str]]:
+    """Every Alpha those tasks produced that genuinely clears Power Pool's bar.
+
+    Same six checkable criteria as /alphas/tasks/{id}/power-pool-eligibility, generalised
+    to several tasks at once, and a degenerate-alpha never counts whatever its numbers say.
+    Returns (eligible_ids, flagged_ids) -- flagged is reported so a plan that comes back
+    short says why, rather than just "nothing to plan".
+    """
+    async with state.db.session() as session:
+        rows = (
+            await session.execute(
+                select(Trial.alpha_id).where(
+                    Trial.study_id.in_(task_ids),
+                    Trial.state == TrialState.COMPLETE,
+                    Trial.alpha_id.is_not(None),
+                )
+            )
+        ).all()
+    alpha_ids = list(dict.fromkeys(str(r[0]) for r in rows))
+
+    eligible: list[str] = []
+    flagged: list[str] = []
+    for alpha_id in alpha_ids:
+        try:
+            view = await alpha_page(alpha_id, state)
+        except Exception:
+            continue
+        info = view.alpha
+        by_name = {str(c.get("name", "")).upper(): c for c in info.checks}
+        sharpe = by_name.get("LOW_SHARPE", {}).get("value")
+        ops = info.power_pool_operators
+        fields = len(info.data_fields) if info.data_fields is not None else None
+        turnover_pass = all(
+            by_name.get(n, {}).get("result") == "PASS"
+            for n in ("LOW_TURNOVER", "HIGH_TURNOVER")
+            if n in by_name
+        )
+        sub_universe_pass = by_name.get("LOW_SUB_UNIVERSE_SHARPE", {}).get("result") != "FAIL"
+        robust_key = next(
+            (k for k in by_name if k.startswith("LOW_ROBUST_UNIVERSE_SHARPE")), None
+        )
+        robust_pass = by_name.get(robust_key, {}).get("result") != "FAIL" if robust_key else True
+        flag = info.degenerate_warning
+        good = (
+            sharpe is not None and sharpe >= 1.0
+            and ops is not None and ops <= 8
+            and fields is not None and fields <= 3
+            and turnover_pass and sub_universe_pass and robust_pass
+            and flag is None
+        )
+        if good:
+            eligible.append(alpha_id)
+        elif flag is not None:
+            flagged.append(alpha_id)
+    return eligible, flagged
+
+
+@router.post("/submission-planner/power-pool-plan")
+async def plan_power_pool_submissions(body: PlanRequest, state: State) -> PlannedPortfolio:
+    """Which Power-Pool-eligible Alphas to submit and in what order.
+
+    Same beam-search machinery as /submission-planner/plan -- Power Pool's own correlation
+    ceiling is 0.5, identical to submission_planner.CEILING -- but sourced from Power Pool
+    eligibility (Sharpe>=1.0, ops<=8, fields<=3, the three performance tests, and never a
+    degenerate-flagged Alpha) instead of the stricter REGULAR is_submittable() gate.
+    """
+    alpha_ids, flagged = await _power_pool_candidates(state, body.task_ids)
+    if not alpha_ids:
+        raise refuse(
+            422,
+            "no_candidates",
+            f"Those tasks produced no Power-Pool-eligible Alphas ({len(flagged)} flagged as "
+            "implausible, the rest failed a checkable criterion)."
+            if flagged
+            else "Those tasks produced no Power-Pool-eligible Alphas.",
+        )
+    async with state.db.session() as session:
+        marked = {str(a) for a in (await session.scalars(select(Submission.alpha_id))).all()}
     locked_ids = sorted(marked)
     days = await state.alphas.daily_pnl(list(dict.fromkeys([*alpha_ids, *locked_ids])))
     found = await asyncio.to_thread(submission_planner.plan, days, alpha_ids, locked_ids=locked_ids)
