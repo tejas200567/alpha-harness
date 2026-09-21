@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re as _re
 from collections import defaultdict
 from datetime import datetime
 from typing import Annotated, Any
@@ -9,6 +10,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from ..brain.filters import AlphaQuery, Filter
 from ..brain.schemas import SimulationRequest, SimulationSettings
 from ..brain.settings_schema import valid_values
 from ..catalog.description_rules import build_expression, is_metadata_field
@@ -24,6 +26,7 @@ from ..labs.params import DESC_AWARE_SAMPLER, DescAwareParams
 from ..schemas import Out, SyncAllRun
 from ..tools import settings_sampler
 from ..vault.store import SUBMITTED
+from .alphas import AlphaStats, degenerate_warning
 from .deps import State, refuse
 
 router = APIRouter(prefix="/api/catalog", tags=["catalog"])
@@ -491,6 +494,235 @@ async def pool_coverage(scope: Scope, state: State) -> PoolCoverageResult:
     categories.sort(key=lambda c: -c.opportunity)
 
     return PoolCoverageResult(categories=categories, pool_size=pool_size, unreadable=unreadable)
+
+
+class HighImpactCandidate(DescAwareCandidate):
+    category_id: str
+    category_name: str | None
+    #: This category's opportunity score at the time of the sweep (see pool_coverage).
+    opportunity: float
+
+
+class HighImpactBatchResult(Out):
+    candidates: list[HighImpactCandidate]
+    #: The categories actually swept, ranked, for context on why these and not others.
+    categories_used: list[CategoryPoolCoverage]
+    pool_size: int
+
+
+@router.get("/high-impact-batch")
+async def high_impact_batch(
+    scope: Scope,
+    state: State,
+    top_n: int = 6,
+    per_category_limit: int = 20,
+) -> HighImpactBatchResult:
+    """The whole opportunity pipeline in one call: coverage gap x pyramid multiplier,
+    ranked, swept by real category_id for the top opportunities, ready for
+    /description-aware-sweep/task. A preview -- nothing is simulated here.
+    """
+    coverage = await pool_coverage(scope, state)
+    top = [c for c in coverage.categories if c.opportunity > 0][:top_n]
+
+    candidates: list[HighImpactCandidate] = []
+    for c in top:
+        result = await description_aware_sweep(
+            scope,
+            state,
+            FieldFilter(
+                category_ids=[c.category_id],
+                sort_by="alpha_count",
+                sort_desc=False,
+                limit=per_category_limit,
+            ),
+        )
+        candidates.extend(
+            HighImpactCandidate(
+                field_id=cand.field_id,
+                description=cand.description,
+                classification=cand.classification,
+                template_used=cand.template_used,
+                expression=cand.expression,
+                category_id=c.category_id,
+                category_name=c.category_name,
+                opportunity=c.opportunity,
+            )
+            for cand in result.candidates
+        )
+
+    return HighImpactBatchResult(
+        candidates=candidates, categories_used=top, pool_size=coverage.pool_size
+    )
+
+
+_STOPWORDS = frozenset({
+    "a", "an", "the", "of", "for", "in", "on", "to", "and", "or", "is", "are",
+    "this", "that", "with", "as", "by", "from", "its", "at", "be", "vs", "per",
+})
+
+#: Universal auxiliary fields nearly every template reads (as a denominator, a size
+#: weight, or a scaling factor) -- never the actual signal on their own. Found live:
+#: an alpha's data_fields() sorts alphabetically, so an expression using both "cap"
+#: and a real signal field picked "cap" purely because it sorts first -- an
+#: infrastructure input, not the proven pattern.
+_AUXILIARY_FIELDS = frozenset({
+    "cap", "close", "open", "high", "low", "volume", "returns", "vwap",
+    "adv20", "sharesout", "dividend", "split",
+})
+
+
+def _tokenize(text: str) -> set[str]:
+    words = _re.findall(r"[a-z]+", (text or "").lower())
+    return {w for w in words if w not in _STOPWORDS and len(w) > 2}
+
+
+def _jaccard(a: set[str], b: set[str]) -> float:
+    if not a or not b:
+        return 0.0
+    union = len(a | b)
+    return len(a & b) / union if union else 0.0
+
+
+class ProvenPatternCandidate(Out):
+    proven_alpha_id: str
+    proven_field_id: str
+    proven_fitness: float | None
+    proven_expression: str
+    matched_field_id: str
+    matched_field_description: str | None
+    #: Jaccard similarity between the two fields' description text, 0-1.
+    similarity: float
+    #: The proven expression with proven_field_id replaced by matched_field_id --
+    #: the same construction, cloned onto an unused but similarly-described field.
+    new_expression: str
+
+
+class ProvenPatternBatchResult(Out):
+    candidates: list[ProvenPatternCandidate]
+    proven_alphas_examined: int
+    pool_size: int
+
+
+@router.get("/proven-pattern-batch")
+async def proven_pattern_batch(
+    scope: Scope,
+    state: State,
+    min_fitness: float = 1.5,
+    similarity_threshold: float = 0.25,
+    top_n: int = 10,
+    max_proven: int = 30,
+) -> ProvenPatternBatchResult:
+    """Clone real, already-proven Alpha constructions onto unused fields whose real
+    description overlaps meaningfully with the proven field's -- pattern cloning from
+    evidence, not template classification. Different from description-aware-sweep:
+    that routes a field to one of 13 fixed shapes by keyword; this instead takes an
+    Alpha that already scored well, finds the field it's built on, and looks for other
+    fields -- in the same category, never already used in this pool -- whose own
+    description reads similarly, then reuses the exact proven expression on them.
+    """
+    query = AlphaQuery(
+        limit=100,
+        filters=[
+            Filter(field="settings.region", op="=", value=scope.region),
+            Filter(field="settings.delay", op="=", value=scope.delay),
+            Filter(field="settings.universe", op="=", value=scope.universe),
+            Filter(field="is.fitness", op=">=", value=min_fitness),
+        ],
+    )
+    page = await state.endpoints.list_alphas(query)
+    def _clean(a: dict[str, Any]) -> bool:
+        isd = a.get("is") or {}
+        if isd.get("fitness") is None:
+            return False
+        return degenerate_warning(AlphaStats.model_validate(isd)) is None
+
+    proven_rows = sorted(
+        (a for a in (page.get("results") or []) if _clean(a)),
+        key=lambda a: -(a["is"]["fitness"]),
+    )[:max_proven]
+
+    pool_rows = await state.catalog.query(
+        f"""
+        SELECT a.expression FROM alpha a
+        WHERE coalesce(a.instrument_type, 'EQUITY') = ?
+          AND a.region = ? AND a.delay = ? AND a.universe = ?
+          AND NOT {SUBMITTED} AND a.expression IS NOT NULL
+        """,  # noqa: S608
+        [scope.instrument_type, scope.region, scope.delay, scope.universe],
+    )
+    used_fields: set[str] = set()
+    for row in pool_rows:
+        try:
+            tree = parse(row["expression"] or "")
+        except ParseError:
+            continue
+        used_fields.update(data_fields(tree))
+
+    catalog_rows = await state.catalog.query(
+        "SELECT field_id, description, category_id FROM data_field "
+        "WHERE instrument_type = ? AND region = ? AND delay = ? AND universe = ?",
+        [scope.instrument_type, scope.region, scope.delay, scope.universe],
+    )
+    desc_by_field = {r["field_id"]: r.get("description") or "" for r in catalog_rows}
+    category_by_field = {r["field_id"]: r.get("category_id") for r in catalog_rows}
+    by_category: dict[str | None, list[str]] = {}
+    for r in catalog_rows:
+        by_category.setdefault(r.get("category_id"), []).append(r["field_id"])
+
+    candidates: list[ProvenPatternCandidate] = []
+    for a in proven_rows:
+        if len(candidates) >= top_n:
+            break
+        regular = a.get("regular")
+        code = regular.get("code") if isinstance(regular, dict) else regular
+        if not code:
+            continue
+        try:
+            tree = parse(code)
+        except ParseError:
+            continue
+        fields = [f for f in data_fields(tree) if f not in _AUXILIARY_FIELDS]
+        if not fields:
+            continue
+        proven_field = fields[0]
+        proven_desc = desc_by_field.get(proven_field)
+        if not proven_desc:
+            continue
+        proven_tokens = _tokenize(proven_desc)
+        category = category_by_field.get(proven_field)
+        pool_candidates = by_category.get(category, [])
+        scored = sorted(
+            (
+                (_jaccard(proven_tokens, _tokenize(desc_by_field.get(fid, ""))), fid)
+                for fid in pool_candidates
+                if fid != proven_field and fid not in used_fields
+            ),
+            key=lambda x: -x[0],
+        )
+        for sim, fid in scored[:3]:
+            if sim < similarity_threshold:
+                break
+            new_expr = _re.sub(rf"\b{_re.escape(proven_field)}\b", fid, code)
+            candidates.append(
+                ProvenPatternCandidate(
+                    proven_alpha_id=str(a.get("id")),
+                    proven_field_id=proven_field,
+                    proven_fitness=(a.get("is") or {}).get("fitness"),
+                    proven_expression=code,
+                    matched_field_id=fid,
+                    matched_field_description=desc_by_field.get(fid),
+                    similarity=round(sim, 4),
+                    new_expression=new_expr,
+                )
+            )
+            if len(candidates) >= top_n:
+                break
+
+    return ProvenPatternBatchResult(
+        candidates=candidates,
+        proven_alphas_examined=len(proven_rows),
+        pool_size=len(pool_rows),
+    )
 
 
 @router.post("/description-aware-sweep")
