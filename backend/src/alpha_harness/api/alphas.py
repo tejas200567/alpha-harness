@@ -8,6 +8,7 @@ exists. Correlations are slow, rate-limited jobs, so their answers are kept in
 
 from __future__ import annotations
 
+import json
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Annotated, Any, Literal
@@ -23,7 +24,7 @@ from ..labs.fastexpr import ParseError, data_fields, operator_count, parse
 from ..labs.params import TASK_SAMPLERS
 from ..schemas import Out
 from ..vault.yields import PLATFORM_ALPHA_URL
-from .deps import State
+from .deps import State, refuse
 
 router = APIRouter(prefix="/api/alphas", tags=["alphas"])
 
@@ -359,6 +360,12 @@ async def summary(state: State) -> BrainPayload:
     return BrainPayload(await state.endpoints.alphas_summary())
 
 
+class OsmosisUniverseBreakdown(Out):
+    universe: str
+    n_alphas: int
+    points_total: int
+
+
 class OsmosisScopeCoverage(Out):
     region: str
     delay: int
@@ -368,6 +375,9 @@ class OsmosisScopeCoverage(Out):
     meets_alpha_minimum: bool
     #: Exactly 100,000 points, per the same doc ("EXACTLY 100,000 points total").
     fully_allocated: bool
+    #: Universe is not part of an Osmosis scope (Region x Delay only, per the real
+    #: doc) -- shown for context, since a region/delay pair can span several universes.
+    universes: list[OsmosisUniverseBreakdown]
 
 
 class OsmosisCoverageResult(Out):
@@ -377,18 +387,25 @@ class OsmosisCoverageResult(Out):
     #: Osmosis needs >=3 complete scopes (Osmosis_allocation_.md).
     meets_minimum_scopes: bool
     alphas_examined: int
+    #: From /users/self/alphas/summary -- lets a caller tell "examined everything" from
+    #: "examined a sample" without a second request.
+    total_active: int | None
 
 
 @router.get("/osmosis/coverage")
-async def osmosis_coverage(state: State, max_alphas: int = 3000) -> OsmosisCoverageResult:
+async def osmosis_coverage(state: State, max_alphas: int = 500) -> OsmosisCoverageResult:
     """Real per-scope Osmosis coverage: fetched from your actual submitted Alphas, not a
     hardcoded scope list -- Osmosis_allocation_.md defines a scope as whatever Region x
-    Delay your Genius level allows, which is account-specific, not fixed.
+    Delay your Genius level allows, which is account-specific, not fixed. Also breaks
+    each scope down by universe for context, even though universe isn't part of the
+    scope definition itself.
 
     Osmosis eligibility is any submission date (unlike quarterly Signals), so this walks
     every submitted Alpha up to max_alphas, paginated via the real list_alphas() filter DSL.
+    Default max_alphas=500 comfortably covers a few hundred active Alphas in one call;
+    raise it if /summary reports more than that.
     """
-    by_scope: dict[tuple[str, int], dict[str, int]] = {}
+    by_scope: dict[tuple[str, int], dict[str, Any]] = {}
     offset = 0
     page_size = 100
     examined = 0
@@ -404,13 +421,20 @@ async def osmosis_coverage(state: State, max_alphas: int = 3000) -> OsmosisCover
             break
         for a in results:
             settings = a.get("settings") or {}
-            region, delay = settings.get("region"), settings.get("delay")
+            region, delay, universe = (
+                settings.get("region"), settings.get("delay"), settings.get("universe")
+            )
             if region is None or delay is None:
                 continue
             key = (region, int(delay))
-            bucket = by_scope.setdefault(key, {"n": 0, "points": 0})
+            bucket = by_scope.setdefault(key, {"n": 0, "points": 0, "universes": {}})
+            points = int(a.get("osmosisPoints") or 0)
             bucket["n"] += 1
-            bucket["points"] += int(a.get("osmosisPoints") or 0)
+            bucket["points"] += points
+            uk = universe or "UNKNOWN"
+            ub = bucket["universes"].setdefault(uk, {"n": 0, "points": 0})
+            ub["n"] += 1
+            ub["points"] += points
         examined += len(results)
         offset += len(results)
         if len(results) < page_size or offset >= int(page.get("count") or 0):
@@ -424,20 +448,74 @@ async def osmosis_coverage(state: State, max_alphas: int = 3000) -> OsmosisCover
             points_total=v["points"],
             meets_alpha_minimum=v["n"] >= 10,
             fully_allocated=v["points"] == 100_000,
+            universes=[
+                OsmosisUniverseBreakdown(universe=u, n_alphas=uv["n"], points_total=uv["points"])
+                for u, uv in sorted(v["universes"].items(), key=lambda kv: -kv[1]["n"])
+            ],
         )
         for (region, delay), v in sorted(by_scope.items(), key=lambda kv: -kv[1]["points"])
     ]
     complete = sum(1 for s in scopes if s.meets_alpha_minimum and s.fully_allocated)
+    summary = await state.endpoints.alphas_summary()
     return OsmosisCoverageResult(
         scopes=scopes,
         complete_scopes=complete,
         meets_minimum_scopes=complete >= 3,
         alphas_examined=examined,
+        total_active=summary.get("active"),
     )
 
 
 class OsmosisPointsRequest(BaseModel):
     points: int = Field(ge=0, le=100_000)
+
+
+class OsmosisScopeAlpha(Out):
+    alpha_id: str
+    fitness: float | None
+    sharpe: float | None
+    osmosis_points: int
+
+
+@router.get("/osmosis/scope-alphas")
+async def osmosis_scope_alphas(
+    region: str, delay: int, state: State, max_alphas: int = 200
+) -> list[OsmosisScopeAlpha]:
+    """Every submitted Alpha in one Region/Delay scope, with fitness/sharpe/current
+    osmosisPoints -- the real per-alpha detail osmosis/coverage aggregates away, needed
+    to build any real allocation plan responsibly instead of guessing at it.
+    """
+    out: list[OsmosisScopeAlpha] = []
+    offset = 0
+    page_size = 100
+    while len(out) < max_alphas:
+        query = AlphaQuery(
+            limit=min(page_size, max_alphas - len(out)),
+            offset=offset,
+            filters=[
+                Filter(field="status", op="!=", value="UNSUBMITTED"),
+                Filter(field="settings.region", op="=", value=region),
+                Filter(field="settings.delay", op="=", value=delay),
+            ],
+        )
+        page = await state.endpoints.list_alphas(query)
+        results = page.get("results") or []
+        if not results:
+            break
+        for a in results:
+            isd = a.get("is") or {}
+            out.append(
+                OsmosisScopeAlpha(
+                    alpha_id=str(a.get("id")),
+                    fitness=isd.get("fitness"),
+                    sharpe=isd.get("sharpe"),
+                    osmosis_points=int(a.get("osmosisPoints") or 0),
+                )
+            )
+        offset += len(results)
+        if len(results) < page_size or offset >= int(page.get("count") or 0):
+            break
+    return out
 
 
 @router.patch("/{alpha_id}/osmosis-points")
@@ -449,10 +527,24 @@ async def set_osmosis_points(alpha_id: str, body: OsmosisPointsRequest, state: S
     One Alpha at a time, deliberately: a real write to your account, no bulk-allocation
     plan/apply here -- build and confirm a scope's full allocation manually, one Alpha at
     a time, until a reviewed bulk-plan endpoint exists.
+
+    Proven necessary, not theoretical: update_alpha() discards HTTP status entirely and
+    just returns whatever body BRAIN sent, error or success alike. A live run found 5 of
+    12 Alphas in one scope silently rejected -- BRAIN's real message is "Cannot update
+    Osmosis points for non-compensated alpha" -- while this endpoint, ignoring the PATCH
+    response and only re-fetching, reported every one of them as 200 OK. update_properties()
+    next to this function already has the right check (a real success carries an "id"; an
+    error body does not); applied here identically instead of trusting a blind re-fetch.
     """
-    await state.endpoints.update_alpha(alpha_id, {"osmosisPoints": body.points})
-    body_after = await state.endpoints.alpha_body(alpha_id)
-    return _info(alpha_id, body_after)
+    patched = await state.endpoints.update_alpha(alpha_id, {"osmosisPoints": body.points})
+    if not patched.get("id"):
+        raise refuse(
+            422,
+            "osmosis_points_rejected",
+            f"BRAIN rejected the Osmosis points update for {alpha_id}: "
+            f"{json.dumps(patched)[:300]}",
+        )
+    return _info(alpha_id, patched)
 
 
 @router.get("/{alpha_id}/page")
