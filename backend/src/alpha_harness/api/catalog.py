@@ -11,6 +11,9 @@ from pydantic import BaseModel
 from ..brain.settings_schema import valid_values
 from ..catalog.pyramids import pyramid_grid
 from ..catalog.description_rules import is_metadata_field, build_expression
+from collections import defaultdict
+from ..labs.fastexpr import ParseError, data_fields, parse
+from ..vault.store import SUBMITTED
 from ..catalog.field_intelligence import field_intelligence
 from ..brain.schemas import SimulationRequest, SimulationSettings
 from ..db.models import utcnow
@@ -337,6 +340,116 @@ class DescAwareSweepResult(Out):
     candidates: list[DescAwareCandidate]
     excluded_metadata_count: int
     total_fields: int
+
+
+class CategoryPoolCoverage(Out):
+    category_id: str
+    category_name: str | None
+    #: Real fields available in the catalog for this category, in this market.
+    catalog_fields: int
+    #: Distinct fields from this category actually used across the unsubmitted pool.
+    pool_fields: int
+    #: Unsubmitted Alphas using at least one field from this category (an Alpha using
+    #: several fields from one category counts once per field, so this can exceed the
+    #: pool -- a rough weight, not a distinct count).
+    pool_alphas: int
+    catalog_share: float
+    pool_share: float
+    #: catalog_share - pool_share. Positive means the category has more real opportunity
+    #: than its current share of the pool reflects -- genuinely under-mined relative to
+    #: its own size, not just small in absolute terms.
+    gap: float
+
+
+class PoolCoverageResult(Out):
+    categories: list[CategoryPoolCoverage]
+    pool_size: int
+    unreadable: int
+
+
+@router.get("/pool-coverage")
+async def pool_coverage(scope: Scope, state: State) -> PoolCoverageResult:
+    """Where the unsubmitted pool is genuinely under-mined, relative to real catalog size.
+
+    Phase 1 of the diversity pipeline: a coverage-gap calculation, not a hardcoded term
+    list. catalog_share - pool_share avoids the naive "small category = explore it"
+    mistake -- a tiny category isn't a gap unless the pool represents it even less than
+    its own small size would suggest.
+    """
+    catalog_rows = await state.catalog.query(
+        "SELECT category_id, category_name, count(*) AS n FROM data_field "
+        "WHERE instrument_type = ? AND region = ? AND delay = ? AND universe = ? "
+        "AND category_id IS NOT NULL GROUP BY category_id, category_name",
+        [scope.instrument_type, scope.region, scope.delay, scope.universe],
+    )
+    total_catalog = sum(int(r["n"]) for r in catalog_rows)
+
+    pool_rows = await state.catalog.query(
+        f"""
+        SELECT a.expression FROM alpha a
+        WHERE coalesce(a.instrument_type, 'EQUITY') = ?
+          AND a.region = ? AND a.delay = ? AND a.universe = ?
+          AND NOT {SUBMITTED} AND a.expression IS NOT NULL
+        """,  # noqa: S608
+        [scope.instrument_type, scope.region, scope.delay, scope.universe],
+    )
+    pool_size = len(pool_rows)
+
+    unreadable = 0
+    field_alpha_count: dict[str, int] = defaultdict(int)
+    for row in pool_rows:
+        try:
+            tree = parse(row["expression"] or "")
+        except ParseError:
+            unreadable += 1
+            continue
+        for field_id in set(data_fields(tree)):
+            field_alpha_count[field_id] += 1
+
+    used_fields = list(field_alpha_count)
+    field_category: dict[str, str] = {}
+    if used_fields:
+        placeholders = ",".join("?" for _ in used_fields)
+        rows = await state.catalog.query(
+            f"SELECT field_id, category_id FROM data_field WHERE field_id IN ({placeholders})",  # noqa: S608
+            used_fields,
+        )
+        field_category = {
+            str(r["field_id"]): str(r["category_id"]) for r in rows if r.get("category_id")
+        }
+
+    pool_fields_by_category: dict[str, set[str]] = defaultdict(set)
+    pool_alphas_by_category: dict[str, int] = defaultdict(int)
+    for field_id, count in field_alpha_count.items():
+        category = field_category.get(field_id)
+        if category:
+            pool_fields_by_category[category].add(field_id)
+            pool_alphas_by_category[category] += count
+
+    total_pool_fields_used = len(used_fields)
+    categories = [
+        CategoryPoolCoverage(
+            category_id=str(row["category_id"]),
+            category_name=row.get("category_name"),
+            catalog_fields=int(row["n"]),
+            pool_fields=len(pool_fields_by_category.get(str(row["category_id"]), set())),
+            pool_alphas=pool_alphas_by_category.get(str(row["category_id"]), 0),
+            catalog_share=(int(row["n"]) / total_catalog) if total_catalog else 0.0,
+            pool_share=(
+                len(pool_fields_by_category.get(str(row["category_id"]), set()))
+                / total_pool_fields_used
+            )
+            if total_pool_fields_used
+            else 0.0,
+            gap=0.0,
+        )
+        for row in catalog_rows
+    ]
+    for c in categories:
+        c.gap = c.catalog_share - c.pool_share
+    categories.sort(key=lambda c: -c.gap)
+
+    return PoolCoverageResult(categories=categories, pool_size=pool_size, unreadable=unreadable)
 
 
 @router.post("/description-aware-sweep")
