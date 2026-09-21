@@ -92,3 +92,29 @@ export type TaskPowerPoolResult = Schemas['TaskPowerPoolResult']
 
 export const taskPowerPoolEligibility = (studyId: number) =>
   http.get<TaskPowerPoolResult>(`/api/alphas/tasks/${studyId}/power-pool-eligibility`)
+
+export type HighImpactBatchResult = Schemas['HighImpactBatchResult']
+
+export const highImpactBatch = (
+  region: string,
+  delay: number,
+  universe: string,
+  topN = 6,
+  perCategoryLimit = 20,
+) =>
+  http.get<HighImpactBatchResult>(
+    `/api/catalog/high-impact-batch${qs({ region, delay, universe, topN, perCategoryLimit })}`,
+  )
+
+export type ProvenPatternBatchResult = Schemas['ProvenPatternBatchResult']
+
+export const provenPatternBatch = (
+  region: string,
+  delay: number,
+  universe: string,
+  topN = 10,
+  minFitness = 1.5,
+) =>
+  http.get<ProvenPatternBatchResult>(
+    `/api/catalog/proven-pattern-batch${qs({ region, delay, universe, topN, minFitness })}`,
+  )

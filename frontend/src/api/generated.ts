@@ -292,6 +292,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/catalog/pool-coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pool Coverage
+         * @description Where the unsubmitted pool is genuinely under-mined, relative to real catalog size.
+         *
+         *     Phase 1 of the diversity pipeline: a coverage-gap calculation, not a hardcoded term
+         *     list. catalog_share - pool_share avoids the naive "small category = explore it"
+         *     mistake -- a tiny category isn't a gap unless the pool represents it even less than
+         *     its own small size would suggest.
+         */
+        get: operations["pool_coverage_api_catalog_pool_coverage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalog/high-impact-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * High Impact Batch
+         * @description The whole opportunity pipeline in one call: coverage gap x pyramid multiplier,
+         *     ranked, swept by real category_id for the top opportunities, ready for
+         *     /description-aware-sweep/task. A preview -- nothing is simulated here.
+         */
+        get: operations["high_impact_batch_api_catalog_high_impact_batch_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalog/proven-pattern-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Proven Pattern Batch
+         * @description Clone real, already-proven Alpha constructions onto unused fields whose real
+         *     description overlaps meaningfully with the proven field's -- pattern cloning from
+         *     evidence, not template classification. Different from description-aware-sweep:
+         *     that routes a field to one of 13 fixed shapes by keyword; this instead takes an
+         *     Alpha that already scored well, finds the field it's built on, and looks for other
+         *     fields -- in the same category, never already used in this pool -- whose own
+         *     description reads similarly, then reuses the exact proven expression on them.
+         */
+        get: operations["proven_pattern_batch_api_catalog_proven_pattern_batch_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/catalog/description-aware-sweep": {
         parameters: {
             query?: never;
@@ -521,6 +594,91 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/alphas/osmosis/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Osmosis Coverage
+         * @description Real per-scope Osmosis coverage: fetched from your actual submitted Alphas, not a
+         *     hardcoded scope list -- Osmosis_allocation_.md defines a scope as whatever Region x
+         *     Delay your Genius level allows, which is account-specific, not fixed. Also breaks
+         *     each scope down by universe for context, even though universe isn't part of the
+         *     scope definition itself.
+         *
+         *     Osmosis eligibility is any submission date (unlike quarterly Signals), so this walks
+         *     every submitted Alpha up to max_alphas, paginated via the real list_alphas() filter DSL.
+         *     Default max_alphas=500 comfortably covers a few hundred active Alphas in one call;
+         *     raise it if /summary reports more than that.
+         */
+        get: operations["osmosis_coverage_api_alphas_osmosis_coverage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/alphas/osmosis/scope-alphas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Osmosis Scope Alphas
+         * @description Every submitted Alpha in one Region/Delay scope, with fitness/sharpe/current
+         *     osmosisPoints -- the real per-alpha detail osmosis/coverage aggregates away, needed
+         *     to build any real allocation plan responsibly instead of guessing at it.
+         */
+        get: operations["osmosis_scope_alphas_api_alphas_osmosis_scope_alphas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/alphas/{alpha_id}/osmosis-points": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set Osmosis Points
+         * @description Set one Alpha's Osmosis allocation. Reuses update_alpha() exactly -- the same
+         *     verified PATCH /alphas/{id} mechanism update_properties() already uses for
+         *     description/tags -- osmosisPoints is just one more field on the same body.
+         *
+         *     One Alpha at a time, deliberately: a real write to your account, no bulk-allocation
+         *     plan/apply here -- build and confirm a scope's full allocation manually, one Alpha at
+         *     a time, until a reviewed bulk-plan endpoint exists.
+         *
+         *     Proven necessary, not theoretical: update_alpha() discards HTTP status entirely and
+         *     just returns whatever body BRAIN sent, error or success alike. A live run found 5 of
+         *     12 Alphas in one scope silently rejected -- BRAIN's real message is "Cannot update
+         *     Osmosis points for non-compensated alpha" -- while this endpoint, ignoring the PATCH
+         *     response and only re-fetching, reported every one of them as 200 OK. update_properties()
+         *     next to this function already has the right check (a real success carries an "id"; an
+         *     error body does not); applied here identically instead of trusting a blind re-fetch.
+         */
+        patch: operations["set_osmosis_points_api_alphas__alpha_id__osmosis_points_patch"];
         trace?: never;
     };
     "/api/alphas/{alpha_id}/page": {
@@ -1287,6 +1445,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tools/submission-planner/power-pool-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Plan Power Pool Submissions
+         * @description Which Power-Pool-eligible Alphas to submit and in what order.
+         *
+         *     Same beam-search machinery as /submission-planner/plan -- Power Pool's own correlation
+         *     ceiling is 0.5, identical to submission_planner.CEILING -- but sourced from Power Pool
+         *     eligibility (Sharpe>=1.0, ops<=8, fields<=3, the three performance tests, and never a
+         *     degenerate-flagged Alpha) instead of the stricter REGULAR is_submittable() gate.
+         */
+        post: operations["plan_power_pool_submissions_api_tools_submission_planner_power_pool_plan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tools/submission-planner/submitted": {
         parameters: {
             query?: never;
@@ -1796,6 +1979,10 @@ export interface components {
             powerPoolOperators: number | null;
             /** Datafields */
             dataFields: string[] | null;
+            /** Degeneratewarning */
+            degenerateWarning: string | null;
+            /** Osmosispoints */
+            osmosisPoints: number | null;
         };
         /** AlphaLineage */
         AlphaLineage: {
@@ -2228,6 +2415,33 @@ export interface components {
             name: string | null;
             /** N */
             n: number;
+        };
+        /** CategoryPoolCoverage */
+        CategoryPoolCoverage: {
+            /** Categoryid */
+            categoryId: string;
+            /** Categoryname */
+            categoryName: string | null;
+            /** Catalogfields */
+            catalogFields: number;
+            /** Poolfields */
+            poolFields: number;
+            /** Poolalphas */
+            poolAlphas: number;
+            /** Catalogshare */
+            catalogShare: number;
+            /** Poolshare */
+            poolShare: number;
+            /** Gap */
+            gap: number;
+            /** Pyramidmultiplier */
+            pyramidMultiplier: number | null;
+            /** Pyramidalphacount */
+            pyramidAlphaCount: number | null;
+            /** Pyramidlit */
+            pyramidLit: boolean | null;
+            /** Opportunity */
+            opportunity: number;
         };
         /** ChatMessageOut */
         ChatMessageOut: {
@@ -2762,6 +2976,34 @@ export interface components {
             /** Websocketclients */
             websocketClients: number;
         };
+        /** HighImpactBatchResult */
+        HighImpactBatchResult: {
+            /** Candidates */
+            candidates: components["schemas"]["HighImpactCandidate"][];
+            /** Categoriesused */
+            categoriesUsed: components["schemas"]["CategoryPoolCoverage"][];
+            /** Poolsize */
+            poolSize: number;
+        };
+        /** HighImpactCandidate */
+        HighImpactCandidate: {
+            /** Fieldid */
+            fieldId: string;
+            /** Description */
+            description: string;
+            /** Classification */
+            classification: string;
+            /** Templateused */
+            templateUsed: string;
+            /** Expression */
+            expression: string;
+            /** Categoryid */
+            categoryId: string;
+            /** Categoryname */
+            categoryName: string | null;
+            /** Opportunity */
+            opportunity: number;
+        };
         /** KRatioRequest */
         KRatioRequest: {
             /** Alpha Ids */
@@ -3182,6 +3424,61 @@ export interface components {
             /** Maxsimulations */
             maxSimulations: number;
         };
+        /** OsmosisCoverageResult */
+        OsmosisCoverageResult: {
+            /** Scopes */
+            scopes: components["schemas"]["OsmosisScopeCoverage"][];
+            /** Completescopes */
+            completeScopes: number;
+            /** Meetsminimumscopes */
+            meetsMinimumScopes: boolean;
+            /** Alphasexamined */
+            alphasExamined: number;
+            /** Totalactive */
+            totalActive: number | null;
+        };
+        /** OsmosisPointsRequest */
+        OsmosisPointsRequest: {
+            /** Points */
+            points: number;
+        };
+        /** OsmosisScopeAlpha */
+        OsmosisScopeAlpha: {
+            /** Alphaid */
+            alphaId: string;
+            /** Fitness */
+            fitness: number | null;
+            /** Sharpe */
+            sharpe: number | null;
+            /** Osmosispoints */
+            osmosisPoints: number;
+        };
+        /** OsmosisScopeCoverage */
+        OsmosisScopeCoverage: {
+            /** Region */
+            region: string;
+            /** Delay */
+            delay: number;
+            /** Nalphas */
+            nAlphas: number;
+            /** Pointstotal */
+            pointsTotal: number;
+            /** Meetsalphaminimum */
+            meetsAlphaMinimum: boolean;
+            /** Fullyallocated */
+            fullyAllocated: boolean;
+            /** Universes */
+            universes: components["schemas"]["OsmosisUniverseBreakdown"][];
+        };
+        /** OsmosisUniverseBreakdown */
+        OsmosisUniverseBreakdown: {
+            /** Universe */
+            universe: string;
+            /** Nalphas */
+            nAlphas: number;
+            /** Pointstotal */
+            pointsTotal: number;
+        };
         /** Pair */
         Pair: {
             /** Maxtrade */
@@ -3271,6 +3568,15 @@ export interface components {
             /** Dates */
             dates: string[];
         };
+        /** PoolCoverageResult */
+        PoolCoverageResult: {
+            /** Categories */
+            categories: components["schemas"]["CategoryPoolCoverage"][];
+            /** Poolsize */
+            poolSize: number;
+            /** Unreadable */
+            unreadable: number;
+        };
         /** PowerPoolCandidate */
         PowerPoolCandidate: {
             /** Alphaid */
@@ -3291,6 +3597,8 @@ export interface components {
             powerPoolCorrelation: string | null;
             /** Eligibleonknowncriteria */
             eligibleOnKnownCriteria: boolean;
+            /** Degeneratewarning */
+            degenerateWarning: string | null;
         };
         /** PowerPoolModel */
         PowerPoolModel: {
@@ -3416,6 +3724,34 @@ export interface components {
         PromptList: {
             /** Prompts */
             prompts: components["schemas"]["PromptInfo"][];
+        };
+        /** ProvenPatternBatchResult */
+        ProvenPatternBatchResult: {
+            /** Candidates */
+            candidates: components["schemas"]["ProvenPatternCandidate"][];
+            /** Provenalphasexamined */
+            provenAlphasExamined: number;
+            /** Poolsize */
+            poolSize: number;
+        };
+        /** ProvenPatternCandidate */
+        ProvenPatternCandidate: {
+            /** Provenalphaid */
+            provenAlphaId: string;
+            /** Provenfieldid */
+            provenFieldId: string;
+            /** Provenfitness */
+            provenFitness: number | null;
+            /** Provenexpression */
+            provenExpression: string;
+            /** Matchedfieldid */
+            matchedFieldId: string;
+            /** Matchedfielddescription */
+            matchedFieldDescription: string | null;
+            /** Similarity */
+            similarity: number;
+            /** Newexpression */
+            newExpression: string;
         };
         /** PyramidCategory */
         PyramidCategory: {
@@ -4816,6 +5152,120 @@ export interface operations {
             };
         };
     };
+    pool_coverage_api_catalog_pool_coverage_get: {
+        parameters: {
+            query: {
+                /** @description e.g. USA, EUR, GLB */
+                region: string;
+                delay: number;
+                /** @description e.g. TOP3000 */
+                universe: string;
+                instrumentType?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PoolCoverageResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    high_impact_batch_api_catalog_high_impact_batch_get: {
+        parameters: {
+            query: {
+                top_n?: number;
+                per_category_limit?: number;
+                /** @description e.g. USA, EUR, GLB */
+                region: string;
+                delay: number;
+                /** @description e.g. TOP3000 */
+                universe: string;
+                instrumentType?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HighImpactBatchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    proven_pattern_batch_api_catalog_proven_pattern_batch_get: {
+        parameters: {
+            query: {
+                min_fitness?: number;
+                similarity_threshold?: number;
+                top_n?: number;
+                max_proven?: number;
+                /** @description e.g. USA, EUR, GLB */
+                region: string;
+                delay: number;
+                /** @description e.g. TOP3000 */
+                universe: string;
+                instrumentType?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProvenPatternBatchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     description_aware_sweep_api_catalog_description_aware_sweep_post: {
         parameters: {
             query: {
@@ -5151,6 +5601,105 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BrainPayload"];
+                };
+            };
+        };
+    };
+    osmosis_coverage_api_alphas_osmosis_coverage_get: {
+        parameters: {
+            query?: {
+                max_alphas?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsmosisCoverageResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    osmosis_scope_alphas_api_alphas_osmosis_scope_alphas_get: {
+        parameters: {
+            query: {
+                region: string;
+                delay: number;
+                max_alphas?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsmosisScopeAlpha"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_osmosis_points_api_alphas__alpha_id__osmosis_points_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alpha_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OsmosisPointsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlphaInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -6313,6 +6862,39 @@ export interface operations {
         };
     };
     plan_submissions_api_tools_submission_planner_plan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlannedPortfolio"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    plan_power_pool_submissions_api_tools_submission_planner_power_pool_plan_post: {
         parameters: {
             query?: never;
             header?: never;

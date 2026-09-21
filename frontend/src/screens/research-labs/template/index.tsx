@@ -32,6 +32,8 @@ import {
   descriptionAwareSweep,
   descriptionAwareSweepTask,
   fieldIntelligence,
+  highImpactBatch,
+  provenPatternBatch,
   type TemplateLabRequest,
   type TemplateSummary,
   taskPowerPoolEligibility,
@@ -575,14 +577,31 @@ function DescriptionAwarePanel({
   const queryClient = useQueryClient()
   const [lastTaskId, setLastTaskId] = useState<number | null>(null)
   const [showEligibility, setShowEligibility] = useState(false)
+  const highImpact = useMutation({
+    mutationFn: () => highImpactBatch(region, delay, universe),
+    onError: (error) => toast.error(errorMessage(error)),
+  })
+  const provenPattern = useMutation({
+    mutationFn: () => provenPatternBatch(region, delay, universe),
+    onError: (error) => toast.error(errorMessage(error)),
+  })
   const addTask = useMutation({
-    mutationFn: () =>
-      descriptionAwareSweepTask(region, delay, universe, {
-        candidates: (result?.candidates ?? []).map((c) => ({
+    mutationFn: () => {
+      if (provenPattern.data?.candidates.length) {
+        return descriptionAwareSweepTask(region, delay, universe, {
+          candidates: provenPattern.data.candidates.map((c) => ({
+            field_id: c.matchedFieldId,
+            expression: c.newExpression,
+          })),
+        })
+      }
+      return descriptionAwareSweepTask(region, delay, universe, {
+        candidates: (highImpact.data?.candidates ?? result?.candidates ?? []).map((c) => ({
           field_id: c.fieldId,
           expression: c.expression,
         })),
-      }),
+      })
+    },
     onSuccess: (data) => {
       setLastTaskId(data.id)
       void queryClient.invalidateQueries({ queryKey: ['lab-tasks'] })
@@ -605,9 +624,27 @@ function DescriptionAwarePanel({
     <Panel
       title="Description-Aware Sweep"
       actions={
-        <Button size="sm" onClick={() => sweep.mutate()} disabled={sweep.isPending}>
-          Run Sweep
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" onClick={() => sweep.mutate()} disabled={sweep.isPending}>
+            Run Sweep
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => highImpact.mutate()}
+            disabled={highImpact.isPending}
+          >
+            Run High-Impact Batch
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => provenPattern.mutate()}
+            disabled={provenPattern.isPending}
+          >
+            Run Proven-Pattern Batch
+          </Button>
+        </div>
       }
     >
       <Field label="Search fields">
@@ -675,6 +712,143 @@ function DescriptionAwarePanel({
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => setInspecting(c.fieldId)}>
                         Evidence
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {highImpact.isError ? (
+        <ErrorNotice error={highImpact.error} title="High-impact batch failed" />
+      ) : highImpact.isPending ? (
+        <Skeleton className="h-40" />
+      ) : !highImpact.data ? null : highImpact.data.candidates.length === 0 ? (
+        <Empty title="No high-impact candidates">
+          No category currently has a positive opportunity score for this market.
+        </Empty>
+      ) : (
+        <div className="flex flex-col gap-2 border-t pt-4">
+          <div className="text-sm font-medium">High-Impact Batch</div>
+          <div className="text-sm text-muted-foreground">
+            {highImpact.data.candidates.length} candidates from{' '}
+            {highImpact.data.categoriesUsed.length} opportunity categories &middot;{' '}
+            {highImpact.data.poolSize} unsubmitted Alphas in this market
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+            {highImpact.data.categoriesUsed.map((c) => (
+              <span key={c.categoryId} className="rounded border px-2 py-1">
+                {c.categoryName} &middot; opportunity {c.opportunity.toFixed(4)}
+                {c.pyramidMultiplier != null && ` ×${c.pyramidMultiplier}`}
+                {c.pyramidLit === false && ' · unlit'}
+              </span>
+            ))}
+          </div>
+          <Button size="sm" onClick={() => addTask.mutate()} disabled={addTask.isPending}>
+            Add All as Task
+          </Button>
+          {lastTaskId !== null && (
+            <Button size="sm" variant="ghost" onClick={() => setShowEligibility(true)}>
+              Check Power Pool Eligibility
+            </Button>
+          )}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left">
+                  <th className="pr-4">Field</th>
+                  <th className="pr-4">Category</th>
+                  <th className="pr-4">Classification</th>
+                  <th className="pr-4">Template</th>
+                  <th className="pr-4">Expression</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {highImpact.data.candidates.map((c) => (
+                  <tr key={c.fieldId} className="border-t">
+                    <td className="pr-4 font-mono">{c.fieldId}</td>
+                    <td className="pr-4">{c.categoryName}</td>
+                    <td className="pr-4">{c.classification}</td>
+                    <td className="pr-4">{c.templateUsed}</td>
+                    <td className="pr-4 font-mono">{c.expression}</td>
+                    <td>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(c.expression)
+                          toast.success('Copied')
+                        }}
+                      >
+                        Copy
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {provenPattern.isError ? (
+        <ErrorNotice error={provenPattern.error} title="Proven-pattern batch failed" />
+      ) : provenPattern.isPending ? (
+        <Skeleton className="h-40" />
+      ) : !provenPattern.data ? null : provenPattern.data.candidates.length === 0 ? (
+        <Empty title="No proven-pattern candidates">
+          No unused field matched a high-fitness Alpha's field closely enough.
+        </Empty>
+      ) : (
+        <div className="flex flex-col gap-2 border-t pt-4">
+          <div className="text-sm font-medium">Proven-Pattern Batch</div>
+          <div className="text-sm text-muted-foreground">
+            {provenPattern.data.candidates.length} candidates from{' '}
+            {provenPattern.data.provenAlphasExamined} proven Alphas &middot;{' '}
+            {provenPattern.data.poolSize} unsubmitted Alphas in this market
+          </div>
+          <Button size="sm" onClick={() => addTask.mutate()} disabled={addTask.isPending}>
+            Add All as Task
+          </Button>
+          {lastTaskId !== null && (
+            <Button size="sm" variant="ghost" onClick={() => setShowEligibility(true)}>
+              Check Power Pool Eligibility
+            </Button>
+          )}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left">
+                  <th className="pr-4">Proven Alpha</th>
+                  <th className="pr-4">Fitness</th>
+                  <th className="pr-4">Matched Field</th>
+                  <th className="pr-4">Description</th>
+                  <th className="pr-4">Similarity</th>
+                  <th className="pr-4">Expression</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {provenPattern.data.candidates.map((c, i) => (
+                  <tr key={`${c.provenAlphaId}-${c.matchedFieldId}-${i}`} className="border-t">
+                    <td className="pr-4 font-mono">{c.provenAlphaId}</td>
+                    <td className="pr-4">{c.provenFitness?.toFixed(2)}</td>
+                    <td className="pr-4 font-mono">{c.matchedFieldId}</td>
+                    <td className="pr-4">{c.matchedFieldDescription}</td>
+                    <td className="pr-4">{(c.similarity * 100).toFixed(0)}%</td>
+                    <td className="pr-4 font-mono">{c.newExpression}</td>
+                    <td>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(c.newExpression)
+                          toast.success('Copied')
+                        }}
+                      >
+                        Copy
                       </Button>
                     </td>
                   </tr>
