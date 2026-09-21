@@ -88,6 +88,9 @@ class AlphaInfo(Out):
     power_pool_operators: int | None
     #: Distinct data fields, grouping fields excluded; null when the code is unreadable.
     data_fields: list[str] | None
+    #: A plausibility flag this alpha's own numbers raise (see degenerate_warning());
+    #: null when nothing looks implausible. Never a pass/fail -- for human review.
+    degenerate_warning: str | None
 
 
 class LineageSibling(Out):
@@ -194,6 +197,34 @@ def _power_pool_counts(code: Any) -> tuple[int | None, list[str] | None]:
     return operator_count(tree), data_fields(tree)
 
 
+def degenerate_warning(stats: AlphaStats | None) -> str | None:
+    """A plausibility check the platform's own checks don't run.
+
+    Proven necessary, not theoretical: a real alpha in this vault (JjNnmZEe,
+    ts_scale(vec_avg(fnd14_accel_filer_is_shell_company), 21)) reported Sharpe 31.66,
+    Fitness 229.8, turnover 0.2%, returns 1053% -- a near-static position built on a
+    rare, near-binary field, not a real trading signal. Flags, never blocks: the final
+    judgment is still the platform's checks plus human review.
+    """
+    if stats is None:
+        return None
+    if (
+        stats.turnover is not None
+        and stats.turnover < 0.01
+        and stats.returns is not None
+        and stats.returns > 1.0
+    ):
+        return (
+            f"Turnover {stats.turnover:.1%} with returns {stats.returns:.0%} -- "
+            "likely a near-static position exploiting a rare edge case, not real trading."
+        )
+    if stats.fitness is not None and abs(stats.fitness) > 5.0:
+        return f"Fitness {stats.fitness:.2f} is far outside the normal range (~0.3-4)."
+    if stats.sharpe is not None and abs(stats.sharpe) > 10.0:
+        return f"Sharpe {stats.sharpe:.2f} is implausibly high for a real signal."
+    return None
+
+
 def _info(alpha_id: str, body: dict[str, Any]) -> AlphaInfo:
     code = body.get("regular") or body.get("combo") or body.get("selection") or {}
     sample = body.get("is") or {}
@@ -226,6 +257,7 @@ def _info(alpha_id: str, body: dict[str, Any]) -> AlphaInfo:
         brain_url=f"{PLATFORM_ALPHA_URL}{alpha_id}",
         power_pool_operators=operators,
         data_fields=fields,
+        degenerate_warning=degenerate_warning(_stats(sample)),
     )
 
 
@@ -401,6 +433,9 @@ class PowerPoolCandidate(Out):
     #: (< 0.5, or Sharpe 10% above the most correlated Alpha) still needs Check
     #: Submission run manually -- shown separately above, never folded into this.
     eligible_on_known_criteria: bool
+    #: A plausibility flag (see degenerate_warning()); null when nothing looks off.
+    #: An alpha with a warning is never eligible_on_known_criteria, whatever its numbers say.
+    degenerate_warning: str | None
 
 
 class TaskPowerPoolResult(Out):
@@ -456,11 +491,13 @@ async def task_power_pool_eligibility(study_id: int, state: State) -> TaskPowerP
         )
         pp_correlation = by_name.get(pp_corr_key, {}).get("result") if pp_corr_key else None
 
+        flagged = degenerate_warning(info.in_sample)
         eligible = (
             sharpe is not None and sharpe >= 1.0
             and ops is not None and ops <= 8
             and fields is not None and fields <= 3
             and turnover_pass and sub_universe_pass and robust_pass
+            and flagged is None
         )
         candidates.append(
             PowerPoolCandidate(
@@ -473,6 +510,7 @@ async def task_power_pool_eligibility(study_id: int, state: State) -> TaskPowerP
                 robust_universe_pass=robust_pass,
                 power_pool_correlation=pp_correlation,
                 eligible_on_known_criteria=eligible,
+                degenerate_warning=flagged,
             )
         )
     return TaskPowerPoolResult(
