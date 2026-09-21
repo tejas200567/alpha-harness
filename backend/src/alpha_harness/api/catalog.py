@@ -2,28 +2,28 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from ..brain.settings_schema import valid_values
-from ..catalog.pyramids import pyramid_grid
-from ..catalog.description_rules import is_metadata_field, build_expression
-from collections import defaultdict
-from ..labs.fastexpr import ParseError, data_fields, parse
-from ..vault.store import SUBMITTED
-from ..catalog.field_intelligence import field_intelligence
 from ..brain.schemas import SimulationRequest, SimulationSettings
-from ..db.models import utcnow
-from ..engine.packer import MAX_BATCH
-from ..labs.launch import AddedTask, add_study
-from ..labs.params import DESC_AWARE_SAMPLER, DescAwareParams
-from ..tools import settings_sampler
+from ..brain.settings_schema import valid_values
+from ..catalog.description_rules import build_expression, is_metadata_field
+from ..catalog.field_intelligence import field_intelligence
+from ..catalog.pyramids import pyramid_grid
 from ..catalog.queries import FieldFilter, Tuple4
 from ..catalog.sync import SyncTarget
+from ..db.models import utcnow
+from ..engine.packer import MAX_BATCH
+from ..labs.fastexpr import ParseError, data_fields, parse
+from ..labs.launch import AddedTask, add_study
+from ..labs.params import DESC_AWARE_SAMPLER, DescAwareParams
 from ..schemas import Out, SyncAllRun
+from ..tools import settings_sampler
+from ..vault.store import SUBMITTED
 from .deps import State, refuse
 
 router = APIRouter(prefix="/api/catalog", tags=["catalog"])
@@ -359,6 +359,17 @@ class CategoryPoolCoverage(Out):
     #: than its current share of the pool reflects -- genuinely under-mined relative to
     #: its own size, not just small in absolute terms.
     gap: float
+    #: This category's real BRAIN pyramid multiplier at this exact region/delay, from
+    #: /api/catalog/pyramids. None when BRAIN offers no pyramid here at all.
+    pyramid_multiplier: float | None
+    #: Alphas submitted in this pyramid this quarter (BRAIN's own count, not the harness's).
+    pyramid_alpha_count: int | None
+    #: Whether this pyramid already has >=3 this quarter, per Genius rules.
+    pyramid_lit: bool | None
+    #: gap * pyramid_multiplier when both are known, gap alone otherwise. Ranks a category
+    #: an unlit, high-multiplier pyramid needs above one that is already lit or low-value,
+    #: even at an identical coverage gap.
+    opportunity: float
 
 
 class PoolCoverageResult(Out):
@@ -427,6 +438,12 @@ async def pool_coverage(scope: Scope, state: State) -> PoolCoverageResult:
             pool_alphas_by_category[category] += count
 
     total_pool_fields_used = len(used_fields)
+    grid = await pyramid_grid(state.endpoints, state.catalog)
+    pyramid_by_key = {
+        (cell["categoryId"], cell["region"], int(cell["delay"])): cell
+        for cell in grid["cells"]
+    }
+
     categories = [
         CategoryPoolCoverage(
             category_id=str(row["category_id"]),
@@ -442,12 +459,36 @@ async def pool_coverage(scope: Scope, state: State) -> PoolCoverageResult:
             if total_pool_fields_used
             else 0.0,
             gap=0.0,
+            pyramid_multiplier=None,
+            pyramid_alpha_count=None,
+            pyramid_lit=None,
+            opportunity=0.0,
         )
         for row in catalog_rows
     ]
     for c in categories:
         c.gap = c.catalog_share - c.pool_share
-    categories.sort(key=lambda c: -c.gap)
+        cell = pyramid_by_key.get((c.category_id, scope.region, scope.delay))
+        if cell is not None:
+            c.pyramid_multiplier = cell.get("multiplier")
+            c.pyramid_alpha_count = cell.get("alphaCount")
+            c.pyramid_lit = cell.get("lit")
+        # An unlit pyramid needing few more Alphas to hit 3 is worth more than its gap
+        # alone says -- 1.5x on top of the multiplier for it, so a positive-gap category
+        # close to lighting a high-multiplier pyramid ranks above an already-lit one at
+        # the same gap.
+        unlit_with_progress = (
+            c.pyramid_lit is False
+            and c.pyramid_alpha_count is not None
+            and c.pyramid_alpha_count > 0
+        )
+        near_light_bonus = 1.5 if unlit_with_progress else 1.0
+        c.opportunity = (
+            c.gap * c.pyramid_multiplier * near_light_bonus
+            if c.pyramid_multiplier is not None
+            else c.gap
+        )
+    categories.sort(key=lambda c: -c.opportunity)
 
     return PoolCoverageResult(categories=categories, pool_size=pool_size, unreadable=unreadable)
 
