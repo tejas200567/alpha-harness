@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, RootModel
 from sqlalchemy import delete, func, select
 
 from ..brain.errors import BrainError
+from ..brain.filters import AlphaQuery, Filter
 from ..db.models import BrainCache, SimulationRecord, Study, Trial, TrialState, utcnow
 from ..labs.fastexpr import ParseError, data_fields, operator_count, parse
 from ..labs.params import TASK_SAMPLERS
@@ -91,6 +92,9 @@ class AlphaInfo(Out):
     #: A plausibility flag this alpha's own numbers raise (see degenerate_warning());
     #: null when nothing looks implausible. Never a pass/fail -- for human review.
     degenerate_warning: str | None
+    #: Current Osmosis allocation for this Alpha, 0-100000. null when BRAIN doesn't
+    #: report one (e.g. never allocated, or not eligible).
+    osmosis_points: int | None
 
 
 class LineageSibling(Out):
@@ -258,6 +262,7 @@ def _info(alpha_id: str, body: dict[str, Any]) -> AlphaInfo:
         power_pool_operators=operators,
         data_fields=fields,
         degenerate_warning=degenerate_warning(_stats(sample)),
+        osmosis_points=body.get("osmosisPoints"),
     )
 
 
@@ -352,6 +357,102 @@ async def _lineage(state: State, alpha_id: str) -> AlphaLineage | None:
 async def summary(state: State) -> BrainPayload:
     """Counts by stage and status — the shape of your pool at a glance."""
     return BrainPayload(await state.endpoints.alphas_summary())
+
+
+class OsmosisScopeCoverage(Out):
+    region: str
+    delay: int
+    n_alphas: int
+    points_total: int
+    #: >=10 alphas per Osmosis_allocation_.md's real rule.
+    meets_alpha_minimum: bool
+    #: Exactly 100,000 points, per the same doc ("EXACTLY 100,000 points total").
+    fully_allocated: bool
+
+
+class OsmosisCoverageResult(Out):
+    scopes: list[OsmosisScopeCoverage]
+    #: Scopes with >=10 alphas AND exactly 100,000 points.
+    complete_scopes: int
+    #: Osmosis needs >=3 complete scopes (Osmosis_allocation_.md).
+    meets_minimum_scopes: bool
+    alphas_examined: int
+
+
+@router.get("/osmosis/coverage")
+async def osmosis_coverage(state: State, max_alphas: int = 3000) -> OsmosisCoverageResult:
+    """Real per-scope Osmosis coverage: fetched from your actual submitted Alphas, not a
+    hardcoded scope list -- Osmosis_allocation_.md defines a scope as whatever Region x
+    Delay your Genius level allows, which is account-specific, not fixed.
+
+    Osmosis eligibility is any submission date (unlike quarterly Signals), so this walks
+    every submitted Alpha up to max_alphas, paginated via the real list_alphas() filter DSL.
+    """
+    by_scope: dict[tuple[str, int], dict[str, int]] = {}
+    offset = 0
+    page_size = 100
+    examined = 0
+    while examined < max_alphas:
+        query = AlphaQuery(
+            limit=min(page_size, max_alphas - examined),
+            offset=offset,
+            filters=[Filter(field="status", op="!=", value="UNSUBMITTED")],
+        )
+        page = await state.endpoints.list_alphas(query)
+        results = page.get("results") or []
+        if not results:
+            break
+        for a in results:
+            settings = a.get("settings") or {}
+            region, delay = settings.get("region"), settings.get("delay")
+            if region is None or delay is None:
+                continue
+            key = (region, int(delay))
+            bucket = by_scope.setdefault(key, {"n": 0, "points": 0})
+            bucket["n"] += 1
+            bucket["points"] += int(a.get("osmosisPoints") or 0)
+        examined += len(results)
+        offset += len(results)
+        if len(results) < page_size or offset >= int(page.get("count") or 0):
+            break
+
+    scopes = [
+        OsmosisScopeCoverage(
+            region=region,
+            delay=delay,
+            n_alphas=v["n"],
+            points_total=v["points"],
+            meets_alpha_minimum=v["n"] >= 10,
+            fully_allocated=v["points"] == 100_000,
+        )
+        for (region, delay), v in sorted(by_scope.items(), key=lambda kv: -kv[1]["points"])
+    ]
+    complete = sum(1 for s in scopes if s.meets_alpha_minimum and s.fully_allocated)
+    return OsmosisCoverageResult(
+        scopes=scopes,
+        complete_scopes=complete,
+        meets_minimum_scopes=complete >= 3,
+        alphas_examined=examined,
+    )
+
+
+class OsmosisPointsRequest(BaseModel):
+    points: int = Field(ge=0, le=100_000)
+
+
+@router.patch("/{alpha_id}/osmosis-points")
+async def set_osmosis_points(alpha_id: str, body: OsmosisPointsRequest, state: State) -> AlphaInfo:
+    """Set one Alpha's Osmosis allocation. Reuses update_alpha() exactly -- the same
+    verified PATCH /alphas/{id} mechanism update_properties() already uses for
+    description/tags -- osmosisPoints is just one more field on the same body.
+
+    One Alpha at a time, deliberately: a real write to your account, no bulk-allocation
+    plan/apply here -- build and confirm a scope's full allocation manually, one Alpha at
+    a time, until a reviewed bulk-plan endpoint exists.
+    """
+    await state.endpoints.update_alpha(alpha_id, {"osmosisPoints": body.points})
+    body_after = await state.endpoints.alpha_body(alpha_id)
+    return _info(alpha_id, body_after)
 
 
 @router.get("/{alpha_id}/page")
