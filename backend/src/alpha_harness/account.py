@@ -18,6 +18,7 @@ import structlog
 from sqlalchemy import select
 
 from .brain.auth import Authenticator, SessionInfo
+from .brain.endpoints import SIMULATION_TYPES
 from .brain.errors import BrainError
 from .db.models import BrainSessionRow, Credential, MetadataCache, utcnow
 from .sealing import SealError
@@ -192,6 +193,34 @@ class AuthService:
                 await self._warm_operators()
             return info
 
+    async def verify(self, inquiry: str) -> SessionInfo:
+        """Finish a sign-in BRAIN paused for an identity check, without asking again.
+
+        :meth:`login` already resumes a pending inquiry, which is why the old advice was to
+        sign in a second time. That works and asks the person to type a password they have
+        just typed. This closes the same inquiry on its own, so the check finishing is all
+        it takes.
+
+        Answering before the check is done is the normal case, not a failure: the session
+        comes back unauthenticated and still carrying the inquiry, and the caller asks
+        again. Nothing here is stored until BRAIN accepts it.
+        """
+        async with self._lock:
+            info = await self.auth.verify(inquiry)
+            if info is None:
+                # BRAIN would not take the inquiry at all. The session keeps what it had, so
+                # the screen still shows the check rather than a bare failure.
+                return self._session
+            self._user_profile = None
+            self._session = info
+            if info.authenticated:
+                # No credential to store: the sign-in that started this never got far enough
+                # to have one accepted, and the cookie jar is what carries the session now.
+                await self._save_cookies(info)
+                await self.get_user_profile()
+                await self._warm_operators()
+            return info
+
     async def status(self, *, refresh: bool = False) -> SessionInfo:
         """Current state. ``refresh`` re-validates against the platform."""
         if not refresh:
@@ -203,6 +232,13 @@ class AuthService:
             # name again on the new object.
             if fresh.authenticated and not fresh.full_name:
                 fresh.full_name = self._session.full_name
+            if not fresh.authenticated and self._session.inquiry:
+                # A refresh that only says "not signed in" must not drop the inquiry the
+                # person is part-way through: the next sign-in would mint a replacement and
+                # strand the link already open in their browser.
+                fresh.inquiry = self._session.inquiry
+                fresh.verification_url = self._session.verification_url
+                fresh.detail = fresh.detail or self._session.detail
             self._session = fresh
             if self._session.authenticated:
                 await self.get_user_profile()
@@ -310,6 +346,15 @@ class AuthService:
 #: How long BRAIN's settings schema is trusted before it is read again.
 SCHEMA_MAX_AGE = timedelta(hours=1)
 
+#: The cached schema is keyed by what produced it, not just by what it is.
+#:
+#: It is a *merge* of the per-type trees this build knows about, so a build that merges a
+#: different set must not read a row written by one that merged another. Without this, an
+#: update that adds a simulation type goes unnoticed for up to :data:`SCHEMA_MAX_AGE` — the
+#: new markets simply do not appear, and the release looks broken. Measured on the release
+#: that added region-agnostic simulations.
+SCHEMA_KEY = f"settings_schema:{'+'.join(SIMULATION_TYPES)}"
+
 
 class PlatformMetadata:
     """The account's operators and BRAIN's settings schema, cached in SQLite."""
@@ -326,7 +371,7 @@ class PlatformMetadata:
         the account's permissions.
         """
         schema = await self.endpoints.settings_schema()
-        await self._cache("settings_schema", schema)
+        await self._cache(SCHEMA_KEY, schema)
         return schema
 
     async def cached_settings_schema(self) -> dict[str, Any] | None:
@@ -334,9 +379,11 @@ class PlatformMetadata:
 
         Refreshing only at sign-in left a restored session offering universes BRAIN had
         withdrawn. A failed refresh keeps the old copy, still right for almost every setting.
+        A build that merges a different set of simulation types finds no copy at all, by
+        :data:`SCHEMA_KEY`, and reads a fresh one.
         """
         async with self.db.session() as session:
-            row = await session.get(MetadataCache, "settings_schema")
+            row = await session.get(MetadataCache, SCHEMA_KEY)
             cached, fetched = (row.value, row.fetched_at) if row else (None, None)
         if fetched is not None and fetched.tzinfo is None:
             fetched = fetched.replace(tzinfo=UTC)

@@ -17,7 +17,7 @@ import contextlib
 import dataclasses
 import time
 from collections.abc import Awaitable, Callable
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -31,12 +31,13 @@ from ..brain.errors import (
     BrainForbidden,
     BrainValidationError,
 )
-from ..brain.filters import PLATFORM_TZ
+from ..brain.filters import platform_midnight
 from ..brain.schemas import SimulationRequest
-from ..db.models import DedupEntry, SimStatus, SimulationRecord, TaskQuota, utcnow
+from ..db.models import DedupEntry, SimStatus, SimulationRecord, Study, TaskQuota, utcnow
 from .awake import StayAwake
 from .lifecycle import (
     ACTIVE,
+    SLOT_COST,
     ChangeHook,
     Outcome,
     SubmissionFailed,
@@ -83,11 +84,21 @@ AWAKE_TICKS = 15
 #: A wait of TICK_SECONDS that took this long means the computer slept through it.
 SLEEP_GAP = 60.0
 
+#: The task work carries when nothing owns it — a one-off run from the UI rather than a
+#: lab task. It has no study by design, so it is the one task exempt from the orphan sweep.
+MANUAL_TASK = "manual"
+
 #: Hashes per duplicate lookup in :meth:`BatchEngine.enqueue`.
 ENQUEUE_CHUNK = 500
 
 #: Recent completions the time-left estimate is measured over.
 RATE_WINDOW = timedelta(minutes=15)
+
+#: How often queued work with no task left is swept up.
+ORPHAN_SWEEP_SECONDS = 60.0
+
+#: Cancellations in flight at once when a task is forced to stop.
+ABANDON_AT_ONCE = 8
 
 #: Asked while BRAIN refuses the session; True once simulations may be sent again.
 SessionHook = Callable[[], Awaitable[bool]]
@@ -120,8 +131,8 @@ class BatchEngine:
         #: Set when the daily cap is hit. Nothing is submitted until it clears, because
         #: retrying before the US-Eastern reset cannot succeed.
         self._daily_limit_hit = False
-        #: The US-Eastern date the cap was hit on; the flag clears once that date passes.
-        self._limit_day: date | None = None
+        #: Monotonic time of BRAIN's quota reset; the flag clears once it passes.
+        self._limit_resets_at: float | None = None
         self._tick_lock = asyncio.Lock()
         self._enqueue_lock = asyncio.Lock()
         #: Reads finished batches back outside the tick lock; at most one runs at a time.
@@ -140,6 +151,8 @@ class BatchEngine:
         self._awake = StayAwake()
         #: Wall-clock start and end of the last sleep the engine noticed, for the Matrix.
         self._last_pause: tuple[datetime, datetime] | None = None
+        #: When queued work with no task was last swept up. Zero so the first tick sweeps.
+        self._last_orphan_sweep = 0.0
 
     # -- lifecycle -------------------------------------------------------
 
@@ -177,6 +190,7 @@ class BatchEngine:
     def clear_daily_limit(self) -> None:
         """Called when a new US-Eastern day starts, or by the user."""
         self._daily_limit_hit = False
+        self._limit_resets_at = None
 
     # -- queueing --------------------------------------------------------
 
@@ -184,7 +198,7 @@ class BatchEngine:
         self,
         requests: list[SimulationRequest],
         *,
-        task: str = "manual",
+        task: str = MANUAL_TASK,
         skip_duplicates: bool = True,
     ) -> dict[str, Any]:
         """Accept work. Returns what was queued and what was skipped as a duplicate.
@@ -302,6 +316,83 @@ class BatchEngine:
             await self._notify()
         return dropped
 
+    async def disown_orphans(self) -> int:
+        """Cancel queued work whose task no longer exists. Returns how many.
+
+        Queued rows outlive the task that made them — a study deleted, a crash between
+        queueing and recording it — and nothing downstream notices. Dispatch selects on
+        status alone, and :func:`allocate_slots` treats a task with no quota row as
+        *unconstrained*, so orphaned work is sent as fast as the slots allow, spends the
+        day's quota, and produces Alphas no task will ever score. On screen it looks like
+        the app simulating on its own: an empty Tasks table, no cores assigned, and the
+        day's allowance draining anyway.
+
+        Cancelled rather than skipped, because a row left QUEUED is invisible in a
+        different way — it would sit in the backlog for good and the count would never
+        explain itself.
+        """
+        async with self.db.session() as session:
+            result = await session.execute(
+                update(SimulationRecord)
+                .where(
+                    SimulationRecord.status == SimStatus.QUEUED,
+                    # The documented task for work nobody owns; it has no study by design.
+                    SimulationRecord.task != MANUAL_TASK,
+                    SimulationRecord.task.not_in(select(Study.task)),
+                )
+                .values(
+                    status=SimStatus.CANCELLED,
+                    finished_at=utcnow(),
+                    message="The task that queued this no longer exists, so it was not sent.",
+                )
+            )
+            dropped = result.rowcount or 0  # pyright: ignore[reportAttributeAccessIssue]
+        if dropped:
+            log.warning("engine.orphans_disowned", count=dropped)
+            await self._notify()
+        return dropped
+
+    async def abandon(self, task: str) -> int:
+        """Cancel everything ``task`` still has out on BRAIN. Returns how many were asked.
+
+        Best effort on purpose. A simulation BRAIN has already finished refuses to cancel,
+        and marking it cancelled here would hide an alpha that exists — so the refusal is
+        left to the next poll, which records what really happened. The *task* ends either
+        way: a task is a local scheduling object, and a simulation that outlives it still
+        lands in the vault with the quota it already spent.
+        """
+        async with self.db.session() as session:
+            rows = list(
+                (
+                    await session.scalars(
+                        select(SimulationRecord.id).where(
+                            SimulationRecord.task == task,
+                            SimulationRecord.status.in_(
+                                [SimStatus.PENDING, SimStatus.RUNNING, SimStatus.ORPHANED]
+                            ),
+                        )
+                    )
+                ).all()
+            )
+        # Together rather than one after another: this runs while the task's lock is held,
+        # and a task with fifty simulations out would otherwise hold it for the sum of fifty
+        # round trips. Bounded, because BRAIN meters this endpoint like any other.
+        gate = asyncio.Semaphore(ABANDON_AT_ONCE)
+
+        async def stop(record_id: int) -> None:
+            async with gate:
+                await self.tracker.cancel(record_id)
+
+        outcomes = await asyncio.gather(*(stop(r) for r in rows), return_exceptions=True)
+        for record_id, outcome in zip(rows, outcomes, strict=True):
+            if isinstance(outcome, BaseException):
+                # One refusal must not strand the rest; the poll records what really happened.
+                log.warning("engine.cancel_failed", record_id=record_id, error=str(outcome))
+        if rows:
+            log.info("engine.task_abandoned", task=task, count=len(rows))
+            await self._notify()
+        return len(rows)
+
     # -- quotas ----------------------------------------------------------
 
     async def set_quota(self, name: str, max_slots: int, *, enabled: bool = True) -> None:
@@ -415,8 +506,9 @@ class BatchEngine:
             log.exception("engine.expand_failed")
 
     async def _fill_slots(self) -> int:
-        if self._daily_limit_hit and self._limit_day != _platform_today():
-            # A new US-Eastern day: the quota is back.
+        reset = self._limit_resets_at
+        if self._daily_limit_hit and reset is not None and time.monotonic() >= reset:
+            # BRAIN's day has turned: the quota is back.
             self.clear_daily_limit()
         if self._daily_limit_hit:
             return 0
@@ -425,6 +517,15 @@ class BatchEngine:
                 return 0
             self._session_lost = False
             log.info("engine.session_back")
+
+        # Before anything is chosen to send. A task can be orphaned mid-session, and what it
+        # left behind is exactly the work that would be sent hardest — nothing caps it. Not
+        # every tick, though: it is a write transaction, and orphaning is rare enough that a
+        # minute of a stray task sending is the cost of not writing every two seconds.
+        now = time.monotonic()
+        if now - self._last_orphan_sweep >= ORPHAN_SWEEP_SECONDS:
+            self._last_orphan_sweep = now
+            await self.disown_orphans()
 
         async with self.db.session() as session:
             in_flight = await self._in_flight_by_task(session)
@@ -658,26 +759,27 @@ class BatchEngine:
             else:
                 await self._fail_batch(parent_id, record_ids, exc.message, requeue=exc.retryable)
             return False
+        else:
+            # 3. Record the parent id immediately — it is the only way to cancel the batch —
+            # and before leaving ``sending``, so a stale-send sweep cannot orphan it meanwhile.
+            platform_id = extract_simulation_id(response.location)
+            if platform_id is None:
+                await self._fail_batch(
+                    parent_id,
+                    record_ids,
+                    "BRAIN accepted the batch but returned no id, so it cannot be cancelled "
+                    "from here. Check the platform.",
+                    requeue=False,
+                    status=SimStatus.ORPHANED,
+                )
+                return False
+
+            async with self.db.session() as session:
+                won = await record_launch(
+                    session, parent_id, platform_id, response.rate_limit, children=record_ids
+                )
         finally:
             self.tracker.sending.discard(parent_id)
-
-        # 3. Record the parent id immediately — it is the only way to cancel the batch.
-        platform_id = extract_simulation_id(response.location)
-        if platform_id is None:
-            await self._fail_batch(
-                parent_id,
-                record_ids,
-                "BRAIN accepted the batch but returned no id, so it cannot be cancelled "
-                "from here. Check the platform.",
-                requeue=False,
-                status=SimStatus.ORPHANED,
-            )
-            return False
-
-        async with self.db.session() as session:
-            won = await record_launch(
-                session, parent_id, platform_id, response.rate_limit, children=record_ids
-            )
 
         if not won:
             if not await cancel_after_lost_race(
@@ -710,7 +812,8 @@ class BatchEngine:
         good alphas; any other body shape falls back to rejecting the whole batch.
         """
         entries = exc.body if isinstance(exc.body, list) else None
-        if entries is None or len(entries) != len(record_ids):
+        # All entries empty names no culprit: resending it would be refused the same way.
+        if entries is None or len(entries) != len(record_ids) or not any(entries):
             reason = describe_fields(exc.fields, exc.message)
             await self._fail_batch(
                 parent_id, record_ids, f"BRAIN rejected these settings — {reason}", requeue=False
@@ -741,8 +844,12 @@ class BatchEngine:
         Retryable failures put the children back in the queue; a rejection that will
         never succeed marks them so, rather than looping forever on the same payload.
         """
-        child_status = SimStatus.QUEUED if requeue else status
         async with self.db.session() as session:
+            parent = await session.get(SimulationRecord, parent_id)
+            if parent is not None and parent.status == SimStatus.CANCELLED:
+                # Cancelled while the POST was out: this work must never be queued again.
+                requeue, status, message = False, SimStatus.CANCELLED, parent.message or message
+            child_status = SimStatus.QUEUED if requeue else status
             values: dict[str, Any] = {"status": child_status, "parent_record_id": None}
             if not requeue:
                 values["message"] = message
@@ -778,9 +885,25 @@ class BatchEngine:
 
     async def _on_daily_limit(self) -> None:
         self._daily_limit_hit = True
-        self._limit_day = _platform_today()
+        self._limit_resets_at = time.monotonic() + await self._seconds_to_reset()
         log.warning("engine.daily_limit_reached")
         await self._notify()
+
+    async def _seconds_to_reset(self) -> float:
+        """Until BRAIN's quota resets, by its own ``X-Ratelimit-Reset`` when that is current.
+
+        A reading whose reset has already passed is from an earlier day, so the next platform
+        midnight stands in: every recorded reset has landed exactly there.
+        """
+        now = datetime.now(UTC)
+        latest = await self.tracker.latest_quota()
+        if latest is not None and latest.reset_seconds is not None:
+            reset = latest.observed_at + timedelta(seconds=latest.reset_seconds)
+            if reset > now:
+                return (reset - now).total_seconds()
+        # In UTC: subtracting two New York times ignores a DST change between them.
+        midnight = platform_midnight() + timedelta(days=1)
+        return (midnight.astimezone(UTC) - now).total_seconds()
 
     # -- child expansion -------------------------------------------------
 
@@ -1038,20 +1161,22 @@ class BatchEngine:
             return bool(queued)
 
     async def _in_flight_by_task(self, session: Any) -> dict[str, int]:
-        """Slots currently held, counted per task.
+        """Cores currently held, counted per task.
 
         Only parents and standalone simulations count — a batch's children ride in its
-        single slot and must not be double-counted.
+        single slot and must not be double-counted. A region-agnostic simulation holds four,
+        one per region it is translated into, and a GLB one holds two: BRAIN meters that
+        region at double rate, so only four GLB simulations run at once.
         """
         result = await session.execute(
-            select(SimulationRecord.task, func.count())
+            select(SimulationRecord.task, func.sum(SLOT_COST))
             .where(
                 SimulationRecord.status.in_([SimStatus.PENDING, SimStatus.RUNNING]),
                 SimulationRecord.parent_record_id.is_(None),
             )
             .group_by(SimulationRecord.task)
         )
-        return dict(result.all())
+        return {task: int(cost or 0) for task, cost in result.all()}
 
     async def _notify(self) -> None:
         if self._on_change is None:
@@ -1063,8 +1188,3 @@ class BatchEngine:
                 await result
         except Exception:
             log.exception("engine.notify_failed")
-
-
-def _platform_today() -> date:
-    """Today on the platform's clock, which is what the daily quota resets on."""
-    return datetime.now(PLATFORM_TZ).date()

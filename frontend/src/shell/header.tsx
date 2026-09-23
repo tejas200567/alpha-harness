@@ -6,12 +6,12 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { ClockIcon, SearchIcon, ZapIcon } from 'lucide-react'
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { simulations, today } from '@/api/core'
 import { cn } from '@/lib/cn'
 import { fmt } from '@/lib/format'
 import { useCores, useLive } from '@/lib/live'
-import type { CellState } from '@/lib/matrix'
+import { coreBlocks } from '@/lib/matrix'
 import { useRefetchOn } from '@/lib/ws'
 import { Button, STATUS } from '@/ui/kit'
 import { Tooltip } from '@/ui/overlay'
@@ -46,6 +46,9 @@ function HeaderCores() {
     queryKey: ['simulations', 'active'],
     queryFn: () => simulations.active(),
     enabled: live === null,
+    // Always mounted, so it speaks for every screen: a restarted backend may have no
+    // snapshot to replay, and one read taken while it was down would stand forever.
+    refetchInterval: 5000,
   })
   const engine = useQuery({
     queryKey: ['simulations', 'engine'],
@@ -59,6 +62,8 @@ function HeaderCores() {
   const sessionLost = Boolean(engine.data?.sessionLost)
   const { cores } = useCores(live ?? active.data, slots, maxBatch)
 
+  const blocks = useMemo(() => coreBlocks(cores, slots), [cores, slots])
+
   return (
     <nav
       aria-label={`${slots} simulation cores execution matrix`}
@@ -66,12 +71,13 @@ function HeaderCores() {
     >
       <Link
         to="/matrix"
-        className="flex items-center gap-1 rounded-xs transition-colors hover:bg-surface-2 focus-visible:-outline-offset-2"
-        title="Open Simulation Matrix"
+        className="flex items-center gap-1.5 rounded-xs transition-colors hover:bg-surface-2 focus-visible:-outline-offset-2"
+        // No `title`: each core carries its own tooltip, and the browser's native one for
+        // the link fired on top of it. The label stays for anyone not using a pointer.
         aria-label="Open Simulation Matrix"
       >
-        {cores.map((core, i) => {
-          const holder = core.holder
+        {blocks.map((block) => {
+          const holder = block.holder
           let state: 'running' | 'queued' | 'warning' | 'idle' = 'idle'
           if (dailyLimitHit || sessionLost) {
             state = 'warning'
@@ -86,23 +92,34 @@ function HeaderCores() {
             idle: 'bg-status-idle text-ink-subtle border border-hairline hover:border-hairline-strong hover:text-ink',
           }[state]
 
+          const where =
+            block.span === 1
+              ? `Core ${block.start + 1}`
+              : `Cores ${block.start + 1}\u2013${block.start + block.span}`
+          const label =
+            state === 'idle'
+              ? 'Idle'
+              : state === 'running'
+                ? 'Running'
+                : state === 'warning'
+                  ? 'Warning'
+                  : 'Queued'
+
           const tooltipContent = (
             <div className="flex flex-col gap-1 text-caption">
               <span className="font-medium text-ink">
-                Core {i + 1}:{' '}
-                {state === 'idle'
-                  ? 'Idle'
-                  : state === 'running'
-                    ? 'Running'
-                    : state === 'warning'
-                      ? 'Warning'
-                      : 'Queued'}
+                {where}: {label}
               </span>
               {holder && (
                 <>
                   <span className="text-ink-muted">
                     {holder.region} · D{holder.delay} · {holder.universe}
                   </span>
+                  {block.span > 1 && (
+                    <span className="text-ink-muted">
+                      One simulation holding <span className="num">{block.span}</span> cores
+                    </span>
+                  )}
                   <span className="num text-ink-subtle">
                     {holder.task} ({fmt.pct(holder.progress, 0)})
                   </span>
@@ -112,17 +129,31 @@ function HeaderCores() {
           )
 
           return (
-            <Tooltip key={i} content={tooltipContent}>
-              <span
-                role="status"
-                aria-label={`Core ${i + 1}: ${state}`}
-                className={cn(
-                  'num flex size-7 shrink-0 items-center justify-center rounded-xs text-caption font-medium select-none transition-colors max-sm:size-5',
-                  stateClasses,
-                )}
-              >
-                <span className="max-sm:hidden">C{i + 1}</span>
-                <span className="sm:hidden">{i + 1}</span>
+            <Tooltip key={block.start} content={tooltipContent}>
+              {/* A hair between a block's own cores and the full gap between blocks, so two
+                  cores held by one simulation read as one wide mark rather than two. */}
+              <span className="flex gap-px">
+                {Array.from({ length: block.span }, (_, k) => (
+                  <span
+                    key={k}
+                    role="status"
+                    aria-label={`${where}: ${label}`}
+                    className={cn(
+                      'num flex size-7 shrink-0 items-center justify-center text-caption font-medium select-none transition-colors max-sm:size-5',
+                      stateClasses,
+                      block.span === 1
+                        ? 'rounded-xs'
+                        : k === 0
+                          ? 'rounded-l-xs'
+                          : k === block.span - 1
+                            ? 'rounded-r-xs'
+                            : 'rounded-none',
+                    )}
+                  >
+                    <span className="max-sm:hidden">C{block.start + k + 1}</span>
+                    <span className="sm:hidden">{block.start + k + 1}</span>
+                  </span>
+                ))}
               </span>
             </Tooltip>
           )
@@ -186,7 +217,7 @@ function Clocks() {
   const session =
     bar.data.expiresInSeconds == null ? null : Math.max(0, bar.data.expiresInSeconds - elapsed)
   // `exact` flips true once today's first simulation POST returns BRAIN's own quota headers.
-  const { remaining, exact, queued } = bar.data.simulations
+  const { remaining, exact } = bar.data.simulations
 
   return (
     // Below 1024px the two clocks hide; below 640px the quota figures drop their visible labels.
@@ -217,17 +248,6 @@ function Clocks() {
           {fmt.int(remaining)}
         </span>
       </Clock>
-      {/* Clickable, so a control rather than a status box. */}
-      <Tooltip content={<MiniMatrix />}>
-        <Button
-          size="sm"
-          render={<Link to="/matrix" />}
-          aria-label={`${fmt.int(queued)} queued. Open the Simulation Matrix`}
-        >
-          <span className="num font-medium">{fmt.int(queued)}</span>
-          <span className="max-sm:sr-only">Queued</span>
-        </Button>
-      </Tooltip>
       <Clock
         icon={<ClockIcon className="size-3.5 text-ink-subtle" aria-hidden />}
         label="Simulation Quota Reset in"
@@ -272,56 +292,4 @@ function Clock({
     </span>
   )
   return hint ? <Tooltip content={hint}>{body}</Tooltip> : body
-}
-
-const CELL: Record<CellState, string> = {
-  RUNNING: 'bg-status-running',
-  PENDING: 'bg-status-queued',
-  EMPTY: 'bg-status-idle',
-}
-
-/**
- * The 8 cores × 10-Alpha batches at a glance, on hover of "queued". Mounts only while the
- * tooltip is open, and reads the same live snapshot as the Dashboard matrix.
- */
-function MiniMatrix() {
-  const live = useLive((s) => s.simulations)
-  const active = useQuery({
-    queryKey: ['simulations', 'active'],
-    queryFn: () => simulations.active(),
-    enabled: live === null,
-  })
-  const engine = useQuery({
-    queryKey: ['simulations', 'engine'],
-    queryFn: () => simulations.engine(),
-  })
-  const slots = engine.data?.slots ?? 8
-  const maxBatch = engine.data?.maxBatch ?? 10
-  const { cores } = useCores(live ?? active.data, slots, maxBatch)
-
-  return (
-    // Small cells, so the whole 8×10 reads at a glance without covering the page.
-    <div className="flex items-stretch gap-2 p-1">
-      {/* Y-axis label, read bottom-to-top like a chart axis. */}
-      <span className="flex rotate-180 items-center justify-center text-caption font-medium tracking-wider uppercase whitespace-nowrap text-ink-subtle [writing-mode:vertical-rl]">
-        {slots} Cores
-      </span>
-      <div
-        role="img"
-        aria-label={`Simulation matrix, ${slots} cores`}
-        className="flex flex-col gap-1.5"
-      >
-        {cores.map((core, i) => (
-          <div key={i} className="flex gap-1.5">
-            {core.cells.map((cell, j) => (
-              <span
-                key={j}
-                className={cn('size-4 rounded-xs border border-hairline-subtle', CELL[cell.state])}
-              />
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
 }

@@ -17,6 +17,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from ..brain.schemas import SimulationType
+from .lifecycle import GLB_REGION, GLB_SLOTS, RA_SLOTS
 from .reconcile import same_value, squash
 
 if TYPE_CHECKING:
@@ -41,6 +43,35 @@ class BatchKey:
             f"{self.sim_type} {self.instrument_type} {self.region} "
             f"delay {self.delay} {self.language}"
         )
+
+    @property
+    def region_agnostic(self) -> bool:
+        return self.sim_type == SimulationType.REGION_AGNOSTIC
+
+    @property
+    def cost(self) -> int:
+        """Concurrent cores one simulation with this key can occupy, at most.
+
+        GLB counts two: BRAIN gives that region 2 of the 8 slots per simulation, so four
+        run at once (``docs/ANNOUNCEMENTS.md``, 2025-09-23). A batch is one simulation to
+        BRAIN, so its children do not multiply this.
+
+        A region-agnostic one costs the sum of its own children's quota, which varies with
+        the regions its fields reach; :data:`RA_SLOTS` reserves the usual three, so two run
+        at once.
+        """
+        if self.region_agnostic:
+            return RA_SLOTS
+        return GLB_SLOTS if self.region == GLB_REGION else 1
+
+    @property
+    def max_batch(self) -> int:
+        """How many of these a multi-simulation may carry.
+
+        Measured: BRAIN answers ``201`` to an array of region-agnostic simulations and then
+        fails the parent and cancels every child, so they go one at a time.
+        """
+        return 1 if self.region_agnostic else MAX_BATCH
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,8 +122,10 @@ def pack(
 ) -> list[Batch]:
     """Choose what to submit next.
 
-    Groups items by batch key and fills up to ``free_slots`` batches of at most
-    ``max_batch`` each, fullest groups first so a round moves the most simulations it can.
+    Groups items by batch key and fills up to ``free_slots`` *cores* with batches of at most
+    ``max_batch`` each, fullest groups first so a round moves the most simulations it can. A
+    core is one ordinary simulation; a GLB one costs two and a region-agnostic one three, and
+    the latter never shares a batch (see :attr:`BatchKey.cost` and :attr:`BatchKey.max_batch`).
 
     ``task_capacity`` caps how many batches each named task may be given in this round;
     a task absent from the mapping is unconstrained. Items are never mixed across tasks,
@@ -113,23 +146,29 @@ def pack(
     # chunks themselves rather than the groups they came from.
     chunks: list[tuple[str, BatchKey, list[WorkItem]]] = []
     for (task, key), members in groups.items():
+        size = min(max_batch, key.max_batch)
         chunks.extend(
-            (task, key, members[start : start + max_batch])
-            for start in range(0, len(members), max_batch)
+            (task, key, members[start : start + size]) for start in range(0, len(members), size)
         )
 
     # Fullest chunks first; ties broken by the earliest queued item so a small group
     # cannot be starved indefinitely behind a steadily refilled large one.
     chunks.sort(key=lambda c: (-len(c[2]), c[2][0].record_id))
 
+    taken = 0
     for task, key, members in chunks:
-        if len(batches) >= free_slots:
+        if taken >= free_slots:
             break
+        # A region-agnostic batch that will not fit is skipped rather than ending the round:
+        # an ordinary one behind it still fits in the core it would have needed.
+        if taken + key.cost > free_slots:
+            continue
         if task in remaining:
             if remaining[task] <= 0:
                 continue
             remaining[task] -= 1
         batches.append(Batch(key=key, task=task, items=tuple(members)))
+        taken += key.cost
 
     return batches
 
@@ -192,8 +231,9 @@ def demand_by_task(items: Sequence[WorkItem], max_batch: int) -> dict[str, int]:
         counts[(item.task, item.key)] += 1
 
     demand: dict[str, int] = defaultdict(int)
-    for (task, _key), n in counts.items():
-        demand[task] += -(-n // max_batch)  # ceiling division
+    for (task, key), n in counts.items():
+        size = min(max_batch, key.max_batch)
+        demand[task] += -(-n // size)  # ceiling division
     return dict(demand)
 
 

@@ -120,7 +120,7 @@ export function SubmissionPlannerScreen() {
         <Checkbox
           label=""
           checked={r.submitted}
-          onChange={(e) => mark.mutate({ alphaId: r.alphaId, submitted: e.target.checked })}
+          onChange={(next) => mark.mutate({ alphaId: r.alphaId, submitted: next })}
           aria-label={`Mark ${r.alphaId} submitted on BRAIN`}
         />
       ),
@@ -288,7 +288,7 @@ export function SubmissionPlannerScreen() {
             />
           </Panel>
         </>
-      ) : (
+      ) : plan.isError ? null : (
         <Panel>
           <Empty title="Nothing to plan yet">
             Run a sweep first — its submittable Alphas are what this chooses between.

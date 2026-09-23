@@ -36,6 +36,7 @@ from .deps import State, refuse
 
 if TYPE_CHECKING:
     import random
+    from collections.abc import Sequence
 
     from ..brain.schemas import SimulationRequest
 
@@ -53,6 +54,8 @@ class EvolutionRequest(BaseModel):
     delay: int = Field(ge=0, le=1)
     universe: str
     alpha_ids: list[str] = Field(default_factory=list, max_length=MAX_SEEDS)
+    #: Empty keeps the lab's default four; anything here is what the genes may take.
+    neutralizations: list[str] = Field(default_factory=list, max_length=20)
     cores: int = Field(default=search.MAX_CORES, ge=1, le=search.MAX_CORES)
     #: ``None`` sizes the population from the simulations.
     population: Literal[50, 100, 200] | None = None
@@ -141,14 +144,17 @@ class AutoSeedsJob(Out):
 
 
 async def _market(
-    state: Any, region: str, delay: int, universe: str
+    state: Any, region: str, delay: int, universe: str, chosen: Sequence[str] = ()
 ) -> tuple[ga.Market | None, list[str]]:
-    """The market children are bred in, and why it cannot be used if it cannot."""
+    """The market children are bred in, and why it cannot be used if it cannot.
+
+    ``chosen`` narrows the neutralizations a gene may take; empty keeps the lab's default.
+    """
     problems: list[str] = []
     operators = await account_operators(state, refresh=False)
     if not operators:
         problems.append(OPERATORS_UNREAD)
-    neutralizations = await neutralizations_for(state, region, delay)
+    neutralizations = await neutralizations_for(state, region, delay, chosen)
     if not neutralizations:
         problems.append("BRAIN's settings list is not loaded. Sign in again.")
     market = await ga.market_for(state.catalog, operators, region, delay, universe, neutralizations)
@@ -187,7 +193,9 @@ async def options(state: State, refresh: bool = False) -> EvolutionOptions:
 
 async def _plan(body: EvolutionRequest, state: Any) -> dict[str, Any]:
     """Everything a task would breed from, checked, without queueing anything."""
-    market, problems = await _market(state, body.region, body.delay, body.universe)
+    market, problems = await _market(
+        state, body.region, body.delay, body.universe, body.neutralizations
+    )
     ids = list(dict.fromkeys(body.alpha_ids))
     rows = await state.alphas.by_ids(ids)
     seeds: list[dict[str, Any]] = []
@@ -264,7 +272,9 @@ async def auto_seeds(body: AutoSeedsRequest, state: State) -> AutoSeedsStarted:
         # Finished jobs are kept for a while rather than cleared: a screen still reading the
         # last run's seeds was told to start again the moment another market was chosen.
         cutoff = time.monotonic() - JOB_TTL_SECONDS
-        for stale in [i for i, j in _jobs.items() if (j["finished_at"] or 0.0) < cutoff]:
+        # A job whose task just finished may not have stamped ``finished_at`` yet; it stays.
+        ended = [i for i, j in _jobs.items() if j["finished_at"] is not None]
+        for stale in [i for i in ended if _jobs[i]["finished_at"] < cutoff]:
             del _jobs[stale]
         task = await state.tasks.start("evolution-seeds", "Choosing seeds")
         job: dict[str, Any] = {

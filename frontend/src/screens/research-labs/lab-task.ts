@@ -19,9 +19,14 @@ export interface LabDraft {
   decay: number
   /** `null` until the user chooses: then the lab allows `vec_avg`. */
   vectorOperators: string[] | null
+  /** Empty leaves the lab on its own four group neutralizations. */
+  neutralizations: string[]
 }
 
 export const MAX_SIMULATIONS = 100_000
+
+/** Matches `labs.search.MAX_CORES`: a task may hold every slot the engine has. */
+export const CORES = [1, 2, 3, 4, 5, 6, 7, 8]
 
 /** A draft's market and datasets: dataset names, and the round trip to the Data Explorer to choose them. */
 type LabMarket = Pick<LabDraft, 'region' | 'delay' | 'universe' | 'datasetIds'>
@@ -84,6 +89,7 @@ export function labBody(draft: LabDraft, vectorOperators: string[]) {
     universe: draft.universe,
     dataset_ids: draft.datasetIds,
     vector_operators: vectorOperators,
+    neutralizations: draft.neutralizations,
     decay: draft.decay,
     cores: draft.cores,
   }

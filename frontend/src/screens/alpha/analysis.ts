@@ -24,6 +24,7 @@ const NAMES: Record<string, string> = {
   PROD_CORRELATION: 'Production Correlation',
   POWER_POOL_CORRELATION: 'Power Pool Correlation',
   CLUSTER_TEST: 'Cluster Sharpe',
+  QUICK_MODE: 'Quick mode',
   DATA_DIVERSITY: 'Data diversity',
   REGULAR_SUBMISSION: 'Submission quota',
   D0_SUBMISSION: 'Delay 0 quota',
@@ -31,6 +32,9 @@ const NAMES: Record<string, string> = {
   MATCHES_PYRAMID: 'Pyramids',
   MATCHES_THEMES: 'Themes',
   OSMOSIS_ALLOCATION: 'Osmosis allocation',
+  REVERSION_COMPONENT: 'Reversion component',
+  HT_AFTER_COST_SHARPE: 'After-cost Sharpe',
+  HT_ORTHOGONAL_RAM_NEUTRALIZATION: 'Orthogonal neutralization',
   UNITS: 'Units',
   OPERATOR_AUTHORIZATION: 'Operator access',
   DATA_SET_AUTHORIZATION: 'Dataset access',
@@ -50,14 +54,22 @@ export const checkName = (name: string) =>
 export const isCeiling = (name: string) =>
   name === 'CONCENTRATED_WEIGHT' || name.startsWith('HIGH_') || name.includes('CORRELATION')
 
-/** Checks that describe the Alpha rather than gate it: a WARNING here blocks nothing. */
+/**
+ * Checks listed as notes rather than blockers. Display only, but it has to be the *same* set
+ * as `IGNORED_CHECKS` in `vault/yields.py`, which decides `alpha.verdict`: a check excused
+ * there and shown failing here reads as "ready" beside a red row, and one gating there but
+ * excused here reads as "blocked" with nothing to point at.
+ */
 const INFORMATIONAL = new Set([
-  'CLUSTER_TEST',
+  'PROD_CORRELATION',
+  'REGULAR_SUBMISSION',
   'MATCHES_COMPETITION',
   'MATCHES_PYRAMID',
   'MATCHES_THEMES',
+  'CLUSTER_TEST',
   'OSMOSIS_ALLOCATION',
-  'DATA_DIVERSITY',
+  'POWER_POOL_DESCRIPTION_LENGTH',
+  'POWER_POOL_DESCRIPTION_FORMAT',
 ])
 
 export const resultOf = (check: AlphaCheck): CheckResult => check.result ?? 'PENDING'
@@ -91,20 +103,38 @@ export interface Verdict {
   groups: CheckGroups
 }
 
+/**
+ * Quick mode alphas carry every performance check and none of the submission ones, so their
+ * checks alone read as "all clear". BRAIN will not even run the submission check on one:
+ * `GET /alphas/{id}/check` answers 400. Measured.
+ */
+export const isQuickMode = (alpha: AlphaInfo): boolean =>
+  alpha.settings['simulationMode'] === 'QUICK'
+
 export function verdictOf(alpha: AlphaInfo): Verdict {
   const groups = groupChecks(alpha.checks)
   if (alpha.status && alpha.status !== 'UNSUBMITTED') return { kind: 'submitted', groups }
-  if (groups.failing.length > 0) return { kind: 'blocked', groups }
-  // No gating check has run, so the Alpha is pending rather than ready: calling it ready would
-  // invite a permanent submission on the strength of nothing (as `vault/yields.is_submittable`).
-  const judged = groups.failing.length + groups.pending.length + groups.passing.length
-  if (judged === 0 || groups.pending.length > 0) return { kind: 'pending', groups }
-  return { kind: 'ready', groups }
+  if (isQuickMode(alpha)) return { kind: 'blocked', groups }
+  // The backend's rule, shared with Tasks and the Submission Planner. No gating check at all
+  // (`null`) reads as pending: calling it ready would invite a permanent submission on nothing.
+  if (alpha.verdict === 'refused') return { kind: 'blocked', groups }
+  if (alpha.verdict === 'submittable') return { kind: 'ready', groups }
+  return { kind: 'pending', groups }
 }
 
 // ── Power Pool ─────────────────────────────────────────────────────────────────────────────
 
 export type Rule = 'pass' | 'fail' | 'unknown'
+
+/** The headings BRAIN's Power Pool description template asks for (getting-started-power-pool-alphas.md). */
+export const POWER_POOL_HEADINGS = [
+  'Idea',
+  'Rationale for data used',
+  'Rationale for operators used',
+] as const
+
+/** A heading followed by its colon, allowing the Markdown bold of BRAIN's own example. */
+const hasHeading = (text: string, heading: string) => new RegExp(`${heading}\\W*:`, 'i').test(text)
 
 export interface PowerPoolRule {
   label: string
@@ -125,7 +155,15 @@ export function powerPoolRules(alpha: AlphaInfo): PowerPoolRule[] {
   const fields = alpha.dataFields
   const robust = byName(alpha.checks, 'LOW_ROBUST_UNIVERSE_SHARPE')
   const sharpe = alpha.inSample?.sharpe
-  const described = (alpha.description ?? '').trim().length
+  const description = (alpha.description ?? '').trim()
+  const described = description.length
+  const missing = POWER_POOL_HEADINGS.filter((h) => !hasHeading(description, h))
+  const themed = byName(alpha.checks, 'MATCHES_THEMES')
+  // BRAIN names its Power Pool themes as such ("GLB/D1 Liquid Power Pool Aug`26"); a theme
+  // object carries only an id, a name and a multiplier.
+  const powerPoolThemes = matches(alpha.checks)
+    .themes.map((t) => t.name)
+    .filter((name) => /power pool/i.test(name))
   const correlation = byName(alpha.checks, 'POWER_POOL_CORRELATION')
   const turnover = [byName(alpha.checks, 'LOW_TURNOVER'), byName(alpha.checks, 'HIGH_TURNOVER')]
   const turnoverState: Rule = turnover.some((c) => fromCheck(c) === 'fail')
@@ -182,6 +220,20 @@ export function powerPoolRules(alpha: AlphaInfo): PowerPoolRule[] {
       detail: `${described} of 100`,
       state: described >= 100 ? 'pass' : 'fail',
     },
+    {
+      label: 'Description in the Idea and Rationale template',
+      detail: missing.length ? `Missing ${missing.join(', ')}` : 'All three headings',
+      state: missing.length ? 'fail' : 'pass',
+    },
+    {
+      label: 'Matches a Power Pool theme',
+      detail: powerPoolThemes.length
+        ? powerPoolThemes.join(', ')
+        : themed
+          ? 'None matched: needed unless it also submits as Regular or ATOM'
+          : 'Not reported',
+      state: powerPoolThemes.length ? 'pass' : themed ? 'fail' : 'unknown',
+    },
   ]
 }
 
@@ -208,8 +260,8 @@ export function matches(checks: AlphaCheck[]) {
 
 // ── PnL analysis ───────────────────────────────────────────────────────────────────────────
 
-/** Trading days in a year, as BRAIN annualises Sharpe. */
-export const YEAR = 252
+/** Trading days in a year as BRAIN annualises Sharpe and returns: 250, not the documented 252. */
+export const YEAR = 250
 
 export interface Point {
   date: string
@@ -303,24 +355,6 @@ export function drawdowns(points: Point[], bookSize: number, limit = 3): Drawdow
   })
   if (open) close(null)
   return episodes.sort((a, b) => b.depth - a.depth).slice(0, limit)
-}
-
-/** Kestner's K-Ratio (2003), as `vault/store.py` computes it: slope over its standard error, over √n. */
-export function kRatio(points: Point[]): number | null {
-  const n = points.length
-  if (n < 3) return null
-  const meanX = (n - 1) / 2
-  const meanY = points.reduce((s, p) => s + p.value, 0) / n
-  let sxy = 0
-  let sxx = 0
-  points.forEach((p, i) => {
-    sxy += (i - meanX) * (p.value - meanY)
-    sxx += (i - meanX) ** 2
-  })
-  const slope = sxy / sxx
-  const residual = points.reduce((s, p, i) => s + (p.value - meanY - slope * (i - meanX)) ** 2, 0)
-  const error = Math.sqrt(residual / (n - 2) / sxx)
-  return error > 0 ? slope / (error * Math.sqrt(n)) : null
 }
 
 /** Share of days that made money. */

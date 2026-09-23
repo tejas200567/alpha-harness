@@ -133,14 +133,19 @@ _TOKEN = re.compile(
 )
 
 _COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+#: ``//`` is Fast Expression's own line comment and ``#`` is what a model writing one reaches
+#: for; BRAIN accepts both, and Alphas in the vault carry both.
+_LINE_COMMENT = re.compile(r"(?://|#)[^\n]*")
 
 _LEVELS: tuple[tuple[str, ...], ...] = (("||",), ("&&",), COMPARISONS, ("+", "-"), ("*", "/"))
 
 
 def tokenize(text: str) -> list[tuple[str, str, int]]:
     tokens: list[tuple[str, str, int]] = []
-    # Block comments are part of Fast Expression; blanked, not removed, so positions hold.
-    text = _COMMENT.sub(lambda m: " " * len(m.group()), text).rstrip()
+    # Comments are part of Fast Expression; blanked, not removed, so positions hold and a
+    # parse error still points at the character the reader can see.
+    blank = lambda m: " " * len(m.group())  # noqa: E731
+    text = _LINE_COMMENT.sub(blank, _COMMENT.sub(blank, text)).rstrip()
     position = 0
     while position < len(text):
         match = _TOKEN.match(text, position)
@@ -366,11 +371,13 @@ def replace_at(node: Node, path: Path, new: Node) -> Node:
     return replace(node, kwargs=tuple(kwargs))
 
 
-def data_fields(tree: Node) -> list[str]:
+def data_fields(tree: Node, *, grouping: bool = False) -> list[str]:
     """The data fields an expression reads, the way BRAIN counts them.
 
     Names that are not data: anything assigned earlier in the expression, a keyword value
-    (``driver=gaussian`` names an option), a grouping field, and the literals.
+    (``driver=gaussian`` names an option), a grouping field, and the literals. ``grouping``
+    keeps the grouping fields: they do not count, but they still have to exist where the
+    expression runs, and some (``currency``, ``split``) are missing from some markets.
     """
     nodes = walk(tree)
     assigned = {n.value for _, n in nodes if n.kind == "assign"}
@@ -381,10 +388,15 @@ def data_fields(tree: Node) -> list[str]:
             if n.kind == "name"
             and not (path and path[-1] >= len(node_at(tree, path[:-1]).args))
             and n.value not in assigned
-            and n.value not in GROUPING
+            and (grouping or n.value not in GROUPING)
             and n.value.lower() not in ("true", "false", "nan")
         }
     )
+
+
+def operator_names(tree: Node) -> list[str]:
+    """Each operator the expression calls, once, in order of first appearance."""
+    return list(dict.fromkeys(n.value for _, n in walk(tree) if n.kind == "call"))
 
 
 def operator_count(node: Node) -> int:
@@ -429,7 +441,7 @@ def validate(
     """Why BRAIN would reject this tree, or nothing."""
     problems: list[str] = []
     assigned = {node.value for _, node in walk(tree) if node.kind == "assign"}
-    for _path, node in walk(tree):
+    for path, node in walk(tree):
         if node.kind == "call":
             info = table.get(node.value)
             if info is None:
@@ -440,6 +452,8 @@ def validate(
                 problems.append(f"{node.value} does not take {count} inputs.")
         elif (
             node.kind == "name"
+            # A keyword value names an option (``driver=gaussian``), not a data field.
+            and not (path and path[-1] >= len(node_at(tree, path[:-1]).args))
             and node.value not in known_names
             and node.value not in assigned
             and node.value.lower() not in ("true", "false", "nan")

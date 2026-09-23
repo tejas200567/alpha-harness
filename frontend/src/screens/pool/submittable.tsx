@@ -62,14 +62,13 @@ export function Submittable({ onOpen }: { onOpen: (alphaId: string) => void }) {
       bodyClassName="flex flex-col gap-4"
     >
       {data && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Metric
             boxed
             label="Submittable"
             value={fmt.int(data.total)}
             tone={data.total > 0 ? 'profit' : 'neutral'}
           />
-          <Metric boxed label="Checks pending" value={fmt.int(data.pending)} />
           <Metric
             boxed
             label="Not Submittable"
@@ -91,13 +90,7 @@ export function Submittable({ onOpen }: { onOpen: (alphaId: string) => void }) {
           ))}
         </div>
       ) : data && data.alphas.length === 0 ? (
-        <Empty title={`No submittable Alphas in ${scopeLabel(scope)}`}>
-          {data.pending > 0 && (
-            <>
-              <span className="num">{fmt.int(data.pending)}</span> Alphas are still being checked.
-            </>
-          )}
-        </Empty>
+        <Empty title={`No submittable Alphas in ${scopeLabel(scope)}`} />
       ) : (
         data && (
           <>
@@ -117,7 +110,13 @@ export function Submittable({ onOpen }: { onOpen: (alphaId: string) => void }) {
                 </div>
               )}
             </section>
-            <Disclosure summary={`All ${fmt.int(data.total)} Submittable Alphas, by Sharpe`}>
+            <Disclosure
+              summary={
+                data.alphas.length < data.total
+                  ? `Top ${fmt.int(data.alphas.length)} of ${fmt.int(data.total)} Submittable Alphas, by Sharpe`
+                  : `All ${fmt.int(data.total)} Submittable Alphas, by Sharpe`
+              }
+            >
               <div className="grid grid-cols-1 gap-3 p-3 xl:grid-cols-2">
                 {data.alphas.map((a) => (
                   <Card key={a.alphaId} alpha={a} onOpen={onOpen} />
@@ -209,7 +208,6 @@ function Card({
             value={fmt.ratio(a.testSharpe)}
             tone={pass(a.testSharpe > 0)}
           />
-          <Metric boxed size="sm" label="K-Ratio" value={fmt.ratio(a.kRatio)} />
         </div>
       )}
       {a.pnl.length > 1 && (

@@ -4,6 +4,7 @@
  * only, profit/loss mark data only, and every figure uses `num`.
  */
 
+import { Checkbox as BaseCheckbox } from '@base-ui/react/checkbox'
 import { mergeProps } from '@base-ui/react/merge-props'
 import { Radio } from '@base-ui/react/radio'
 import { RadioGroup } from '@base-ui/react/radio-group'
@@ -12,13 +13,14 @@ import { ToggleGroup } from '@base-ui/react/toggle-group'
 import { useRender } from '@base-ui/react/use-render'
 import { createLink } from '@tanstack/react-router'
 import {
+  CheckIcon,
   ChevronRightIcon,
   CircleAlertIcon,
   InfoIcon,
   LoaderCircleIcon,
   TriangleAlertIcon,
 } from 'lucide-react'
-import { type ComponentProps, Fragment, type ReactNode } from 'react'
+import { type ComponentProps, Fragment, type ReactNode, useId } from 'react'
 import { ApiError, errorMessage } from '@/api/http'
 import type { CheckResult } from '@/api/types'
 import { cn } from '@/lib/cn'
@@ -39,14 +41,19 @@ export const TEXT_TONE: Record<Tone, string> = {
 export const signTone = (v: number | null | undefined): Tone =>
   v == null || v === 0 ? 'neutral' : v > 0 ? 'profit' : 'loss'
 
-/** A BRAIN submission check result. */
+/**
+ * One BRAIN submission check, coloured by what it says on its own: passed, noted, or not
+ * a yes. A ``PENDING`` check has not been run, so it is not green — nothing about the Alpha
+ * has been established yet. Whether the Alpha as a whole can still come good is a different
+ * question with a different answer; see the Tasks results pane.
+ */
 export const checkTone = (result: CheckResult | null | undefined): Tone =>
   result === 'PASS'
     ? 'profit'
-    : result === 'FAIL' || result === 'ERROR'
-      ? 'loss'
-      : result
-        ? 'warn'
+    : result === 'WARNING'
+      ? 'warn'
+      : result === 'FAIL' || result === 'ERROR' || result === 'PENDING'
+        ? 'loss'
         : 'muted'
 
 // ── Layout ──────────────────────────────────────────────────────────────────────────────
@@ -264,16 +271,68 @@ export function Fieldset({
   )
 }
 
+/**
+ * A tick box that belongs to this app. The browser's own control paints itself from the OS
+ * theme and ignores every token in `DESIGN.md`, so this is Base UI's headless root wearing
+ * the same field tokens the inputs and selects wear.
+ *
+ * The label is tied on with `htmlFor` rather than wrapped around: Base UI renders a button,
+ * and a `<label>` with no input inside it labels nothing.
+ */
 export function Checkbox({
   label,
+  checked,
+  onChange,
+  disabled,
   className,
+  hint,
   ...props
-}: Omit<ComponentProps<'input'>, 'type'> & { label: ReactNode }) {
+}: {
+  label: ReactNode
+  checked: boolean
+  onChange: (checked: boolean) => void
+  disabled?: boolean | undefined
+  className?: string | undefined
+  /** A second line under the label, for what the choice costs or changes. */
+  hint?: ReactNode
+  'aria-label'?: string | undefined
+}) {
+  const id = useId()
   return (
-    <label className={cn('inline-flex items-center gap-2 text-body text-ink-muted', className)}>
-      <input type="checkbox" className="size-3.5" {...props} />
-      {label}
-    </label>
+    <span className={cn('group inline-flex items-start gap-2.5', className)}>
+      <BaseCheckbox.Root
+        id={id}
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={onChange}
+        className={cn(
+          'mt-px flex size-4 shrink-0 items-center justify-center rounded-xs border transition-colors',
+          'border-(--field-border) bg-surface-1',
+          'data-[checked]:border-(--btn-primary-bg) data-[checked]:bg-(--btn-primary-bg)',
+          'data-[disabled]:border-(--field-border-disabled) data-[disabled]:bg-surface-2',
+          !disabled && 'cursor-pointer group-hover:border-(--field-border-hover)',
+        )}
+        {...props}
+      >
+        <BaseCheckbox.Indicator className="flex text-(--btn-primary-text)">
+          <CheckIcon className="size-3" strokeWidth={3.5} aria-hidden />
+        </BaseCheckbox.Indicator>
+      </BaseCheckbox.Root>
+      {(label || hint) && (
+        <label
+          htmlFor={id}
+          className={cn(
+            'flex min-w-0 flex-col gap-0.5 text-body select-none',
+            disabled
+              ? 'cursor-not-allowed text-(--field-text-disabled)'
+              : 'cursor-pointer text-ink-muted group-hover:text-ink',
+          )}
+        >
+          {label}
+          {hint && <span className="text-body-compact text-ink-subtle">{hint}</span>}
+        </label>
+      )}
+    </span>
   )
 }
 
@@ -289,7 +348,7 @@ export function Chips<V extends string>({
   value: V[]
   onChange: (value: V[]) => void
   label: string
-  disabled?: boolean
+  disabled?: boolean | undefined
 }) {
   return (
     <ToggleGroup

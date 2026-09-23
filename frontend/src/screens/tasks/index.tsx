@@ -3,7 +3,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
+  CopyIcon,
   EllipsisIcon,
+  ExternalLinkIcon,
   PauseIcon,
   PencilIcon,
   PlayIcon,
@@ -12,11 +14,15 @@ import {
   Trash2Icon,
 } from 'lucide-react'
 import { type ComponentProps, useEffect, useState } from 'react'
+import { toast } from 'sonner'
+import { errorMessage } from '@/api/http'
 import { DASH, fmt } from '@/lib/format'
 import { useRefetchOn } from '@/lib/ws'
 import { DetailSheet } from '@/screens/pool/detail'
 import { MAX_SIMULATIONS } from '@/screens/research-labs/lab-task'
 import { type LabTask, labTasks, type RankedAlpha, type TaskStatus } from '@/screens/tasks/api'
+import { resultsMarkdown } from '@/screens/tasks/copy'
+import { SubmittableAlphas } from '@/screens/tasks/submittable'
 import {
   Badge,
   Button,
@@ -40,8 +46,6 @@ import {
 } from '@/ui/kit'
 import { Confirm, Dialog, Menu } from '@/ui/overlay'
 import { type Column, DataTable } from '@/ui/table'
-
-const CORES = [1, 2, 3, 4]
 
 /** Matches `labs.params.SETTINGS_SAMPLER`. */
 const SETTINGS_SAMPLER = 'settings-sampler'
@@ -188,6 +192,7 @@ export function TasksScreen() {
   const [editing, setEditing] = useState<LabTask | null>(null)
   const [confirming, setConfirming] = useState<Act | null>(null)
   const [alphaId, setAlphaId] = useState<string | null>(null)
+  const [view, setView] = useState<'tasks' | 'submittable'>('tasks')
 
   // Nothing picked yet: open on what is running, then stay there. Re-deriving this every render
   // would move the pane out from under the reader the moment that task finished.
@@ -374,8 +379,22 @@ export function TasksScreen() {
       )}
       {act.isError && confirming === null && <ErrorNotice error={act.error} />}
 
-      <Panel>
-        {list.data && all.length === 0 ? (
+      <Panel
+        actions={
+          <Segmented
+            label="View"
+            items={[
+              { value: 'tasks', label: 'Tasks' },
+              { value: 'submittable', label: 'Submittable Alphas' },
+            ]}
+            value={view}
+            onChange={setView}
+          />
+        }
+      >
+        {view === 'submittable' ? (
+          <SubmittableAlphas onOpenAlpha={setAlphaId} />
+        ) : list.data && all.length === 0 ? (
           <Empty title="No tasks yet">
             <Link to="/labs" className={LINK}>
               Open Research Labs
@@ -388,14 +407,20 @@ export function TasksScreen() {
             columns={columns}
             rowKey={(t) => String(t.id)}
             onRowClick={(t) => setSelectedId(t.id)}
+            // Held through hover, which otherwise repaints the row as if nothing were picked.
+            rowClass={(t) =>
+              t.id === selectedId ? 'bg-primary-subtle hover:bg-primary-subtle' : undefined
+            }
             loading={list.isPending}
             error={list.error}
           />
         )}
       </Panel>
-      {selected && <TaskDetail task={selected} onOpenAlpha={setAlphaId} />}
+      {view === 'tasks' && selected && <TaskDetail task={selected} onOpenAlpha={setAlphaId} />}
 
-      {editing && <EditTask key={editing.id} task={editing} onClose={() => setEditing(null)} />}
+      {editing && (
+        <EditTask key={editing.id} task={editing} slots={slots} onClose={() => setEditing(null)} />
+      )}
       <DetailSheet alphaId={alphaId} onClose={() => setAlphaId(null)} />
       <Confirm
         open={confirming !== null}
@@ -435,6 +460,15 @@ function confirmCopy(a: Act, fresh: number): { title: string; label: string; bod
         }
       return { title: 'Run this task?', label: 'Run Task' }
     case 'stop':
+      // The second press, on a task that has been stopping and has not stopped. It says
+      // what it will cost, because forcing gives up on simulations the quota already paid
+      // for — which is the right trade only once the ordinary stop has failed.
+      if (a.task.stopping)
+        return {
+          title: 'Force this task to stop?',
+          label: 'Force Stop',
+          body: 'It is waiting on simulations that have not come back. Forcing cancels what it can on BRAIN, ends the task and frees its cores. Any simulation that finishes anyway is still kept in Alphas.',
+        }
       return {
         title: 'Stop this task?',
         label: 'Stop Task',
@@ -502,12 +536,15 @@ function Actions({
           <PauseIcon />
         </Button>
       )}
-      {(status === 'RUNNING' || status === 'PAUSED' || status === 'QUEUED') && !stopping && (
+      {/* Stays through `stopping`, unlike Pause and Edit. A task waiting on a simulation
+          that never comes back is exactly when someone needs this button, and hiding it
+          left them with a task holding cores and nothing on screen to press. */}
+      {(status === 'RUNNING' || status === 'PAUSED' || status === 'QUEUED') && (
         <Button
           size="icon-sm"
-          variant="ghost"
-          aria-label="Stop"
-          title="Stop"
+          variant={stopping ? 'danger' : 'ghost'}
+          aria-label={stopping ? 'Force stop' : 'Stop'}
+          title={stopping ? 'Force stop' : 'Stop'}
           onClick={() => onAct('stop')}
         >
           <SquareIcon />
@@ -573,11 +610,11 @@ function TaskDetail({
   const found = top.data ?? []
   const source = found.find((r) => r.source)
   const rows = source ? [source, ...found.filter((r) => r !== source)] : found
-  // Green where every check passed, red where one refuses it, and plain where BRAIN has not
-  // finished judging. A pending row was green until it was noticed that the Submission Planner
-  // holds those back — colouring it like a confirmed pass promises a candidate it will refuse.
+  // Red only where a check refuses the Alpha. A row still waiting on BRAIN is green like a
+  // passing one: nothing has said no, which is the question this pane answers. Whether it is
+  // submittable *yet* is the Submittable count's job, and that one does hold pending back.
   const verdict = (r: RankedAlpha) =>
-    r.pending ? '' : r.submittable ? 'bg-pnl-positive-tint' : 'bg-pnl-negative-tint'
+    r.submittable || r.pending ? 'bg-pnl-positive-tint' : 'bg-pnl-negative-tint'
   const rowClass = (r: RankedAlpha) =>
     // The source keeps its verdict, and a heavier rule under it so the ranking below reads
     // as its own block.
@@ -585,34 +622,50 @@ function TaskDetail({
 
   const sampler = task.lab === SETTINGS_SAMPLER
   const done = task.status === 'COMPLETE' || task.status === 'FAILED'
-  // Counted the way the Submission Planner counts, so the two screens cannot disagree.
+  // The green rows: nothing has refused them. Pending ones are in here, which is what makes
+  // the figure an estimate — a check BRAIN has not run yet can still come back FAIL.
   const pending = found.filter((r) => r.pending).length
-  const green = found.filter((r) => r.submittable && !r.pending).length
-  const red = found.length - green - pending
+  const green = found.filter((r) => r.submittable || r.pending).length
+  const red = found.length - green
   // From when it first ran, not when it was added — a task can sit idle for days. Older rows
   // predate that being recorded, so they fall back to when they were created.
   const began = Date.parse(task.startedAt ?? task.createdAt ?? '')
   const ended = task.finishedAt ? Date.parse(task.finishedAt) : Date.now()
   const elapsed = Number.isNaN(began) ? null : Math.max(0, (ended - began) / 1000)
 
+  const title = [
+    task.labName,
+    task.templateName,
+    task.lab === SETTINGS_SAMPLER ? task.alphaId : `${task.region} D${task.delay}`,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  const description =
+    task.lab === SETTINGS_SAMPLER
+      ? // Held at the source Alpha's values for every simulation in the sweep.
+        `${fmt.int(task.markets)} Markets · Decay ${task.decay ?? DASH} · Truncation ${task.truncation ?? DASH} · NaN Handling ${task.nanHandling ?? DASH}`
+      : task.seeds > 0
+        ? `${task.universe ?? DASH} · ${fmt.int(task.seeds)} seeds · Population ${fmt.int(task.population)} · Mutation ${fmt.pct(task.mutationRate, 0)}`
+        : `Decay ${task.decay ?? DASH} · ${fmt.int(task.fields)} fields · ${task.datasetIds.join(', ')}`
+  const copyResults = () =>
+    navigator.clipboard.writeText(resultsMarkdown(task, rows)).then(
+      () => toast.success(`Copied ${fmt.int(rows.length)} results`),
+      (e: unknown) => toast.error(errorMessage(e)),
+    )
+
   return (
     <Panel
-      title={[
-        task.labName,
-        task.templateName,
-        task.lab === SETTINGS_SAMPLER ? task.alphaId : `${task.region} D${task.delay}`,
-      ]
-        .filter(Boolean)
-        .join(' · ')}
-      description={
-        task.lab === SETTINGS_SAMPLER
-          ? // Held at the source Alpha's values for every simulation in the sweep.
-            `${fmt.int(task.markets)} Markets · Decay ${task.decay ?? DASH} · Truncation ${task.truncation ?? DASH} · NaN Handling ${task.nanHandling ?? DASH}`
-          : task.seeds > 0
-            ? `${task.universe ?? DASH} · ${fmt.int(task.seeds)} seeds · Population ${fmt.int(task.population)} · Mutation ${fmt.pct(task.mutationRate, 0)}`
-            : `Decay ${task.decay ?? DASH} · ${fmt.int(task.fields)} fields · ${task.datasetIds.join(', ')}`
+      title={title}
+      description={description}
+      actions={
+        <>
+          <Button size="sm" variant="ghost" disabled={!rows.length} onClick={copyResults}>
+            <CopyIcon />
+            Copy Results
+          </Button>
+          <TaskBadge task={task} />
+        </>
       }
-      actions={<TaskBadge task={task} />}
     >
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -626,12 +679,18 @@ function TaskDetail({
           {!done && <Metric boxed label="In Flight" value={fmt.int(task.queued + task.running)} />}
           {sampler ? (
             <>
+              {/* `~` because the pending rows counted here have checks BRAIN has not run
+                  yet, any one of which can still come back FAIL. */}
               <Metric
                 boxed
                 tone="profit"
                 label="Submittable"
-                value={fmt.int(green)}
-                hint={pending ? `${fmt.int(pending)} still being checked` : ''}
+                value={
+                  <>
+                    {pending > 0 && '~'}
+                    {fmt.int(green)}
+                  </>
+                }
               />
               <Metric
                 boxed
@@ -650,7 +709,6 @@ function TaskDetail({
             value={elapsed == null ? DASH : fmt.duration(elapsed)}
             hint={done ? '' : 'still running'}
           />
-          <Metric boxed label={`Best ${task.objectiveLabel}`} value={fmt.ratio(task.best)} />
         </div>
         {task.message && (
           <Notice tone={task.status === 'FAILED' ? 'error' : 'info'} title={task.message} />
@@ -663,6 +721,18 @@ function TaskDetail({
         {top.isError && top.data && (
           <ErrorNotice error={top.error} title="Could not load the best Alphas" />
         )}
+        {/* A sweep's results are a comparison across markets, which needs more room than a
+            card: the whole set, grouped by region and correlated, gets its own page. */}
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            variant="secondary"
+            render={<Link to="/tasks/$taskId" params={{ taskId: String(task.id) }} />}
+          >
+            <ExternalLinkIcon />
+            Open Full Results
+          </Button>
+        </div>
         <DataTable
           label={task.lab === SETTINGS_SAMPLER ? 'Results' : 'Top Alphas'}
           rows={rows}
@@ -689,7 +759,7 @@ function TaskDetail({
   )
 }
 
-function EditTask({ task, onClose }: { task: LabTask; onClose: () => void }) {
+function EditTask({ task, slots, onClose }: { task: LabTask; slots: number; onClose: () => void }) {
   const queryClient = useQueryClient()
   const [cores, setCores] = useState(task.cores)
   const [simulations, setSimulations] = useState(String(task.target))
@@ -731,7 +801,7 @@ function EditTask({ task, onClose }: { task: LabTask; onClose: () => void }) {
         <Fieldset legend="Cores">
           <Segmented
             label="Cores"
-            items={CORES.map((v) => ({ value: v, label: v }))}
+            items={Array.from({ length: slots }, (_, i) => ({ value: i + 1, label: i + 1 }))}
             value={cores}
             onChange={setCores}
           />

@@ -16,7 +16,9 @@ import { toast } from 'sonner'
 import { errorMessage } from '@/api/http'
 import { cn } from '@/lib/cn'
 import { DASH, fmt } from '@/lib/format'
+import { DEFAULT_SCOPE, regionLabel, useScopeOptions } from '@/lib/scope'
 import { AstInspector } from '@/screens/pool/shared'
+import { NeutralizationPicker } from '@/screens/research-labs/neutralization'
 import {
   Button,
   Empty,
@@ -31,13 +33,30 @@ import {
   Panel,
   Segmented,
   Skeleton,
+  Textarea,
 } from '@/ui/kit'
-import { type MarketPick, type Pair, pairLabel, type SettingsPlan, settingsSampler } from './api'
+import { Select } from '@/ui/overlay'
+import {
+  type Holding,
+  type MarketPick,
+  type Pair,
+  pairLabel,
+  type SettingsPlan,
+  type Source,
+  settingsSampler,
+} from './api'
 
 /** A multi-simulation carries at most ten children, all sharing region and delay. */
 const BATCH = 10
 
 const pairKey = (p: Pair) => `${p.maxTrade}|${p.maxPosition}`
+
+type Mode = 'expression' | 'alpha'
+
+const MODES: { value: Mode; label: string }[] = [
+  { value: 'expression', label: 'Expression' },
+  { value: 'alpha', label: 'Alpha ID' },
+]
 const marketKey = (m: { region: string; delay: number; universe: string }) =>
   `${m.region}|${m.delay}|${m.universe}`
 
@@ -242,7 +261,7 @@ function Tree({
           >
             <div className={GRID}>
               <GroupChip
-                label={<span className="font-medium">{branch.region}</span>}
+                label={<span className="font-medium">{regionLabel(branch.region)}</span>}
                 group={branch.group}
                 onChange={onChange}
               />
@@ -295,6 +314,103 @@ function Tree({
   )
 }
 
+/** A typed number held inside BRAIN's own bounds. */
+const clamp = (text: string, max: number) =>
+  Math.min(max, Math.max(0, Math.round(Number(text) || 0)))
+
+/**
+ * How every simulation in the sweep is held: BRAIN's own four, laid out as BRAIN lays them
+ * out — Test Period is years *and* months, not a number of whole years.
+ */
+function SettingsFields({
+  decay,
+  setDecay,
+  truncation,
+  setTruncation,
+  nanHandling,
+  setNanHandling,
+  testYears,
+  setTestYears,
+  testMonths,
+  setTestMonths,
+}: {
+  decay: string
+  setDecay: (v: string) => void
+  truncation: string
+  setTruncation: (v: string) => void
+  nanHandling: 'ON' | 'OFF'
+  setNanHandling: (v: 'ON' | 'OFF') => void
+  testYears: string
+  setTestYears: (v: string) => void
+  testMonths: string
+  setTestMonths: (v: string) => void
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <Field label="Decay">
+        <Input
+          type="number"
+          min={0}
+          max={512}
+          step={1}
+          value={decay}
+          onChange={(e) => setDecay(e.target.value)}
+        />
+      </Field>
+      <Field label="Truncation">
+        <Input
+          type="number"
+          min={0}
+          max={1}
+          step={0.01}
+          value={truncation}
+          onChange={(e) => setTruncation(e.target.value)}
+        />
+      </Field>
+      <Field label="NaN Handling">
+        <Select
+          label="NaN Handling"
+          value={nanHandling}
+          onChange={(v) => setNanHandling(v as 'ON' | 'OFF')}
+          items={[
+            { value: 'ON', label: 'On' },
+            { value: 'OFF', label: 'Off' },
+          ]}
+        />
+      </Field>
+      {/* BRAIN takes P0Y0M0D up to P6Y0M0D, and its own form splits the two. The units sit
+          beside the boxes rather than above them, so this reads as one control on one line
+          and its inputs share a baseline with Decay and Truncation. */}
+      <Fieldset legend="Test Period">
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            min={0}
+            max={6}
+            step={1}
+            aria-label="Test period, years"
+            className="w-16"
+            value={testYears}
+            onChange={(e) => setTestYears(e.target.value)}
+          />
+          <span className="text-body-compact text-ink-subtle">Years</span>
+          <Input
+            type="number"
+            min={0}
+            max={11}
+            step={1}
+            aria-label="Test period, months"
+            className="w-16"
+            value={testMonths}
+            onChange={(e) => setTestMonths(e.target.value)}
+          />
+          <span className="text-body-compact text-ink-subtle">Months</span>
+        </div>
+      </Fieldset>
+    </div>
+  )
+}
+
 export function SettingsSamplerScreen() {
   const search = useSearch({ from: '/tools/settings-sampler' })
   const navigate = useNavigate()
@@ -302,7 +418,19 @@ export function SettingsSamplerScreen() {
   // The URL owns which Alpha is open, so arriving without one shows an empty screen rather
   // than the last one analysed.
   const alphaId = search.alpha ?? ''
+  const [mode, setMode] = useState<Mode>(alphaId ? 'alpha' : 'expression')
   const [draft, setDraft] = useState(alphaId)
+  const [expression, setExpression] = useState('')
+  const [decay, setDecay] = useState('0')
+  const [truncation, setTruncation] = useState('0.08')
+  const [nanHandling, setNanHandling] = useState<'ON' | 'OFF'>('ON')
+  const [testYears, setTestYears] = useState('2')
+  const [testMonths, setTestMonths] = useState('0')
+  /** Which Alpha's settings have been read into the fields above, so a refetch of the same
+   *  plan does not overwrite an edit made since. */
+  const [inherited, setInherited] = useState('')
+  /** The expression last analysed; the draft above only counts once Analyse is pressed. */
+  const [typed, setTyped] = useState<Source | null>(null)
   const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set())
   const [neutralizations, setNeutralizations] = useState<string[]>([])
   const [pairs, setPairs] = useState<string[]>([])
@@ -310,15 +438,38 @@ export function SettingsSamplerScreen() {
 
   useEffect(() => {
     setDraft(search.alpha ?? '')
+    if (search.alpha) setMode('alpha')
   }, [search.alpha])
 
+  const holding: Holding = {
+    decay: Math.max(0, Math.round(Number(decay) || 0)),
+    truncation: Number(truncation) || 0.08,
+    nanHandling,
+    testPeriod: `P${clamp(testYears, 6)}Y${clamp(testMonths, 11)}M0D`,
+  }
+  const source: Source | null = mode === 'alpha' ? (alphaId ? { alphaId } : null) : typed
   const query = useQuery({
-    queryKey: ['settings-sampler', alphaId],
-    queryFn: () => settingsSampler.preview(alphaId),
-    enabled: alphaId.length > 0,
+    queryKey: ['settings-sampler', source],
+    queryFn: () => settingsSampler.preview(source ?? { alphaId: '' }),
+    enabled: source !== null,
     retry: false,
   })
   const plan = query.data
+
+  // An Alpha's own settings fill the fields the first time its plan arrives, so what is shown
+  // is what would run — and stays editable, because an edit is the whole point of having them
+  // here. Keyed on the Alpha, so a refetch never overwrites a change made since.
+  useEffect(() => {
+    const own = plan?.settings
+    if (!own || !plan.alphaId || plan.alphaId === inherited) return
+    setInherited(plan.alphaId)
+    setDecay(String(own.decay ?? 0))
+    setTruncation(String(own.truncation ?? 0.08))
+    setNanHandling(own.nanHandling === 'OFF' ? 'OFF' : 'ON')
+    const period = /^P(\d+)Y(\d+)M/.exec(own.testPeriod ?? '')
+    setTestYears(period?.[1] ?? '2')
+    setTestMonths(period?.[2] ?? '0')
+  }, [plan?.settings, plan?.alphaId, inherited])
 
   const reset = (from: SettingsPlan) => {
     const start = defaults(from)
@@ -393,15 +544,33 @@ export function SettingsSamplerScreen() {
         .filter((p, i, list) => list.findIndex((q) => pairKey(q) === pairKey(p)) === i),
     [plan],
   )
-  const allNeutralizations = useMemo(
-    () => [...new Set((plan?.regions ?? []).flatMap((r) => r.neutralizations))].sort(),
-    [plan],
-  )
+  // Every neutralization the sweep's markets offer between them, under BRAIN's own labels
+  // where the source market knows them. A sweep spans regions, so one that only exists
+  // elsewhere keeps its bare name rather than being dropped.
+  const labelled = useScopeOptions({
+    instrumentType: 'EQUITY',
+    region: String(plan?.settings.region ?? DEFAULT_SCOPE.region),
+    delay: Number(plan?.settings.delay ?? DEFAULT_SCOPE.delay),
+    universe: String(plan?.settings.universe ?? DEFAULT_SCOPE.universe),
+  }).neutralizations
+  const allNeutralizations = useMemo(() => {
+    const names = [...new Set((plan?.regions ?? []).flatMap((r) => r.neutralizations))]
+    const labels = new Map(labelled.map((c) => [c.value, c.label]))
+    // BRAIN's order where it has one, so the two families read the same as everywhere else.
+    const rank = (v: string) => {
+      const at = labelled.findIndex((c) => c.value === v)
+      return at === -1 ? labelled.length : at
+    }
+    return names
+      .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
+      .map((value) => ({ value, label: labels.get(value) ?? value }))
+  }, [plan, labelled])
 
   const add = useMutation({
     mutationFn: () =>
       settingsSampler.addTask({
-        alphaId,
+        ...(source ?? { alphaId: '' }),
+        ...holding,
         markets: picks,
         neutralizations,
         pairs: allPairs.filter((p) => pairs.includes(pairKey(p))),
@@ -419,6 +588,10 @@ export function SettingsSamplerScreen() {
 
   const analyse = (event: React.FormEvent) => {
     event.preventDefault()
+    if (mode === 'expression') {
+      setTyped({ expression: expression.trim() })
+      return
+    }
     const next = draft.trim()
     void navigate({
       to: '/tools/settings-sampler',
@@ -427,12 +600,11 @@ export function SettingsSamplerScreen() {
     })
   }
 
-  const settings = plan?.settings
   return (
     <Page>
       <PageHeader
         title="Settings Sampler"
-        description="Run an Alpha everywhere BRAIN accepts it"
+        description="Run an expression everywhere BRAIN accepts it"
         actions={
           <Button
             variant="primary"
@@ -446,23 +618,44 @@ export function SettingsSamplerScreen() {
         }
       />
 
-      <Panel title="Alpha">
-        <form onSubmit={analyse} className="flex flex-wrap items-end gap-3">
-          <Field label="Alpha ID" className="min-w-48 flex-1">
-            <Input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="om6RAVLn"
-              spellCheck={false}
-              className="num"
-            />
-          </Field>
-          <Button type="submit" variant="primary" disabled={!draft.trim()}>
-            Analyse
-          </Button>
-        </form>
+      <Panel
+        title="Source"
+        actions={<Segmented label="Source" items={MODES} value={mode} onChange={setMode} />}
+      >
+        {mode === 'alpha' ? (
+          <form onSubmit={analyse} className="flex flex-wrap items-end gap-3">
+            <Field label="Alpha ID" className="min-w-48 flex-1">
+              <Input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                spellCheck={false}
+                className="num"
+              />
+            </Field>
+            <Button type="submit" variant="primary" disabled={!draft.trim()}>
+              Analyse
+            </Button>
+          </form>
+        ) : (
+          <form onSubmit={analyse} className="flex flex-col gap-3">
+            <Field label="Alpha Expression">
+              <Textarea
+                value={expression}
+                onChange={(e) => setExpression(e.target.value)}
+                spellCheck={false}
+                rows={6}
+                className="num"
+              />
+            </Field>
+            <div className="flex flex-wrap items-end gap-3">
+              <Button type="submit" variant="primary" disabled={!expression.trim()}>
+                Analyse
+              </Button>
+            </div>
+          </form>
+        )}
 
-        {plan?.expression && settings && (
+        {plan?.expression && (
           <div className="mt-4 flex flex-col gap-4 border-t border-hairline pt-4">
             <AstInspector expression={plan.expression} />
 
@@ -471,45 +664,60 @@ export function SettingsSamplerScreen() {
                 Data Fields
               </h3>
               <div className="flex flex-wrap gap-2">
-                {plan.dataFields.length === 0 ? (
+                {plan.dataFields.length + plan.groupingFields.length === 0 ? (
                   <span className="text-body-compact text-ink-subtle">{DASH}</span>
                 ) : (
-                  plan.dataFields.map((field) => (
-                    <span
-                      key={field}
-                      className="num rounded-md border border-hairline-strong bg-surface-2 px-2.5 py-1.5 text-body-compact text-ink"
-                    >
-                      {field}
-                    </span>
-                  ))
+                  <>
+                    {plan.dataFields.map((field) => (
+                      <span
+                        key={field}
+                        className="num rounded-md border border-hairline-strong bg-surface-2 px-2.5 py-1.5 text-body-compact text-ink"
+                      >
+                        {field}
+                      </span>
+                    ))}
+                    {/* Read and required in every market, though BRAIN counts none as data. */}
+                    {plan.groupingFields.map((field) => (
+                      <span
+                        key={field}
+                        title="Grouping field: must exist where it runs, but BRAIN does not count it as a data field"
+                        className="flex items-baseline gap-1.5 rounded-md border border-hairline bg-surface-2 px-2.5 py-1.5 text-body-compact"
+                      >
+                        <span className="num text-ink">{field}</span>
+                        <span className="text-ink-subtle">grouping</span>
+                      </span>
+                    ))}
+                  </>
                 )}
-              </div>
-            </section>
-
-            <section className="flex flex-col gap-2">
-              <h3 className="text-body-compact font-medium tracking-wide text-ink-muted uppercase">
-                Simulation Settings
-              </h3>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {(
-                  [
-                    ['Region', settings.region ?? DASH],
-                    ['Delay', settings.delay == null ? DASH : `D${settings.delay}`],
-                    ['Universe', settings.universe ?? DASH],
-                    ['Neutralization', settings.neutralization ?? DASH],
-                    ['Max Trade', settings.maxTrade],
-                    ['Max Position', settings.maxPosition],
-                    ['Decay', settings.decay ?? DASH],
-                    ['Truncation', settings.truncation ?? DASH],
-                  ] as const
-                ).map(([label, value]) => (
-                  <Metric key={label} boxed size="sm" label={label} value={value} />
-                ))}
               </div>
             </section>
           </div>
         )}
       </Panel>
+
+      {plan?.expression && (
+        <Panel
+          title="Simulation Settings"
+          description={
+            plan.alphaId
+              ? 'Read from the Alpha, and yours to change. Every market in the sweep runs at these.'
+              : 'Every market in the sweep runs at these.'
+          }
+        >
+          <SettingsFields
+            decay={decay}
+            setDecay={setDecay}
+            truncation={truncation}
+            setTruncation={setTruncation}
+            nanHandling={nanHandling}
+            setNanHandling={setNanHandling}
+            testYears={testYears}
+            setTestYears={setTestYears}
+            testMonths={testMonths}
+            setTestMonths={setTestMonths}
+          />
+        </Panel>
+      )}
 
       {query.isError && <ErrorNotice error={query.error} title="Could not read that Alpha" />}
       {plan?.problems.map((problem) => (
@@ -523,7 +731,7 @@ export function SettingsSamplerScreen() {
         </Notice>
       ))}
 
-      {query.isPending && alphaId ? (
+      {query.isPending && source ? (
         <Skeleton className="h-96" />
       ) : plan && branches.length > 0 ? (
         <Panel
@@ -605,22 +813,11 @@ export function SettingsSamplerScreen() {
                   ))}
                 </div>
               </Fieldset>
-              <Fieldset legend="Neutralization">
-                <div className="flex flex-wrap gap-1.5">
-                  {allNeutralizations.map((name) => (
-                    <GroupChip
-                      key={name}
-                      label={name}
-                      group={{ keys: [name], on: neutralizations.includes(name) ? 1 : 0 }}
-                      onChange={(keys, on) =>
-                        setNeutralizations((prev) =>
-                          on ? [...prev, ...keys] : prev.filter((n) => !keys.includes(n)),
-                        )
-                      }
-                    />
-                  ))}
-                </div>
-              </Fieldset>
+              <NeutralizationPicker
+                available={allNeutralizations}
+                value={neutralizations}
+                onChange={setNeutralizations}
+              />
               <Fieldset legend="Max Trade / Max Position">
                 <div className="flex flex-wrap gap-1.5">
                   {allPairs.map((pair) => (
@@ -652,17 +849,17 @@ export function SettingsSamplerScreen() {
             </div>
           </div>
         </Panel>
-      ) : alphaId && plan ? (
+      ) : source && plan ? (
         <Panel>
           <Empty title="Nowhere to run it">
-            No downloaded market holds every data field this Alpha reads.
+            No downloaded market holds every data field this expression reads.
           </Empty>
         </Panel>
       ) : (
         <Panel>
-          <Empty title="Start with an Alpha">
-            Paste an Alpha ID above, or open one from the Alphas screen and choose Settings Sampler
-            from its menu.
+          <Empty title="Start with an Expression">
+            Paste an Alpha Expression above, or switch to Alpha ID to run an existing Alpha with its
+            own Settings.
           </Empty>
         </Panel>
       )}

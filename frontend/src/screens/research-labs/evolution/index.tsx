@@ -11,6 +11,7 @@ import { useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 import { ApiError, errorMessage } from '@/api/http'
 import { DASH, fmt } from '@/lib/format'
+import { useScopeOptions } from '@/lib/scope'
 import { useDebounced } from '@/lib/use-debounced'
 import {
   type EvolutionRequest,
@@ -19,7 +20,8 @@ import {
   type SeedRow,
 } from '@/screens/research-labs/evolution/api'
 import { MAX_SEEDS, useSeedPick } from '@/screens/research-labs/evolution/seed-pick'
-import { MAX_SIMULATIONS } from '@/screens/research-labs/lab-task'
+import { CORES, MAX_SIMULATIONS } from '@/screens/research-labs/lab-task'
+import { NeutralizationPicker } from '@/screens/research-labs/neutralization'
 import { Setting } from '@/screens/research-labs/task-settings'
 import {
   Button,
@@ -41,7 +43,6 @@ import { Select } from '@/ui/overlay'
 import { type Column, DataTable } from '@/ui/table'
 import { useEvolutionLab } from './state'
 
-const CORES = [1, 2, 3, 4]
 const POPULATIONS = [50, 100, 200]
 const MUTATION_RATES = [0.03, 0.05, 0.08]
 
@@ -72,11 +73,20 @@ export function EvolutionLabScreen() {
     queryFn: evolutionLab.options,
     staleTime: 5 * 60_000,
   })
+  // BRAIN's legal list for the market being bred in; wider than the four the lab defaults to.
+  const scopeOptions = useScopeOptions({
+    instrumentType: 'EQUITY',
+    region: draft.region,
+    delay: draft.delay,
+    universe: draft.universe,
+  })
+
   const body: EvolutionRequest = {
     region: draft.region,
     delay: draft.delay,
     universe: draft.universe,
     alpha_ids: draft.seedIds,
+    neutralizations: draft.neutralizations,
     cores: draft.cores,
     population: draft.population,
     mutation_rate: draft.mutationRate,
@@ -321,6 +331,9 @@ export function EvolutionLabScreen() {
             {job.data.error}
           </Notice>
         )}
+        {job.isError && (
+          <ErrorNotice error={job.error} title="Could not read Auto Select's progress" />
+        )}
         {hasSeeds ? (
           <DataTable
             label="Seeds"
@@ -399,6 +412,14 @@ export function EvolutionLabScreen() {
               />
             </Setting>
           </div>
+          {scopeOptions.neutralizations.length > 0 && (
+            <NeutralizationPicker
+              available={scopeOptions.neutralizations}
+              value={draft.neutralizations}
+              onChange={(next) => set({ neutralizations: next })}
+              hint="None chosen breeds within Market, Sector, Industry and Subindustry."
+            />
+          )}
           <Disclosure summary="Advanced">
             <div className="flex flex-wrap items-start gap-x-8 gap-y-4">
               <Setting label="Population">

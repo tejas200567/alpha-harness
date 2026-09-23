@@ -17,11 +17,12 @@ from __future__ import annotations
 import asyncio
 import json
 from itertools import accumulate
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
 from sqlalchemy import select
 
+from ..brain.schemas import QUICK_MODE
 from ..db.models import SimulationRecord
 
 if TYPE_CHECKING:
@@ -36,11 +37,14 @@ log = structlog.get_logger(__name__)
 #: ``WARNING`` on every alpha checked, passing or failing, so judging them would make
 #: nothing submittable.
 #:
-#: ``SELF_CORRELATION`` is deliberately *not* here: an alpha too close to the pool
-#: genuinely cannot be submitted, and excusing it would hide the signal that should
-#: reallocate cores.
+#: ``PROD_CORRELATION`` and ``REGULAR_SUBMISSION`` gate nothing a consultant is kept from
+#: submitting, so they are excused too. ``SELF_CORRELATION`` is deliberately *not* here: an
+#: alpha too close to the pool genuinely cannot be submitted, and excusing it would hide the
+#: signal that should reallocate cores.
 IGNORED_CHECKS = frozenset(
     {
+        "PROD_CORRELATION",
+        "REGULAR_SUBMISSION",
         "MATCHES_COMPETITION",
         "MATCHES_PYRAMID",
         "MATCHES_THEMES",
@@ -51,10 +55,14 @@ IGNORED_CHECKS = frozenset(
     }
 )
 
-#: Results that count against an alpha. On a gating check the platform reports a miss as
-#: ``WARNING`` straight after simulation and as ``FAIL`` once the checks are finished, so
-#: both mean the same thing.
-FAILING = frozenset({"FAIL", "WARNING"})
+#: Results that refuse an alpha. ``WARNING`` is not one: a threshold missed by an alpha that
+#: qualifies another way (Power Pool, ATOM) stays ``WARNING`` once BRAIN has finished, and BRAIN
+#: accepts it. A plain alpha's miss reads ``WARNING`` only while other checks are still
+#: ``PENDING``, and becomes ``FAIL`` when they resolve, so the pending state covers it.
+REFUSING = frozenset({"FAIL", "ERROR"})
+
+#: What BRAIN's checks say so far: submittable, still being judged, or refused.
+Verdict = Literal["submittable", "pending", "refused"]
 
 
 def checks_of(checks_json: str | None) -> list[dict[str, Any]]:
@@ -68,44 +76,47 @@ def checks_of(checks_json: str | None) -> list[dict[str, Any]]:
     return [c for c in checks if isinstance(c, dict)] if isinstance(checks, list) else []
 
 
-def judged_results(checks_json: str | None) -> list[str] | None:
-    """The result of every check that describes the alpha itself, upper-cased.
+def verdict(checks: list[dict[str, Any]], simulation_mode: str | None = None) -> Verdict | None:
+    """The one rule for whether an alpha can be submitted, from BRAIN's checks.
 
-    ``None`` when there is nothing to judge — a missing, unparseable or empty array, or
-    one containing only competition checks. Callers treat that as "not shown to be
-    good", never as "fine".
+    ``None`` when nothing gating was reported (no checks, or only labels): not shown to be good,
+    which callers must never read as fine. Otherwise any refusal decides it, then anything
+    still ``PENDING``; an alpha whose every gating check is ``PASS`` or ``WARNING`` is
+    submittable.
+
+    ``simulation_mode`` is needed because the checks alone cannot answer for a quick-mode
+    alpha: BRAIN sends it the performance checks and *omits* every submission check, so one
+    that beats every threshold would otherwise read as submittable when the platform will not
+    even check it, let alone take it.
     """
-    judged = [
+    if simulation_mode == QUICK_MODE:
+        return "refused"
+    results = {
         str(c.get("result", "")).upper()
-        for c in checks_of(checks_json)
+        for c in checks
         if str(c.get("name", "")).upper() not in IGNORED_CHECKS
-    ]
-    return judged or None
+    }
+    if not results:
+        return None
+    if results & REFUSING:
+        return "refused"
+    if results <= {"PASS", "WARNING"}:
+        return "submittable"
+    return "pending"
 
 
-def is_submittable(checks_json: str | None) -> bool:
-    """Whether every check that describes the alpha itself passed.
-
-    A missing or unparseable check array is *not* submittable: the alpha has not been
-    shown to be good, and assuming otherwise inflates every yield figure in the product.
-    """
-    results = judged_results(checks_json)
-    return results is not None and all(r == "PASS" for r in results)
+def is_submittable(checks_json: str | None, simulation_mode: str | None = None) -> bool:
+    """Whether BRAIN has finished and nothing gating refused this alpha."""
+    return verdict(checks_of(checks_json), simulation_mode) == "submittable"
 
 
-def is_promising(checks_json: str | None) -> bool:
-    """Whether the platform is worth asking to finish judging this alpha.
+def is_promising(checks_json: str | None, simulation_mode: str | None = None) -> bool:
+    """Whether this alpha can still come out submittable: nothing refused it, some check PENDING.
 
     A finished simulation leaves ``SELF_CORRELATION``, ``PROD_CORRELATION``,
-    ``REGULAR_SUBMISSION`` and ``IS_LADDER_SHARPE`` ``PENDING`` until
-    ``GET /alphas/{id}/check`` is asked to compute them. Asking about every finished alpha
-    would be thousands of requests a day; the ones where nothing has failed *yet* are a
-    few dozen, and are exactly the set that could still become submittable.
+    ``REGULAR_SUBMISSION`` and ``IS_LADDER_SHARPE`` ``PENDING`` until BRAIN is asked to check it.
     """
-    results = judged_results(checks_json)
-    if results is None or "PENDING" not in results:
-        return False
-    return set(results) <= {"PASS", "PENDING"}
+    return verdict(checks_of(checks_json), simulation_mode) == "pending"
 
 
 class YieldBook:
@@ -148,8 +159,8 @@ class YieldBook:
         # few hundred rows hid every submittable alpha ranked below it. Parsed once per row,
         # off the event loop, because at tens of thousands of alphas that takes seconds.
         every = await self.catalog.query(
-            f"SELECT a.alpha_id, a.checks FROM alpha a WHERE {' AND '.join(clauses)} "  # noqa: S608
-            "AND a.checks IS NOT NULL",
+            f"SELECT a.alpha_id, a.checks, a.simulation_mode FROM alpha a "  # noqa: S608
+            f"WHERE {' AND '.join(clauses)} AND a.checks IS NOT NULL",
             params,
         )
         ready_ids, pending, near = await asyncio.to_thread(_tally, every)
@@ -167,7 +178,6 @@ class YieldBook:
 
         # Imported here: both modules read this one's check lists at import time.
         from ..labs.ga import independent, series_of
-        from .store import k_ratio
 
         validated = [r for r in ready if r.get("test_sharpe") is not None]
         held = [r for r in validated if held_out_ok(r)]
@@ -176,13 +186,7 @@ class YieldBook:
         days = await self._days_for(
             list(dict.fromkeys(str(r["alpha_id"]) for r in [*held, *chosen]))
         )
-        k_ratios = {
-            str(r["alpha_id"]): r.get("k_ratio")
-            if r.get("k_ratio") is not None
-            else k_ratio(list(days.get(str(r["alpha_id"]), {}).values()))
-            for r in held
-        }
-        order = stability_order(held, k_ratios)
+        order = stability_order(held)
         picks = await asyncio.to_thread(
             independent,
             order,
@@ -223,7 +227,6 @@ class YieldBook:
                 "margin": row.get("margin"),
                 "trainSharpe": row.get("train_sharpe"),
                 "testSharpe": row.get("test_sharpe"),
-                "kRatio": k_ratios.get(alpha_id, row.get("k_ratio")),
                 "checks": json.loads(row["checks"]) if row.get("checks") else [],
                 "pnl": series.get(alpha_id, []),
                 "brainUrl": f"{PLATFORM_ALPHA_URL}{alpha_id}",
@@ -290,46 +293,30 @@ PLATFORM_ALPHA_URL = "https://platform.worldquantbrain.com/alpha/"
 SPARK_POINTS = 120
 
 
-def failed_checks(checks_json: str | None) -> set[str]:
-    """The names of the checks that failed, in the platform's own spelling.
-
-    Empty when nothing failed *and* when there is nothing to read, which is why callers
-    pair it with :func:`judged_results` rather than treating an empty set as a pass.
-    """
-    return {
-        str(c.get("name", "")).upper()
-        for c in checks_of(checks_json)
-        if str(c.get("result", "")).upper() in FAILING
-        and str(c.get("name", "")).upper() not in IGNORED_CHECKS
-    }
-
-
 def _tally(rows: list[dict[str, Any]]) -> tuple[list[str], int, int]:
     """Submittable ids, promising count and near-miss count, reading each row's JSON once.
 
-    The same judgements as :func:`is_submittable` and :func:`is_promising`, which would
-    parse the array three times per row. A near miss is one or two fixable failures and
-    nothing else wrong.
+    Judged by :func:`verdict`. A near miss is one or two fixable failures and nothing else
+    wrong.
     """
     ready: list[str] = []
     pending = near = 0
     for row in rows:
-        judged = [
-            (name, str(c.get("result", "")).upper())
-            for c in checks_of(row.get("checks"))
-            if (name := str(c.get("name", "")).upper()) not in IGNORED_CHECKS
-        ]
-        if not judged:
-            continue
-        results = {result for _, result in judged}
-        if results == {"PASS"}:
+        checks = checks_of(row.get("checks"))
+        found = verdict(checks, row.get("simulation_mode"))
+        if found == "submittable":
             ready.append(str(row["alpha_id"]))
-        elif "PENDING" in results and results <= {"PASS", "PENDING"}:
+        elif found == "pending":
             pending += 1
-        elif (failed := {n for n, r in judged if r in FAILING}) and (
-            failed <= FIXABLE_CHECKS and len(failed) <= 2
-        ):
-            near += 1
+        elif found == "refused":
+            failed = {
+                name
+                for c in checks
+                if str(c.get("result", "")).upper() in REFUSING
+                and (name := str(c.get("name", "")).upper()) not in IGNORED_CHECKS
+            }
+            if failed <= FIXABLE_CHECKS and len(failed) <= 2:
+                near += 1
     return ready, pending, near
 
 
@@ -376,9 +363,9 @@ def sub_universe_margin(checks_json: str | None) -> float | None:
     return None
 
 
-def stability_order(rows: list[dict[str, Any]], k_ratios: dict[str, float | None]) -> list[str]:
-    """Alpha ids, most stable first: the mean percentile rank of test-years Sharpe, K-Ratio
-    and sub-universe margin.
+def stability_order(rows: list[dict[str, Any]]) -> list[str]:
+    """Alpha ids, most stable first: the mean percentile rank of test-years Sharpe and
+    sub-universe margin.
 
     Ranks rather than a weighted sum, so no measure needs a scale. A missing measure ranks
     last on that measure.
@@ -386,7 +373,6 @@ def stability_order(rows: list[dict[str, Any]], k_ratios: dict[str, float | None
     ids = [str(r["alpha_id"]) for r in rows]
     measures = [
         {str(r["alpha_id"]): r.get("test_sharpe") for r in rows},
-        k_ratios,
         {str(r["alpha_id"]): sub_universe_margin(r.get("checks")) for r in rows},
     ]
     score = dict.fromkeys(ids, 0.0)

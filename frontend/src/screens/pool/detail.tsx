@@ -87,7 +87,7 @@ function Body({ alphaId }: { alphaId: string }) {
           render={<Link to="/alpha/$alphaId" params={{ alphaId: d.alphaId }} />}
         >
           <MaximizeIcon aria-hidden />
-          Open full page
+          Open Full Page
         </Button>
         <OpenInBrain url={d.brainUrl} />
         <RecheckButton alphaId={d.alphaId} />
@@ -95,9 +95,7 @@ function Body({ alphaId }: { alphaId: string }) {
       </div>
 
       <Section title="Cumulative PnL" description={`${fmt.int(d.days)} trading days stored`}>
-        <div className="flex gap-3">
-          <Metric size="sm" label="K-Ratio" value={fmt.ratio(d.kRatio)} />
-        </div>
+        <div className="flex gap-3"></div>
         {d.problem && <Notice tone="warn">{d.problem}</Notice>}
         {d.pnl.length > 1 ? (
           <PnlChart values={d.pnl} dates={d.dates} label={`Cumulative PnL of ${d.alphaId}`} />
@@ -221,6 +219,8 @@ function CorrelationResult({ alphaId, kind }: { alphaId: string; kind: Kind }) {
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-end gap-3">
         <h3 className="text-body font-medium text-balance text-ink">{label}</h3>
+        {/* A kept answer: self-correlation moves as other Alphas are submitted. */}
+        <span className="text-body-compact text-ink-subtle">{fmt.ago(q.data.fetchedAt)}</span>
         {isNum(q.data.min) && <Metric size="sm" label="Min" value={fmt.ratio(q.data.min, 4)} />}
         {isNum(q.data.max) && <Metric size="sm" label="Max" value={fmt.ratio(q.data.max, 4)} />}
       </div>

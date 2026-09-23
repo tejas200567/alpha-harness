@@ -40,10 +40,12 @@ CREATE TABLE IF NOT EXISTS data_field (
     description       VARCHAR,
     field_type        VARCHAR,
     coverage          DOUBLE,
+    date_coverage     DOUBLE,
     user_count        INTEGER,
     alpha_count       INTEGER,
     pyramid_multiplier DOUBLE,
     themes            VARCHAR,
+    date_created      DATE,
     instrument_type   VARCHAR NOT NULL,
     region            VARCHAR NOT NULL,
     delay             INTEGER NOT NULL,
@@ -89,6 +91,12 @@ CREATE TABLE IF NOT EXISTS data_category (
     PRIMARY KEY (category_id, instrument_type, region, delay, universe)
 );
 
+-- Only region ALL sends it: how many regions hold the field, which is what says whether it
+-- can survive a region-agnostic simulation's intersection of regions.
+ALTER TABLE data_field ADD COLUMN IF NOT EXISTS region_coverage INTEGER;
+ALTER TABLE data_field ADD COLUMN IF NOT EXISTS date_coverage DOUBLE;
+ALTER TABLE data_field ADD COLUMN IF NOT EXISTS date_created DATE;
+
 CREATE INDEX IF NOT EXISTS ix_field_tuple
     ON data_field (instrument_type, region, delay, universe);
 CREATE INDEX IF NOT EXISTS ix_set_tuple
@@ -126,7 +134,6 @@ CREATE TABLE IF NOT EXISTS alpha (
 );
 
 -- Computed from alpha_pnl on demand, so it survives re-imports of the alpha row.
-ALTER TABLE alpha ADD COLUMN IF NOT EXISTS k_ratio DOUBLE;
 ALTER TABLE alpha ADD COLUMN IF NOT EXISTS name VARCHAR;
 ALTER TABLE alpha ADD COLUMN IF NOT EXISTS date_submitted TIMESTAMP;
 -- A simulation that holds its last years out as a test reports its train years apart.
@@ -135,6 +142,31 @@ ALTER TABLE alpha ADD COLUMN IF NOT EXISTS train_sharpe DOUBLE;
 ALTER TABLE alpha ADD COLUMN IF NOT EXISTS train_fitness DOUBLE;
 ALTER TABLE alpha ADD COLUMN IF NOT EXISTS test_sharpe DOUBLE;
 ALTER TABLE alpha ADD COLUMN IF NOT EXISTS test_fitness DOUBLE;
+ALTER TABLE alpha ADD COLUMN IF NOT EXISTS test_start DATE;
+-- What the Portfolio page filters on. Tags, classifications ("Power Pool Alpha") and
+-- pyramids ("ASI/D1/OTHER") are JSON arrays of names; an empty array means "none".
+ALTER TABLE alpha ADD COLUMN IF NOT EXISTS max_trade VARCHAR;
+ALTER TABLE alpha ADD COLUMN IF NOT EXISTS max_position VARCHAR;
+-- Quick mode alphas carry every performance metric and none of the submission checks,
+-- so nothing in `checks` reveals that BRAIN will never take one.
+ALTER TABLE alpha ADD COLUMN IF NOT EXISTS simulation_mode VARCHAR;
+ALTER TABLE alpha ADD COLUMN IF NOT EXISTS tags VARCHAR;
+ALTER TABLE alpha ADD COLUMN IF NOT EXISTS classifications VARCHAR;
+ALTER TABLE alpha ADD COLUMN IF NOT EXISTS pyramids VARCHAR;
+-- What rebuilds the final day BRAIN counts in IS and test but exports in no recordset.
+ALTER TABLE alpha ADD COLUMN IF NOT EXISTS is_pnl DOUBLE;
+ALTER TABLE alpha ADD COLUMN IF NOT EXISTS end_date DATE;
+ALTER TABLE alpha ADD COLUMN IF NOT EXISTS test_turnover DOUBLE;
+-- How the stored daily series was built (``vault.store.SERIES_VERSION``); older ones are refetched.
+ALTER TABLE alpha ADD COLUMN IF NOT EXISTS series_version INTEGER;
+-- In-sample figures rebuilt from the stored series (final days included), kept so the Portfolio
+-- list need not read every series. Apart from BRAIN's own, which a listing overwrites.
+-- An older database still carries `series_sharpe` and its five siblings, rebuilt locally
+-- from the stored series before the Portfolio page read BRAIN's own per-Alpha figures, and
+-- `k_ratio`. Nothing reads or writes any of them now; they stay because DuckDB refuses to
+-- drop a column from a table an index depends on, and rebuilding this one to tidy seven
+-- unread doubles would cost far more than it saves.
+DROP TABLE IF EXISTS k_ratio_2003;
 
 -- One row per alpha per trading day. ~2,500 rows per alpha.
 CREATE TABLE IF NOT EXISTS alpha_pnl (
@@ -143,6 +175,9 @@ CREATE TABLE IF NOT EXISTS alpha_pnl (
     pnl               DOUBLE,
     PRIMARY KEY (alpha_id, date)
 );
+-- NULL on every row of an alpha means its series predates the pnl + turnover download and
+-- is re-fetched: the old daily-pnl recordset is rounded separately from the platform's stats.
+ALTER TABLE alpha_pnl ADD COLUMN IF NOT EXISTS turnover DOUBLE;
 
 CREATE INDEX IF NOT EXISTS ix_alpha_scope
     ON alpha (instrument_type, region, delay, universe);
@@ -160,10 +195,13 @@ FIELD_COLUMNS = (
     "description",
     "field_type",
     "coverage",
+    "date_coverage",
     "user_count",
     "alpha_count",
     "pyramid_multiplier",
     "themes",
+    "date_created",
+    "region_coverage",
     "instrument_type",
     "region",
     "delay",
@@ -235,12 +273,27 @@ ALPHA_COLUMNS = (
     "fetched_at",
     "name",
     "date_submitted",
+    "max_trade",
+    "max_position",
+    "tags",
+    "classifications",
+    "pyramids",
+    "is_pnl",
+    "end_date",
+    "simulation_mode",
 )
 
 #: Written only with an Alpha that has a ``train`` block (see ``AlphaVault.save_alphas``).
-TRAIN_COLUMNS = ("train_sharpe", "train_fitness", "test_sharpe", "test_fitness")
+TRAIN_COLUMNS = (
+    "train_sharpe",
+    "train_fitness",
+    "test_sharpe",
+    "test_fitness",
+    "test_start",
+    "test_turnover",
+)
 
-PNL_COLUMNS = ("alpha_id", "date", "pnl")
+PNL_COLUMNS = ("alpha_id", "date", "pnl", "turnover")
 
 _KEYS = {
     "data_set": ("dataset_id", "instrument_type", "region", "delay", "universe"),
@@ -272,10 +325,13 @@ ARROW_TYPES: dict[str, dict[str, pa.DataType]] = {
         "description": _STR,
         "field_type": _STR,
         "coverage": _F64,
+        "date_coverage": _F64,
         "user_count": _I32,
         "alpha_count": _I32,
         "pyramid_multiplier": _F64,
         "themes": _STR,
+        "date_created": _DATE,
+        "region_coverage": _I32,
         "instrument_type": _STR,
         "region": _STR,
         "delay": _I32,
@@ -329,18 +385,29 @@ ARROW_TYPES: dict[str, dict[str, pa.DataType]] = {
         "date_created": _TS,
         "checks": _STR,
         "fetched_at": _TS,
-        "k_ratio": _F64,
         "name": _STR,
         "date_submitted": _TS,
         "train_sharpe": _F64,
         "train_fitness": _F64,
         "test_sharpe": _F64,
         "test_fitness": _F64,
+        "test_start": _DATE,
+        "max_trade": _STR,
+        "max_position": _STR,
+        "tags": _STR,
+        "classifications": _STR,
+        "pyramids": _STR,
+        "is_pnl": _F64,
+        "end_date": _DATE,
+        "simulation_mode": _STR,
+        "test_turnover": _F64,
+        "series_version": _I32,
     },
     "alpha_pnl": {
         "alpha_id": _STR,
         "date": _DATE,
         "pnl": _F64,
+        "turnover": _F64,
     },
     "data_category": {
         "category_id": _STR,
@@ -482,6 +549,27 @@ class CatalogLockedError(RuntimeError):
         self.detail = detail
 
 
+def _load_fts(conn: duckdb.DuckDBPyConnection) -> bool:
+    """Whether full-text search can be used at all.
+
+    DuckDB ships ``fts`` from its repository rather than statically, so the first
+    ``INSTALL`` needs a network. Loading is tried first, because once the extension is on
+    disk that is the whole job and ``INSTALL`` is a registry round trip for nothing. A
+    machine that has never had a network keeps substring search, which is worse but not
+    broken — so this reports rather than raises.
+    """
+    try:
+        conn.execute("LOAD fts")
+    except duckdb.Error:
+        try:
+            conn.execute("INSTALL fts")
+            conn.execute("LOAD fts")
+        except Exception:
+            log.info("catalog.fts_unavailable", exc_info=True)
+            return False
+    return True
+
+
 class Catalog:
     """Async facade over a DuckDB file."""
 
@@ -493,6 +581,8 @@ class Catalog:
         #: its thread, and ``close`` must wait for the thread, not the caller.
         self._reads: set[asyncio.Future[Any]] = set()
         self._closing = False
+        #: Whether full-text search is available; see :func:`_load_fts`.
+        self.fts = False
 
     async def open(self) -> None:
         self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -513,6 +603,14 @@ class Catalog:
         self._conn.execute(SCHEMA)
         _drop_field_key(self._conn)
         _drop_spent_indexes(self._conn)
+        self.fts = _load_fts(self._conn)
+
+    async def execute(self, sql: str, params: list[Any] | None = None) -> None:
+        """Run one statement. For DDL and small writes; bulk loads go through Arrow."""
+        await self._locked(self._execute_sync, sql, params or [])
+
+    def _execute_sync(self, sql: str, params: list[Any]) -> None:
+        self._require().execute(sql, params)
 
     async def close(self) -> None:
         """Refuse new reads, then let in-flight writes and reads finish before closing."""
@@ -691,5 +789,32 @@ class Catalog:
     async def upsert_alphas(self, rows: list[tuple[Any, ...]]) -> int:
         return await self.upsert("alpha", ALPHA_COLUMNS, rows)
 
-    async def upsert_pnl(self, rows: list[tuple[Any, ...]]) -> int:
-        return await self.upsert("alpha_pnl", PNL_COLUMNS, rows)
+    async def replace_pnl(self, alpha_id: str, rows: list[tuple[Any, ...]]) -> int:
+        """Make one alpha's daily series exactly ``rows``, in one transaction.
+
+        Delete then insert: an older series may hold dates the current recordset does not.
+        """
+        if not rows:
+            return 0
+        table = _to_arrow("alpha_pnl", PNL_COLUMNS, rows)
+        await self._locked(self._replace_pnl_sync, alpha_id, table)
+        return len(rows)
+
+    def _replace_pnl_sync(self, alpha_id: str, table: pa.Table) -> None:
+        conn = self._require()
+        source = "_incoming"
+        columns = ", ".join(PNL_COLUMNS)
+        conn.register(source, table)
+        try:
+            conn.execute("BEGIN TRANSACTION")
+            try:
+                conn.execute("DELETE FROM alpha_pnl WHERE alpha_id = ?", [alpha_id])
+                conn.execute(
+                    f"INSERT INTO alpha_pnl ({columns}) SELECT {columns} FROM {source}"  # noqa: S608
+                )
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+        finally:
+            conn.unregister(source)

@@ -16,7 +16,6 @@ export type AlphaMetricKey =
   | 'drawdown'
   | 'margin'
   | 'operator_count'
-  | 'k_ratio'
   | 'calmar'
 export type AlphaSortKey = AlphaMetricKey | 'date_created' | 'date_submitted'
 
@@ -30,6 +29,8 @@ export interface AlphaPageRequest {
   minimum?: Partial<Record<AlphaMetricKey, number>>
   maximum?: Partial<Record<AlphaMetricKey, number>>
   search?: string | null
+  /** Only Alphas the Evolution Lab can breed from, for when this table picks seeds. */
+  evolvable?: boolean
   /** 1..500 */
   limit?: number
   offset?: number
@@ -73,11 +74,6 @@ export const pool = {
   query: (body: AlphaPageRequest) => http.post<AlphaPage>('/api/vault/alphas/query', body),
   detail: (alphaId: string) =>
     http.get<AlphaDetail>(`/api/vault/alphas/${encodeURIComponent(alphaId)}/detail`),
-  /** ≤ 100 ids; downloads daily PnL where missing, in the background. */
-  kRatio: (alphaIds: string[]) =>
-    http.post<Schemas['KRatioStarted']>('/api/vault/alphas/k-ratio', {
-      alpha_ids: alphaIds,
-    }),
   submittable: (scope: Scope, limit = 200) =>
     http.get<SubmittableResponse>(
       `/api/vault/submittable${qs({ region: scope.region, delay: scope.delay, universe: scope.universe, instrument_type: scope.instrumentType, limit })}`,
@@ -89,5 +85,7 @@ export const pool = {
     ),
   /** A slow, rate-limited BRAIN job. */
   correlations: (alphaId: string, kind: 'self' | 'prod') =>
-    http.get<BrainCorrelation>(`/api/alphas/${encodeURIComponent(alphaId)}/correlations/${kind}`),
+    http.get<BrainCorrelation & { fetchedAt: string }>(
+      `/api/alphas/${encodeURIComponent(alphaId)}/correlations/${kind}`,
+    ),
 }

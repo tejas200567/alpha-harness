@@ -4,598 +4,6 @@
  */
 
 export interface paths {
-    "/api/auth/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Login
-         * @description Sign in to BRAIN.
-         *
-         *     Solves the ALTCHA proof-of-work, exchanges Basic auth for a session cookie, then
-         *     caches the cookie jar so a restart does not repeat the work.
-         */
-        post: operations["login_api_auth_login_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/cookie": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Login Cookie
-         * @description Sign in using a pasted BRAIN session cookie instead of email+password.
-         */
-        post: operations["login_cookie_api_auth_cookie_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/logout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Logout */
-        post: operations["logout_api_auth_logout_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/settings-options": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Settings Options
-         * @description Valid options for every settings field, given what is already chosen.
-         *
-         *     ``OPTIONS /simulations`` returns a *recursive* structure: the legal universes depend
-         *     on the region, which depends on the instrument type. Resolving it here means the
-         *     settings form can only ever offer combinations the platform accepts — CHN shows
-         *     ``TOP2000U`` and nothing else.
-         */
-        post: operations["settings_options_api_auth_settings_options_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/catalog/markets": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Markets
-         * @description Every market a full sync covers: what the Data Explorer's sync matrix draws.
-         */
-        get: operations["markets_api_catalog_markets_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/catalog/sync-all": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Start Sync All
-         * @description Download every market BRAIN offers: all fields first, then dataset details.
-         *
-         *     Runs in the background; progress, including each market's state, arrives over the
-         *     WebSocket ``sync`` topic.
-         */
-        post: operations["start_sync_all_api_catalog_sync_all_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/catalog/sync/runs/{run_id}/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Cancel Run */
-        post: operations["cancel_run_api_catalog_sync_runs__run_id__cancel_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/catalog/pyramids": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Pyramids
-         * @description Every pyramid: its multiplier, this quarter's alpha count, and download state.
-         */
-        get: operations["pyramids_api_catalog_pyramids_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/catalog/scopes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Scopes
-         * @description Which scopes hold data locally, and how much.
-         */
-        get: operations["scopes_api_catalog_scopes_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/catalog/counts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Counts
-         * @description Datasets / categories / subcategories / fields for one scope.
-         */
-        get: operations["counts_api_catalog_counts_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/catalog/size": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Size
-         * @description How much the catalog's data actually takes up.
-         */
-        get: operations["size_api_catalog_size_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/catalog/stats": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Stats
-         * @description Value ranges, so filter controls can bound themselves to real data.
-         */
-        get: operations["stats_api_catalog_stats_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/catalog/fields": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Fields
-         * @description Filtered, sorted, paginated data fields.
-         *
-         *     POST rather than GET because the filter set is large and structured; the operation
-         *     is still a pure read.
-         */
-        post: operations["fields_api_catalog_fields_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/catalog/facets": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Facets
-         * @description Categories / subcategories / datasets / types with counts under the other filters.
-         */
-        post: operations["facets_api_catalog_facets_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/catalog/pool-coverage": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Pool Coverage
-         * @description Where the unsubmitted pool is genuinely under-mined, relative to real catalog size.
-         *
-         *     Phase 1 of the diversity pipeline: a coverage-gap calculation, not a hardcoded term
-         *     list. catalog_share - pool_share avoids the naive "small category = explore it"
-         *     mistake -- a tiny category isn't a gap unless the pool represents it even less than
-         *     its own small size would suggest.
-         */
-        get: operations["pool_coverage_api_catalog_pool_coverage_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/catalog/high-impact-batch": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * High Impact Batch
-         * @description The whole opportunity pipeline in one call: coverage gap x pyramid multiplier,
-         *     ranked, swept by real category_id for the top opportunities, ready for
-         *     /description-aware-sweep/task. A preview -- nothing is simulated here.
-         */
-        get: operations["high_impact_batch_api_catalog_high_impact_batch_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/catalog/proven-pattern-batch": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Proven Pattern Batch
-         * @description Clone real, already-proven Alpha constructions onto unused fields whose real
-         *     description overlaps meaningfully with the proven field's -- pattern cloning from
-         *     evidence, not template classification. Different from description-aware-sweep:
-         *     that routes a field to one of 13 fixed shapes by keyword; this instead takes an
-         *     Alpha that already scored well, finds the field it's built on, and looks for other
-         *     fields -- in the same category, never already used in this pool -- whose own
-         *     description reads similarly, then reuses the exact proven expression on them.
-         */
-        get: operations["proven_pattern_batch_api_catalog_proven_pattern_batch_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/catalog/description-aware-sweep": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Description Aware Sweep
-         * @description Classify each field by its real description, route it to the expression
-         *     shape suited to what it represents, instead of sweeping one tree uniformly
-         *     across every field.
-         */
-        post: operations["description_aware_sweep_api_catalog_description_aware_sweep_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/catalog/fields/{field_id}/intelligence": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Field Intelligence Route
-         * @description Real evidence for one field from the community/paper knowledge graph:
-         *     Sharpe/fitness history by scope (PERFORMS_IN), and which neutralizations
-         *     have historically worked or failed for it. Independent of the account's
-         *     own catalog sync -- this is external, aggregated community evidence.
-         */
-        get: operations["field_intelligence_route_api_catalog_fields__field_id__intelligence_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/catalog/description-aware-sweep/task": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Description Aware Sweep Task
-         * @description Run every candidate from a description-aware sweep as a real, fixed-list task.
-         *
-         *     Reuses Settings Sampler's seed_trials/refill machinery as-is: both already implement
-         *     "every simulation is written up front, so nothing is sampled" -- exactly this shape,
-         *     just for pre-classified fields instead of one alpha across markets.
-         */
-        post: operations["description_aware_sweep_task_api_catalog_description_aware_sweep_task_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/catalog/fields/{field_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Field Detail */
-        get: operations["field_detail_api_catalog_fields__field_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/catalog/fields/{field_id}/availability": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Field Availability
-         * @description Every scope this field exists in.
-         *
-         *     Not every field is available in every region/delay/universe, so this is the check
-         *     that stops a template being expanded into simulations that cannot run.
-         */
-        get: operations["field_availability_api_catalog_fields__field_id__availability_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/catalog/datasets": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Datasets */
-        get: operations["datasets_api_catalog_datasets_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/simulations/engine": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Engine Status
-         * @description Slot occupancy, queue depth and task quotas — what the matrix header shows.
-         */
-        get: operations["engine_status_api_simulations_engine_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/simulations/queue": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Drop Queue
-         * @description Discard queued work that has not been submitted yet.
-         *
-         *     Safe by construction: a queued row has no platform id because nothing was sent.
-         */
-        delete: operations["drop_queue_api_simulations_queue_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/simulations/active": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Active
-         * @description Everything currently pending or running — what the matrix renders.
-         */
-        get: operations["active_api_simulations_active_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/simulations/{record_id}/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Cancel
-         * @description Cancel a running simulation.
-         *
-         *     Uses the stored platform id — the reason that id is written to disk before the
-         *     submission request is even sent.
-         */
-        post: operations["cancel_api_simulations__record_id__cancel_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/alphas/summary": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Summary
-         * @description Counts by stage and status — the shape of your pool at a glance.
-         */
-        get: operations["summary_api_alphas_summary_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/alphas/osmosis/coverage": {
         parameters: {
             query?: never;
@@ -639,6 +47,149 @@ export interface paths {
          *     to build any real allocation plan responsibly instead of guessing at it.
          */
         get: operations["osmosis_scope_alphas_api_alphas_osmosis_scope_alphas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/alphas/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Summary
+         * @description Counts by stage and status — the shape of your pool at a glance.
+         */
+        get: operations["summary_api_alphas_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/alphas/tasks/{study_id}/power-pool-eligibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Task Power Pool Eligibility
+         * @description Which Alphas from a finished task actually clear Power Pool's real bar.
+         *
+         *     Reuses page() directly -- the same AlphaInfo the Alpha detail screen already builds,
+         *     so power_pool_operators/data_fields/checks are computed exactly once, the same way.
+         */
+        get: operations["task_power_pool_eligibility_api_alphas_tasks__study_id__power_pool_eligibility_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/alphas/{alpha_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Properties
+         * @description Save the Alpha's name, category, colour, tags and description on BRAIN.
+         *
+         *     Normalised the way the platform's own client sends them: a blank or ``NONE`` colour,
+         *     a blank name or category become null; an empty description is left out.
+         */
+        patch: operations["update_properties_api_alphas__alpha_id__patch"];
+        trace?: never;
+    };
+    "/api/alphas/{alpha_id}/after-cost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * After Cost
+         * @description This Alpha's PnL, gross and after a trading cost of ``costBps`` on every dollar traded.
+         *
+         *     The cost is charged per day against *that day's* turnover and the statistics are then
+         *     computed from the resulting series — never the gross mean with an average cost subtracted.
+         *     The two differ: turnover is not constant, so a cost changes the volatility of the series
+         *     and not only its mean, and a Sharpe taken from ``mean - c * turnover`` over the gross
+         *     standard deviation flatters a high-turnover Alpha.
+         *
+         *     It is the Portfolio page's own arithmetic over a book of one, so an Alpha reads the same
+         *     on both screens. Its daily turnover is downloaded the first time, since the cost of a day
+         *     cannot be known without it.
+         */
+        get: operations["after_cost_api_alphas__alpha_id__after_cost_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/alphas/{alpha_id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check Alpha
+         * @description Re-run the submission checks without submitting.
+         *
+         *     Changes nothing on the platform. It does update the local copy, so an alpha that has
+         *     just resolved appears on the submit screen without waiting for the next backfill.
+         */
+        get: operations["check_alpha_api_alphas__alpha_id__check_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/alphas/{alpha_id}/correlations/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Correlations
+         * @description Correlation against your own submitted Alphas, the Power Pool, or production.
+         *
+         *     A slow, rate-limited job, so the answer is kept and returned with ``fetchedAt``; only
+         *     ``refresh`` asks BRAIN again. ``cachedOnly`` answers ``{"cached": false}`` when nothing
+         *     is kept, so a page can show old answers without asking.
+         */
+        get: operations["correlations_api_alphas__alpha_id__correlations__kind__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -705,99 +256,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/alphas/tasks/{study_id}/power-pool-eligibility": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Task Power Pool Eligibility
-         * @description Which Alphas from a finished task actually clear Power Pool's real bar.
-         *
-         *     Reuses page() directly -- the same AlphaInfo the Alpha detail screen already builds,
-         *     so power_pool_operators/data_fields/checks are computed exactly once, the same way.
-         */
-        get: operations["task_power_pool_eligibility_api_alphas_tasks__study_id__power_pool_eligibility_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/alphas/{alpha_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Update Properties
-         * @description Save the Alpha's name, category, colour, tags and description on BRAIN.
-         *
-         *     Normalised the way the platform's own client sends them: a blank or ``NONE`` colour,
-         *     a blank name or category become null; an empty description is left out.
-         */
-        patch: operations["update_properties_api_alphas__alpha_id__patch"];
-        trace?: never;
-    };
-    "/api/alphas/{alpha_id}/check": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Check Alpha
-         * @description Re-run the submission checks without submitting.
-         *
-         *     Changes nothing on the platform. It does update the local copy, so an alpha that has
-         *     just resolved appears on the submit screen without waiting for the next backfill.
-         */
-        get: operations["check_alpha_api_alphas__alpha_id__check_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/alphas/{alpha_id}/correlations/{kind}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Correlations
-         * @description Correlation against your own submitted Alphas, the Power Pool, or production.
-         *
-         *     A slow, rate-limited job, so the answer is kept and returned with ``fetchedAt``; only
-         *     ``refresh`` asks BRAIN again. ``cachedOnly`` answers ``{"cached": false}`` when nothing
-         *     is kept, so a page can show old answers without asking.
-         */
-        get: operations["correlations_api_alphas__alpha_id__correlations__kind__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/alphas/{alpha_id}/performance": {
         parameters: {
             query?: never;
@@ -818,7 +276,573 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/template-lab/options": {
+    "/api/auth/cookie": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Login Cookie
+         * @description Sign in using a pasted BRAIN session cookie instead of email+password.
+         */
+        post: operations["login_cookie_api_auth_cookie_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Login
+         * @description Sign in to BRAIN.
+         *
+         *     Solves the ALTCHA proof-of-work, exchanges Basic auth for a session cookie, then
+         *     caches the cookie jar so a restart does not repeat the work.
+         */
+        post: operations["login_api_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Logout */
+        post: operations["logout_api_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/settings-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Settings Options
+         * @description Valid options for every settings field, given what is already chosen.
+         *
+         *     ``OPTIONS /simulations`` returns a *recursive* structure: the legal universes depend
+         *     on the region, which depends on the instrument type. Resolving it here means the
+         *     settings form can only ever offer combinations the platform accepts — CHN shows
+         *     ``TOP2000U`` and nothing else.
+         */
+        post: operations["settings_options_api_auth_settings_options_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify
+         * @description Finish a sign-in that BRAIN paused for an identity check.
+         *
+         *     The check itself happens on BRAIN's own page, which cannot be embedded here — it
+         *     answers ``X-Frame-Options: DENY``, and the Persona widget behind it only frames into
+         *     WorldQuant's own domain. So the browser opens that page in a window of its own and
+         *     asks here whether it has been accepted yet.
+         *
+         *     Answering while the check is still open is normal, not an error: the session comes
+         *     back unauthenticated and still carrying the inquiry, and the caller asks again. That
+         *     is what lets the window and this poll finish in either order.
+         */
+        post: operations["verify_api_auth_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalog/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Counts
+         * @description Datasets / categories / subcategories / fields for one scope.
+         */
+        get: operations["counts_api_catalog_counts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalog/datasets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Datasets */
+        get: operations["datasets_api_catalog_datasets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalog/description-aware-sweep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Description Aware Sweep
+         * @description Classify each field by its real description, route it to the expression
+         *     shape suited to what it represents, instead of sweeping one tree uniformly
+         *     across every field.
+         */
+        post: operations["description_aware_sweep_api_catalog_description_aware_sweep_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalog/description-aware-sweep/task": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Description Aware Sweep Task
+         * @description Run every candidate from a description-aware sweep as a real, fixed-list task.
+         *
+         *     Reuses Settings Sampler's seed_trials/refill machinery as-is: both already implement
+         *     "every simulation is written up front, so nothing is sampled" -- exactly this shape,
+         *     just for pre-classified fields instead of one alpha across markets.
+         */
+        post: operations["description_aware_sweep_task_api_catalog_description_aware_sweep_task_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalog/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Facets
+         * @description Categories / subcategories / datasets / types with counts under the other filters.
+         */
+        post: operations["facets_api_catalog_facets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalog/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fields
+         * @description Filtered, sorted, paginated data fields.
+         *
+         *     POST rather than GET because the filter set is large and structured; the operation
+         *     is still a pure read.
+         */
+        post: operations["fields_api_catalog_fields_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalog/fields/{field_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Field Detail */
+        get: operations["field_detail_api_catalog_fields__field_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalog/fields/{field_id}/availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Field Availability
+         * @description Every scope this field exists in.
+         *
+         *     Not every field is available in every region/delay/universe, so this is the check
+         *     that stops a template being expanded into simulations that cannot run.
+         */
+        get: operations["field_availability_api_catalog_fields__field_id__availability_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalog/fields/{field_id}/intelligence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Field Intelligence Route
+         * @description Real evidence for one field from the community/paper knowledge graph:
+         *     Sharpe/fitness history by scope (PERFORMS_IN), and which neutralizations
+         *     have historically worked or failed for it. Independent of the account's
+         *     own catalog sync -- this is external, aggregated community evidence.
+         */
+        get: operations["field_intelligence_route_api_catalog_fields__field_id__intelligence_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalog/high-impact-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * High Impact Batch
+         * @description The whole opportunity pipeline in one call: coverage gap x pyramid multiplier,
+         *     ranked, swept by real category_id for the top opportunities, ready for
+         *     /description-aware-sweep/task. A preview -- nothing is simulated here.
+         */
+        get: operations["high_impact_batch_api_catalog_high_impact_batch_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalog/markets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Markets
+         * @description Every market BRAIN offers: what the sync matrix draws.
+         */
+        get: operations["markets_api_catalog_markets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalog/pool-coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pool Coverage
+         * @description Where the unsubmitted pool is genuinely under-mined, relative to real catalog size.
+         *
+         *     Phase 1 of the diversity pipeline: a coverage-gap calculation, not a hardcoded term
+         *     list. catalog_share - pool_share avoids the naive "small category = explore it"
+         *     mistake -- a tiny category isn't a gap unless the pool represents it even less than
+         *     its own small size would suggest.
+         */
+        get: operations["pool_coverage_api_catalog_pool_coverage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalog/proven-pattern-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Proven Pattern Batch
+         * @description Clone real, already-proven Alpha constructions onto unused fields whose real
+         *     description overlaps meaningfully with the proven field's -- pattern cloning from
+         *     evidence, not template classification. Different from description-aware-sweep:
+         *     that routes a field to one of 13 fixed shapes by keyword; this instead takes an
+         *     Alpha that already scored well, finds the field it's built on, and looks for other
+         *     fields -- in the same category, never already used in this pool -- whose own
+         *     description reads similarly, then reuses the exact proven expression on them.
+         */
+        get: operations["proven_pattern_batch_api_catalog_proven_pattern_batch_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalog/pyramids": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pyramids
+         * @description Every pyramid: its multiplier, this quarter's alpha count, and download state.
+         */
+        get: operations["pyramids_api_catalog_pyramids_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalog/scopes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Scopes
+         * @description Which scopes hold data locally, and how much.
+         */
+        get: operations["scopes_api_catalog_scopes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalog/size": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Size
+         * @description How much the catalog's data actually takes up.
+         */
+        get: operations["size_api_catalog_size_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalog/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stats
+         * @description Value ranges, so filter controls can bound themselves to real data.
+         */
+        get: operations["stats_api_catalog_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalog/sync-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Sync All
+         * @description Download every ordinary market: all fields first, then dataset details.
+         *
+         *     Region ``ALL`` is not one of them; it has :func:`start_sync_region_agnostic` to itself.
+         *
+         *     Runs in the background; progress, including each market's state, arrives over the
+         *     WebSocket ``sync`` topic.
+         */
+        post: operations["start_sync_all_api_catalog_sync_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalog/sync-region-agnostic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Sync Region Agnostic
+         * @description Download the region-agnostic market: every universe of region ``ALL``.
+         *
+         *     Its own route because it is its own download. BRAIN serves this market only fifty fields
+         *     at a time, so it is read dataset by dataset — about ten minutes per universe where an
+         *     ordinary market is seconds — and only an account running region-agnostic alphas needs it.
+         */
+        post: operations["start_sync_region_agnostic_api_catalog_sync_region_agnostic_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/catalog/sync/runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Run */
+        post: operations["cancel_run_api_catalog_sync_runs__run_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Say
+         * @description Send a message and get back a reply plus the fields it chose.
+         *
+         *     Anything the assistant names that is not really in the catalogue is dropped before
+         *     you see it and reported in ``dropped`` — an invented field costs a simulation to
+         *     discover, and the consultant has a limited number each day.
+         */
+        post: operations["say_api_chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chat/options": {
         parameters: {
             query?: never;
             header?: never;
@@ -827,9 +851,9 @@ export interface paths {
         };
         /**
          * Options
-         * @description The blocks this account can build with, and what a task can be set to.
+         * @description The two choices a conversation offers: which model, and how hard to think.
          */
-        get: operations["options_api_template_lab_options_get"];
+        get: operations["options_api_chat_options_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -838,80 +862,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/template-lab/templates": {
+    "/api/chat/threads": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * Templates
-         * @description The presets, then the user's saved templates, newest first.
-         */
-        get: operations["templates_api_template_lab_templates_get"];
+        /** Threads */
+        get: operations["threads_api_chat_threads_get"];
         put?: never;
-        /** Create Template */
-        post: operations["create_template_api_template_lab_templates_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/template-lab/templates/{template_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Update Template */
-        put: operations["update_template_api_template_lab_templates__template_id__put"];
         post?: never;
-        /** Delete Template */
-        delete: operations["delete_template_api_template_lab_templates__template_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/template-lab/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Preview
-         * @description What a task would search. Free; queues nothing.
-         */
-        post: operations["preview_api_template_lab_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/template-lab/tasks": {
+    "/api/chat/threads/{thread_id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Thread */
+        get: operations["thread_api_chat_threads__thread_id__get"];
         put?: never;
-        /**
-         * Add Task
-         * @description Add the template's search to Tasks, not started. It spends nothing until run there.
-         */
-        post: operations["add_task_api_template_lab_tasks_post"];
-        delete?: never;
+        post?: never;
+        /** Delete Thread */
+        delete: operations["delete_thread_api_chat_threads__thread_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1011,6 +991,304 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Health
+         * @description Liveness plus a summary of local state, for the UI's status bar.
+         */
+        get: operations["health_api_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab-tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Tasks
+         * @description Every task, newest first, and the slots they share.
+         */
+        get: operations["list_tasks_api_lab_tasks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab-tasks/run-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run All
+         * @description Run every task not started yet, oldest first. What does not fit waits its turn.
+         */
+        post: operations["run_all_api_lab_tasks_run_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab-tasks/submittable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Submittable Alphas
+         * @description Every Alpha from every task that nothing BRAIN reports refuses: each check PASS, WARNING
+         *     or PENDING, apart from the ones that never gate (``vault.yields.IGNORED_CHECKS``).
+         *
+         *     Judged on the vault's checks where it has them, as a task's own list is. Each Alpha once,
+         *     from the task that found it first.
+         */
+        get: operations["submittable_alphas_api_lab_tasks_submittable_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab-tasks/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove
+         * @description Remove a task that is not running. The Alphas it found stay in Alphas.
+         */
+        delete: operations["remove_api_lab_tasks__task_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change
+         * @description Change a task's cores or simulations. A running task takes them from its next round.
+         */
+        patch: operations["change_api_lab_tasks__task_id__patch"];
+        trace?: never;
+    };
+    "/api/lab-tasks/{task_id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pause
+         * @description Queue nothing more for now. Simulations already sent finish; the rest come off.
+         */
+        post: operations["pause_api_lab_tasks__task_id__pause_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab-tasks/{task_id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run
+         * @description Run a task, resume a paused one, or retry a failed one. It starts once its cores fit.
+         */
+        post: operations["run_api_lab_tasks__task_id__run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab-tasks/{task_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop
+         * @description Finish a task early. Simulations already sent still finish and are scored.
+         *
+         *     Pressed on a task that is *already* stopping, it forces: what is out on BRAIN is
+         *     cancelled where it can be, the trials close whatever their simulations are doing, and
+         *     the cores come back. There is no separate button because there is no separate
+         *     intention — the second press means the first one did not work.
+         */
+        post: operations["stop_api_lab_tasks__task_id__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab-tasks/{task_id}/top": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Top
+         * @description The task's best Alphas on what it searches for. Seeds are not among them.
+         */
+        get: operations["top_api_lab_tasks__task_id__top_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Context
+         * @description Exactly what the model is shown about your data.
+         *
+         *     The hierarchy with metadata, and no individual fields — tens of thousands of field
+         *     names would fill the context window. Set ``rendered`` to read the literal text.
+         */
+        get: operations["context_api_llm_context_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm/keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Keys
+         * @description Keys, today's usage, and how much budget is left across all of them.
+         */
+        get: operations["list_keys_api_llm_keys_get"];
+        put?: never;
+        /**
+         * Add Key
+         * @description Store a key.
+         *
+         *     Quota is per account, so adding a key from a second account genuinely doubles the
+         *     daily budget — which is why the same key cannot be added twice.
+         */
+        post: operations["add_key_api_llm_keys_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm/keys/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check All Keys */
+        post: operations["check_all_keys_api_llm_keys_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm/keys/{key_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Toggle Key */
+        put: operations["toggle_key_api_llm_keys__key_id__put"];
+        post?: never;
+        /** Remove Key */
+        delete: operations["remove_key_api_llm_keys__key_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm/keys/{key_id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Key
+         * @description Confirm a key works. Costs nothing against the generation quota.
+         */
+        post: operations["check_key_api_llm_keys__key_id__check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llm/models": {
         parameters: {
             query?: never;
@@ -1054,33 +1332,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/llm/keys": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Keys
-         * @description Keys, today's usage, and how much budget is left across all of them.
-         */
-        get: operations["list_keys_api_llm_keys_get"];
-        put?: never;
-        /**
-         * Add Key
-         * @description Store a key.
-         *
-         *     Quota is per account, so adding a key from a second account genuinely doubles the
-         *     daily budget — which is why the same key cannot be added twice.
-         */
-        post: operations["add_key_api_llm_keys_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/llm/providers": {
         parameters: {
             query?: never;
@@ -1104,7 +1355,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/llm/keys/{key_id}/check": {
+    "/api/portfolio/compute": {
         parameters: {
             query?: never;
             header?: never;
@@ -1114,17 +1365,37 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Check Key
-         * @description Confirm a key works. Costs nothing against the generation quota.
+         * Compute
+         * @description These Alphas combined at equal weight: stats, yearly rows, partitions, correlations.
          */
-        post: operations["check_key_api_llm_keys__key_id__check_post"];
+        post: operations["compute_api_portfolio_compute_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/llm/keys/check": {
+    "/api/portfolio/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Members
+         * @description Every submitted Alpha stored locally.
+         */
+        get: operations["members_api_portfolio_members_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/portfolio/sync": {
         parameters: {
             query?: never;
             header?: never;
@@ -1133,15 +1404,36 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Check All Keys */
-        post: operations["check_all_keys_api_llm_keys_check_post"];
+        /**
+         * Sync
+         * @description Refresh the submitted Alphas from BRAIN and download the PnL and turnover of any not
+         *     stored yet. Nothing else is listed.
+         */
+        post: operations["sync_api_portfolio_sync_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/llm/keys/{key_id}": {
+    "/api/power-pool-lab/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Options */
+        get: operations["options_api_power_pool_lab_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/power-pool-lab/preview": {
         parameters: {
             query?: never;
             header?: never;
@@ -1149,17 +1441,36 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Toggle Key */
-        put: operations["toggle_key_api_llm_keys__key_id__put"];
-        post?: never;
-        /** Remove Key */
-        delete: operations["remove_key_api_llm_keys__key_id__delete"];
+        put?: never;
+        /**
+         * Preview
+         * @description What a task would send. Free: no LLM call, no simulation.
+         */
+        post: operations["preview_api_power_pool_lab_preview_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/llm/context": {
+    "/api/power-pool-lab/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Task */
+        post: operations["add_task_api_power_pool_lab_tasks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/quarter": {
         parameters: {
             query?: never;
             header?: never;
@@ -1167,13 +1478,14 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Context
-         * @description Exactly what the model is shown about your data.
+         * Standing
+         * @description Submitted Alphas and formulated pyramids for the quarter in progress.
          *
-         *     The hierarchy with metadata, and no individual fields — tens of thousands of field
-         *     names would fill the context window. Set ``rendered`` to read the literal text.
+         *     Two reads, run together. Neither is derivable from the other: an Alpha belongs to as
+         *     many pyramids as it has data categories, so the pyramid counts sum to more than the
+         *     number of Alphas and cannot stand in for it.
          */
-        get: operations["context_api_llm_context_get"];
+        get: operations["standing_api_quarter_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1182,50 +1494,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/vault": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Overview
-         * @description How much of your history is stored, and where it is.
-         */
-        get: operations["overview_api_vault_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/vault/submittable": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Submittable
-         * @description Alphas that passed every submission check, ready to submit on BRAIN.
-         *
-         *     Each entry carries the platform's own check results, the numbers behind them, and a
-         *     link to the alpha on BRAIN — which is where it gets submitted. This application never does.
-         */
-        get: operations["submittable_api_vault_submittable_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/vault/alphas/query": {
+    "/api/quit": {
         parameters: {
             query?: never;
             header?: never;
@@ -1235,53 +1504,29 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Query Alphas
-         * @description The Simulations table: stored alphas, sorted and filtered locally.
-         */
-        post: operations["query_alphas_api_vault_alphas_query_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/vault/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Sync Alphas
-         * @description Bring the stored alphas up to date with BRAIN.
+         * Quit App
+         * @description Close the app for good. The launcher's notification-area Quit calls this.
          *
-         *     Incremental once the store holds as many alphas as BRAIN reports — only alphas newer
-         *     than the newest stored, with a day of overlap because the platform's date filter works
-         *     in whole days. Otherwise everything is listed, which also finishes an interrupted sync.
-         *     The listing only: metrics, but no daily PnL and no submission checks.
+         *     Not a courtesy: killing the process outright leaves DuckDB's single-writer lock held
+         *     and the next start finds its own catalog busy. This unwinds uvicorn's lifespan, which
+         *     closes both stores, and the launcher exits when the process does.
          */
-        post: operations["sync_alphas_api_vault_sync_post"];
+        post: operations["quit_app_api_quit_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/vault/alphas/{alpha_id}/detail": {
+    "/api/search-lab/options": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * Alpha Detail
-         * @description One alpha with its checks and PnL curve. Downloads the daily PnL the first time.
-         */
-        get: operations["alpha_detail_api_vault_alphas__alpha_id__detail_get"];
+        /** Options */
+        get: operations["options_api_search_lab_options_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1290,7 +1535,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/vault/alphas/k-ratio": {
+    "/api/search-lab/preview": {
         parameters: {
             query?: never;
             header?: never;
@@ -1300,13 +1545,139 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * K Ratios
-         * @description Download daily PnL where missing and compute K-Ratio, in the background.
-         *
-         *     One Retry-After request per alpha without a stored series, which is why it is
-         *     capped at 100 at a time.
+         * Preview
+         * @description What a task would search. Free; queues nothing.
          */
-        post: operations["k_ratios_api_vault_alphas_k_ratio_post"];
+        post: operations["preview_api_search_lab_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/search-lab/quick": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Quick
+         * @description Run some of today's unclaimed simulations now, split across tasks that run side by side.
+         *
+         *     :data:`DEFAULT_RUN` unless the body asks for more, never beyond what is left. The
+         *     datasets are the ones last chosen, else every synced dataset in a pyramid not yet
+         *     formulated this quarter, highest multiplier first. Nothing is added unless all of it can run.
+         */
+        post: operations["quick_api_search_lab_quick_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/search-lab/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Task
+         * @description Add the search to Tasks: queued when ``run``, else not started and spending nothing.
+         */
+        post: operations["add_task_api_search_lab_tasks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/simulations/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Active
+         * @description Everything currently pending or running — what the matrix renders.
+         */
+        get: operations["active_api_simulations_active_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/simulations/engine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Engine Status
+         * @description Slot occupancy, queue depth and task quotas — what the matrix header shows.
+         */
+        get: operations["engine_status_api_simulations_engine_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/simulations/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Drop Queue
+         * @description Discard queued work that has not been submitted yet.
+         *
+         *     Safe by construction: a queued row has no platform id because nothing was sent.
+         */
+        delete: operations["drop_queue_api_simulations_queue_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/simulations/{record_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel
+         * @description Cancel a running simulation.
+         *
+         *     Uses the stored platform id — the reason that id is written to disk before the
+         *     submission request is even sent.
+         */
+        post: operations["cancel_api_simulations__record_id__cancel_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1332,6 +1703,105 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/template-lab/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Options
+         * @description The blocks this account can build with, and what a task can be set to.
+         */
+        get: operations["options_api_template_lab_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/template-lab/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview
+         * @description What a task would search. Free; queues nothing.
+         */
+        post: operations["preview_api_template_lab_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/template-lab/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Task
+         * @description Add the template's search to Tasks, not started. It spends nothing until run there.
+         */
+        post: operations["add_task_api_template_lab_tasks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/template-lab/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Templates
+         * @description The presets, then the user's saved templates, newest first.
+         */
+        get: operations["templates_api_template_lab_templates_get"];
+        put?: never;
+        /** Create Template */
+        post: operations["create_template_api_template_lab_templates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/template-lab/templates/{template_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Template */
+        put: operations["update_template_api_template_lab_templates__template_id__put"];
+        post?: never;
+        /** Delete Template */
+        delete: operations["delete_template_api_template_lab_templates__template_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1374,6 +1844,48 @@ export interface paths {
         get: operations["bar_api_today_bar_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tools/correlation-breaker/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Breaker Preview
+         * @description The Alpha, the settings its re-shapes will hold, and every recipe's expression.
+         *
+         *     Free: reads the Alpha and the catalog, simulates nothing.
+         */
+        post: operations["breaker_preview_api_tools_correlation_breaker_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tools/correlation-breaker/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Breaker Task
+         * @description Queue one simulation per chosen recipe, every one at the Alpha's own settings.
+         */
+        post: operations["breaker_task_api_tools_correlation_breaker_tasks_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1490,88 +2002,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/search-lab/options": {
+    "/api/update": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Options */
-        get: operations["options_api_search_lab_options_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/search-lab/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
         /**
-         * Preview
-         * @description What a task would search. Free; queues nothing.
+         * Status
+         * @description Whether a newer release is out. Asked of GitHub at most once an hour.
          */
-        post: operations["preview_api_search_lab_preview_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/search-lab/tasks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
+        get: operations["status_api_update_get"];
         put?: never;
         /**
-         * Add Task
-         * @description Add the search to Tasks: queued when ``run``, else not started and spending nothing.
-         */
-        post: operations["add_task_api_search_lab_tasks_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/search-lab/quick": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Quick
-         * @description Run some of today's unclaimed simulations now, split across the cores a task can hold.
+         * Apply
+         * @description Ask the launcher to install the newest release, then close the app so it can.
          *
-         *     :data:`DEFAULT_RUN` unless the body asks for more, never beyond what is left. The
-         *     datasets are the ones last chosen, else every synced dataset in a pyramid not yet
-         *     formulated this quarter, highest multiplier first. Nothing is added unless all of it can run.
+         *     The request file is written before anything else, so an app that then fails to close
+         *     still gets updated the next time it is started — see :mod:`alpha_harness.updates`.
          */
-        post: operations["quick_api_search_lab_quick_post"];
+        post: operations["apply_api_update_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/lab-tasks": {
+    "/api/vault": {
         parameters: {
             query?: never;
             header?: never;
@@ -1579,10 +2037,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Tasks
-         * @description Every task, newest first, and the slots they share.
+         * Overview
+         * @description How much of your history is stored, and where it is.
          */
-        get: operations["list_tasks_api_lab_tasks_get"];
+        get: operations["overview_api_vault_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1591,7 +2049,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/lab-tasks/run-all": {
+    "/api/vault/alphas/query": {
         parameters: {
             query?: never;
             header?: never;
@@ -1601,101 +2059,17 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Run All
-         * @description Run every task not started yet, oldest first. What does not fit waits its turn.
+         * Query Alphas
+         * @description The Simulations table: stored alphas, sorted and filtered locally.
          */
-        post: operations["run_all_api_lab_tasks_run_all_post"];
+        post: operations["query_alphas_api_vault_alphas_query_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/lab-tasks/{task_id}/run": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Run
-         * @description Run a task, resume a paused one, or retry a failed one. It starts once its cores fit.
-         */
-        post: operations["run_api_lab_tasks__task_id__run_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/lab-tasks/{task_id}/pause": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Pause
-         * @description Queue nothing more for now. Simulations already sent finish; the rest come off.
-         */
-        post: operations["pause_api_lab_tasks__task_id__pause_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/lab-tasks/{task_id}/stop": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Stop
-         * @description Finish a task early. Simulations already sent still finish and are scored.
-         */
-        post: operations["stop_api_lab_tasks__task_id__stop_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/lab-tasks/{task_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Remove
-         * @description Remove a task that is not running. The Alphas it found stay in Alphas.
-         */
-        delete: operations["remove_api_lab_tasks__task_id__delete"];
-        options?: never;
-        head?: never;
-        /**
-         * Change
-         * @description Change a task's cores or simulations. A running task takes them from its next round.
-         */
-        patch: operations["change_api_lab_tasks__task_id__patch"];
-        trace?: never;
-    };
-    "/api/lab-tasks/{task_id}/top": {
+    "/api/vault/alphas/{alpha_id}/detail": {
         parameters: {
             query?: never;
             header?: never;
@@ -1703,10 +2077,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Top
-         * @description The task's best Alphas on what it searches for. Seeds are not among them.
+         * Alpha Detail
+         * @description One alpha with its checks and PnL curve. Downloads the daily PnL the first time.
          */
-        get: operations["top_api_lab_tasks__task_id__top_get"];
+        get: operations["alpha_detail_api_vault_alphas__alpha_id__detail_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1715,61 +2089,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/power-pool-lab/options": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Options */
-        get: operations["options_api_power_pool_lab_options_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/power-pool-lab/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Preview
-         * @description What a task would send. Free: no LLM call, no simulation.
-         */
-        post: operations["preview_api_power_pool_lab_preview_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/power-pool-lab/tasks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Add Task */
-        post: operations["add_task_api_power_pool_lab_tasks_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/chat/options": {
+    "/api/vault/submittable": {
         parameters: {
             query?: never;
             header?: never;
@@ -1777,91 +2097,40 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Options
-         * @description The two choices a conversation offers: which model, and how hard to think.
-         */
-        get: operations["options_api_chat_options_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/chat/threads": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Threads */
-        get: operations["threads_api_chat_threads_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/chat/threads/{thread_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Thread */
-        get: operations["thread_api_chat_threads__thread_id__get"];
-        put?: never;
-        post?: never;
-        /** Delete Thread */
-        delete: operations["delete_thread_api_chat_threads__thread_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/chat": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Say
-         * @description Send a message and get back a reply plus the fields it chose.
+         * Submittable
+         * @description Alphas that passed every submission check, ready to submit on BRAIN.
          *
-         *     Anything the assistant names that is not really in the catalogue is dropped before
-         *     you see it and reported in ``dropped`` — an invented field costs a simulation to
-         *     discover, and the consultant has a limited number each day.
+         *     Each entry carries the platform's own check results, the numbers behind them, and a
+         *     link to the alpha on BRAIN — which is where it gets submitted. This application never does.
          */
-        post: operations["say_api_chat_post"];
+        get: operations["submittable_api_vault_submittable_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/health": {
+    "/api/vault/sync": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * Health
-         * @description Liveness plus a summary of local state, for the UI's status bar.
-         */
-        get: operations["health_api_health_get"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * Sync Alphas
+         * @description Bring the stored alphas up to date with BRAIN.
+         *
+         *     Incremental once the store holds as many alphas as BRAIN reports — only alphas newer
+         *     than the newest stored, with a day of overlap because the platform's date filter works
+         *     in whole days. Otherwise everything is listed, which also finishes an interrupted sync.
+         *     The listing only: metrics, but no daily PnL and no submission checks.
+         */
+        post: operations["sync_alphas_api_vault_sync_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1874,6 +2143,11 @@ export interface components {
     schemas: {
         /** AddKey */
         AddKey: {
+            /**
+             * Daily Limit
+             * @description Daily request ceiling for this key. Required for a paid provider.
+             */
+            daily_limit?: number | null;
             /**
              * Key
              * @description An assistant API key. Sealed at rest; never returned.
@@ -1909,120 +2183,146 @@ export interface components {
         AlphaDetail: {
             /** Alphaid */
             alphaId: string;
-            /** Expression */
-            expression: string | null;
-            settings: components["schemas"]["AlphaSettings"];
+            /** Brainurl */
+            brainUrl: string;
             /** Checks */
             checks: {
                 [key: string]: unknown;
             }[];
-            /** Pnl */
-            pnl: number[];
             /** Dates */
             dates: string[];
             /** Days */
             days: number;
-            /** Kratio */
-            kRatio: number | null;
+            /** Expression */
+            expression: string | null;
+            /** Pnl */
+            pnl: number[];
             /** Problem */
             problem: string | null;
-            /** Brainurl */
-            brainUrl: string;
+            settings: components["schemas"]["AlphaSettings"];
         };
         /** AlphaInfo */
         AlphaInfo: {
             /** Alphaid */
             alphaId: string;
-            /** Type */
-            type: string | null;
             /** Author */
             author: string | null;
-            /** Code */
-            code: string | null;
-            /** Description */
-            description: string | null;
-            /** Operatorcount */
-            operatorCount: number | null;
-            /** Name */
-            name: string | null;
+            /** Brainurl */
+            brainUrl: string;
             /** Category */
             category: string | null;
-            /** Color */
-            color: string | null;
-            /** Tags */
-            tags: string[];
-            /** Stage */
-            stage: string | null;
-            /** Status */
-            status: string | null;
-            /** Datecreated */
-            dateCreated: string | null;
-            /** Datesubmitted */
-            dateSubmitted: string | null;
-            /** Datemodified */
-            dateModified: string | null;
-            /** Settings */
-            settings: {
-                [key: string]: unknown;
-            };
-            /** Classifications */
-            classifications: components["schemas"]["AlphaClassification"][];
-            inSample: components["schemas"]["AlphaStats"] | null;
-            investability: components["schemas"]["AlphaStats"] | null;
             /** Checks */
             checks: {
                 [key: string]: unknown;
             }[];
-            /** Brainurl */
-            brainUrl: string;
-            /** Powerpooloperators */
-            powerPoolOperators: number | null;
+            /** Classifications */
+            classifications: components["schemas"]["AlphaClassification"][];
+            /** Code */
+            code: string | null;
+            /** Color */
+            color: string | null;
             /** Datafields */
             dataFields: string[] | null;
+            /** Datecreated */
+            dateCreated: string | null;
+            /** Datemodified */
+            dateModified: string | null;
+            /** Datesubmitted */
+            dateSubmitted: string | null;
             /** Degeneratewarning */
             degenerateWarning: string | null;
+            /** Description */
+            description: string | null;
+            inSample: components["schemas"]["AlphaStats"] | null;
+            investability: components["schemas"]["AlphaStats"] | null;
+            /** Name */
+            name: string | null;
+            /** Operatorcount */
+            operatorCount: number | null;
+            /** Operators */
+            operators: string[] | null;
             /** Osmosispoints */
             osmosisPoints: number | null;
+            /** Powerpooloperators */
+            powerPoolOperators: number | null;
+            /** Settings */
+            settings: {
+                [key: string]: unknown;
+            };
+            /** Stage */
+            stage: string | null;
+            /** Status */
+            status: string | null;
+            /** Tags */
+            tags: string[];
+            /** Type */
+            type: string | null;
+            /** Verdict */
+            verdict: ("submittable" | "pending" | "refused") | null;
         };
         /** AlphaLineage */
         AlphaLineage: {
-            /** Task */
-            task: string;
+            /** Generation */
+            generation: number | null;
             /** Lab */
             lab: string | null;
             /** Labname */
             labName: string | null;
-            /** Studyid */
-            studyId: number | null;
-            /** Studyname */
-            studyName: string | null;
-            /** Templatename */
-            templateName: string | null;
             /** Params */
             params: {
                 [key: string]: unknown;
             };
-            /** Generation */
-            generation: number | null;
-            /** Simulatedat */
-            simulatedAt: string | null;
             /** Siblings */
             siblings: components["schemas"]["LineageSibling"][];
+            /** Simulatedat */
+            simulatedAt: string | null;
+            /** Studyid */
+            studyId: number | null;
+            /** Studyname */
+            studyName: string | null;
+            /** Task */
+            task: string;
+            /** Templatename */
+            templateName: string | null;
         };
         /** AlphaPage */
         AlphaPage: {
-            /** Total */
-            total: number;
             /** Results */
             results: components["schemas"]["AlphaRow"][];
+            /** Total */
+            total: number;
         };
         /** AlphaPageRequest */
         AlphaPageRequest: {
+            /** Delays */
+            delays?: number[] | null;
             /**
-             * Submitted
+             * Evolvable
              * @default false
              */
-            submitted: boolean;
+            evolvable: boolean;
+            /**
+             * Limit
+             * @default 100
+             */
+            limit: number;
+            /** Maximum */
+            maximum?: {
+                [key: string]: number;
+            };
+            /** Minimum */
+            minimum?: {
+                [key: string]: number;
+            };
+            /**
+             * Offset
+             * @default 0
+             */
+            offset: number;
+            /** Regions */
+            regions?: string[] | null;
+            /** Search */
+            search?: string | null;
             /**
              * Sort By
              * @default date_created
@@ -2033,235 +2333,232 @@ export interface components {
              * @default true
              */
             sort_desc: boolean;
-            /** Regions */
-            regions?: string[] | null;
-            /** Delays */
-            delays?: number[] | null;
+            /**
+             * Submitted
+             * @default false
+             */
+            submitted: boolean;
             /** Universes */
             universes?: string[] | null;
-            /** Minimum */
-            minimum?: {
-                [key: string]: number;
-            };
-            /** Maximum */
-            maximum?: {
-                [key: string]: number;
-            };
-            /** Search */
-            search?: string | null;
-            /**
-             * Limit
-             * @default 100
-             */
-            limit: number;
-            /**
-             * Offset
-             * @default 0
-             */
-            offset: number;
         };
         /** AlphaProperties */
         AlphaProperties: {
-            /** Name */
-            name?: string | null;
             /** Category */
             category?: string | null;
             /** Color */
             color?: string | null;
-            /** Tags */
-            tags?: string[];
             /** Description */
             description?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Tags */
+            tags?: string[];
         };
         /** AlphaRow */
         AlphaRow: {
             /** Alphaid */
             alphaId: string;
-            /** Name */
-            name: string | null;
-            /** Type */
-            type: string | null;
-            /** Status */
-            status: string | null;
-            /** Region */
-            region: string | null;
-            /** Universe */
-            universe: string | null;
-            /** Delay */
-            delay: number | null;
-            /** Neutralization */
-            neutralization: string | null;
-            /** Decay */
-            decay: number | null;
-            /** Truncation */
-            truncation: number | null;
-            /** Expression */
-            expression: string | null;
-            /** Sharpe */
-            sharpe: number | null;
-            /** Fitness */
-            fitness: number | null;
-            /** Turnover */
-            turnover: number | null;
-            /** Returns */
-            returns: number | null;
-            /** Drawdown */
-            drawdown: number | null;
-            /** Margin */
-            margin: number | null;
-            /** Operatorcount */
-            operatorCount: number | null;
-            /** Kratio */
-            kRatio: number | null;
             /** Calmar */
             calmar: number | null;
+            /** Classifications */
+            classifications?: string[];
             /** Datecreated */
             dateCreated: string | null;
             /** Datesubmitted */
             dateSubmitted: string | null;
+            /** Decay */
+            decay: number | null;
+            /** Delay */
+            delay: number | null;
+            /** Drawdown */
+            drawdown: number | null;
+            /** Expression */
+            expression: string | null;
+            /** Fitness */
+            fitness: number | null;
             /** Haspnl */
             hasPnl: boolean;
+            /** Longcount */
+            longCount?: number | null;
+            /** Margin */
+            margin: number | null;
+            /** Maxposition */
+            maxPosition?: string | null;
+            /** Maxtrade */
+            maxTrade?: string | null;
+            /** Name */
+            name: string | null;
+            /** Neutralization */
+            neutralization: string | null;
+            /** Operatorcount */
+            operatorCount: number | null;
+            /** Pyramids */
+            pyramids?: string[];
+            /** Region */
+            region: string | null;
+            /** Returns */
+            returns: number | null;
+            /** Sharpe */
+            sharpe: number | null;
+            /** Shortcount */
+            shortCount?: number | null;
+            /** Status */
+            status: string | null;
+            /** Testsharpe */
+            testSharpe?: number | null;
+            /** Trainsharpe */
+            trainSharpe?: number | null;
+            /** Truncation */
+            truncation: number | null;
+            /** Turnover */
+            turnover: number | null;
+            /** Type */
+            type: string | null;
+            /** Universe */
+            universe: string | null;
         };
         /** AlphaSettings */
         AlphaSettings: {
-            /** Region */
-            region: string | null;
-            /** Universe */
-            universe: string | null;
+            /** Decay */
+            decay: number | null;
             /** Delay */
             delay: number | null;
             /** Neutralization */
             neutralization: string | null;
-            /** Decay */
-            decay: number | null;
+            /** Region */
+            region: string | null;
             /** Truncation */
             truncation: number | null;
+            /** Universe */
+            universe: string | null;
         };
         /** AlphaStats */
         AlphaStats: {
-            /** Pnl */
-            pnl?: number | null;
             /** Booksize */
             bookSize?: number | null;
+            /** Drawdown */
+            drawdown?: number | null;
+            /** Fitness */
+            fitness?: number | null;
             /** Longcount */
             longCount?: number | null;
+            /** Margin */
+            margin?: number | null;
+            /** Pnl */
+            pnl?: number | null;
+            /** Returns */
+            returns?: number | null;
+            /** Sharpe */
+            sharpe?: number | null;
             /** Shortcount */
             shortCount?: number | null;
             /** Turnover */
             turnover?: number | null;
-            /** Returns */
-            returns?: number | null;
-            /** Drawdown */
-            drawdown?: number | null;
-            /** Margin */
-            margin?: number | null;
-            /** Sharpe */
-            sharpe?: number | null;
-            /** Fitness */
-            fitness?: number | null;
         };
         /** AlphaView */
         AlphaView: {
             alpha: components["schemas"]["AlphaInfo"];
             /** Dates */
             dates: string[];
-            /** Pnl */
-            pnl: (number | null)[];
-            /** Investabilitypnl */
-            investabilityPnl: (number | null)[];
-            /** Yearly */
-            yearly: components["schemas"]["AlphaYear"][];
-            lineage: components["schemas"]["AlphaLineage"] | null;
             /** Fetchedat */
             fetchedAt: string;
+            /** Investabilitypnl */
+            investabilityPnl: (number | null)[];
+            lineage: components["schemas"]["AlphaLineage"] | null;
+            /** Pnl */
+            pnl: (number | null)[];
             /** Problems */
             problems: string[];
+            /** Teststart */
+            testStart: string | null;
+            /** Yearly */
+            yearly: components["schemas"]["AlphaYear"][];
         };
         /** AlphaYear */
         AlphaYear: {
-            /** Pnl */
-            pnl?: number | null;
             /** Booksize */
             bookSize?: number | null;
-            /** Longcount */
-            longCount?: number | null;
-            /** Shortcount */
-            shortCount?: number | null;
-            /** Turnover */
-            turnover?: number | null;
-            /** Returns */
-            returns?: number | null;
             /** Drawdown */
             drawdown?: number | null;
-            /** Margin */
-            margin?: number | null;
-            /** Sharpe */
-            sharpe?: number | null;
             /** Fitness */
             fitness?: number | null;
-            /** Year */
-            year: string;
+            /** Longcount */
+            longCount?: number | null;
+            /** Margin */
+            margin?: number | null;
+            /** Pnl */
+            pnl?: number | null;
+            /** Returns */
+            returns?: number | null;
+            /** Sharpe */
+            sharpe?: number | null;
+            /** Shortcount */
+            shortCount?: number | null;
             /** Stage */
             stage?: string | null;
+            /** Turnover */
+            turnover?: number | null;
+            /** Year */
+            year: string;
         };
         /** Assistant */
         Assistant: {
-            /** Keys */
-            keys: number;
-            /** Enabledkeys */
-            enabledKeys: number;
-            /** Requestsremainingtoday */
-            requestsRemainingToday: number;
             /** Budget */
             budget: components["schemas"]["ModelBudget"][];
-            /** Resetsinseconds */
-            resetsInSeconds: number;
-            /** Resetsat */
-            resetsAt: string;
+            /** Enabledkeys */
+            enabledKeys: number;
             /** Headline */
             headline: string;
+            /** Keys */
+            keys: number;
+            /** Requestsremainingtoday */
+            requestsRemainingToday: number;
+            /** Resetsat */
+            resetsAt: string;
+            /** Resetsinseconds */
+            resetsInSeconds: number;
         };
         /** AutoSeeds */
         AutoSeeds: {
+            /** Examined */
+            examined: number;
+            /** Pool */
+            pool: number;
+            /** Reasons */
+            reasons: components["schemas"]["SeedReason"][];
             /** Seeds */
             seeds: components["schemas"]["SeedRow"][];
             /** Wanted */
             wanted: number;
-            /** Pool */
-            pool: number;
-            /** Examined */
-            examined: number;
-            /** Reasons */
-            reasons: components["schemas"]["SeedReason"][];
         };
         /** AutoSeedsJob */
         AutoSeedsJob: {
+            /** Detail */
+            detail: string;
+            /** Error */
+            error: string | null;
+            /** Progress */
+            progress: number | null;
+            result: components["schemas"]["AutoSeeds"] | null;
             /**
              * State
              * @enum {string}
              */
             state: "running" | "done" | "failed" | "cancelled";
-            /** Progress */
-            progress: number | null;
-            /** Detail */
-            detail: string;
-            /** Error */
-            error: string | null;
-            result: components["schemas"]["AutoSeeds"] | null;
         };
         /** AutoSeedsRequest */
         AutoSeedsRequest: {
-            /** Region */
-            region: string;
-            /** Delay */
-            delay: number;
-            /** Universe */
-            universe: string;
             /**
              * Count
              * @default 50
              */
             count: number;
+            /** Delay */
+            delay: number;
+            /** Region */
+            region: string;
+            /** Universe */
+            universe: string;
         };
         /** AutoSeedsStarted */
         AutoSeedsStarted: {
@@ -2270,52 +2567,52 @@ export interface components {
         };
         /** BackgroundTask */
         BackgroundTask: {
+            /** Detail */
+            detail: string;
+            /** Elapsedseconds */
+            elapsedSeconds: number;
+            /** Error */
+            error: string | null;
             /** Id */
             id: string;
             /** Kind */
             kind: string;
             /** Label */
             label: string;
+            /** Meta */
+            meta: {
+                [key: string]: unknown;
+            };
             /** Progress */
             progress: number | null;
-            /** Detail */
-            detail: string;
             /**
              * State
              * @enum {string}
              */
             state: "running" | "done" | "failed" | "cancelled";
-            /** Error */
-            error: string | null;
-            /** Elapsedseconds */
-            elapsedSeconds: number;
-            /** Meta */
-            meta: {
-                [key: string]: unknown;
-            };
         };
         /** Bar */
         Bar: {
-            /** Signedin */
-            signedIn: boolean;
-            /** Fullname */
-            fullName: string | null;
             /** Expiresinseconds */
             expiresInSeconds: number | null;
-            simulations: components["schemas"]["BarSimulations"];
+            /** Fullname */
+            fullName: string | null;
             /** Resetsinseconds */
             resetsInSeconds: number;
+            /** Signedin */
+            signedIn: boolean;
+            simulations: components["schemas"]["BarSimulations"];
         };
         /** BarSimulations */
         BarSimulations: {
-            /** Remaining */
-            remaining: number;
-            /** Limit */
-            limit: number;
             /** Exact */
             exact: boolean;
+            /** Limit */
+            limit: number;
             /** Queued */
             queued: number;
+            /** Remaining */
+            remaining: number;
         };
         /**
          * BrainPayload
@@ -2323,6 +2620,69 @@ export interface components {
          */
         BrainPayload: {
             [key: string]: unknown;
+        };
+        /** BreakerPlan */
+        BreakerPlan: {
+            /** Alphaid */
+            alphaId: string;
+            /** Bound */
+            bound: string;
+            /** Correlation */
+            correlation: {
+                [key: string]: unknown;
+            } | null;
+            /** Expression */
+            expression: string;
+            /** Problems */
+            problems: string[];
+            /** Recipes */
+            recipes: components["schemas"]["BreakerRecipe"][];
+            settings: components["schemas"]["BreakerSettings"];
+        };
+        /** BreakerRecipe */
+        BreakerRecipe: {
+            /** Blocked */
+            blocked: string;
+            /** Caution */
+            caution: string;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Transform */
+            transform: string;
+            /** Why */
+            why: string;
+        };
+        /** BreakerRequest */
+        BreakerRequest: {
+            /** Alphaid */
+            alphaId: string;
+            /**
+             * Cores
+             * @default 8
+             */
+            cores: number;
+            /** Recipes */
+            recipes?: string[];
+        };
+        /**
+         * BreakerSettings
+         * @description What every simulation runs at: the source Alpha's own, never varied.
+         */
+        BreakerSettings: {
+            /** Decay */
+            decay: number | null;
+            /** Delay */
+            delay: number | null;
+            /** Neutralization */
+            neutralization: string | null;
+            /** Region */
+            region: string | null;
+            /** Truncation */
+            truncation: number | null;
+            /** Universe */
+            universe: string | null;
         };
         /** CancelResult */
         CancelResult: {
@@ -2337,12 +2697,12 @@ export interface components {
         };
         /** CatalogCounts */
         CatalogCounts: {
-            /** Fields */
-            fields: number;
-            /** Datasets */
-            datasets: number;
             /** Categories */
             categories: number;
+            /** Datasets */
+            datasets: number;
+            /** Fields */
+            fields: number;
             /** Subcategories */
             subcategories: number;
         };
@@ -2350,39 +2710,39 @@ export interface components {
         CatalogFacets: {
             /** Categories */
             categories: components["schemas"]["CategoryFacet"][];
-            /** Subcategories */
-            subcategories: components["schemas"]["SubcategoryFacet"][];
             /** Datasets */
             datasets: components["schemas"]["DatasetFacet"][];
+            /** Subcategories */
+            subcategories: components["schemas"]["SubcategoryFacet"][];
             /** Types */
             types: components["schemas"]["TypeFacet"][];
         };
         /** CatalogReadiness */
         CatalogReadiness: {
+            /** Anysynced */
+            anySynced: boolean;
+            /** Fields */
+            fields: number;
+            running: components["schemas"]["SyncRunRow"] | null;
             /** Scope */
             scope: string;
             /** Synced */
             synced: boolean;
-            /** Fields */
-            fields: number;
-            running: components["schemas"]["SyncRunRow"] | null;
-            /** Anysynced */
-            anySynced: boolean;
         };
         /** CatalogScopeRow */
         CatalogScopeRow: {
+            /** Delay */
+            delay: number;
+            /** Fields */
+            fields: number;
             /** Instrument Type */
             instrument_type: string;
             /** Region */
             region: string;
-            /** Delay */
-            delay: number;
-            /** Universe */
-            universe: string;
-            /** Fields */
-            fields: number;
             /** Synced At */
             synced_at: string | null;
+            /** Universe */
+            universe: string;
         };
         /**
          * CatalogSize
@@ -2394,59 +2754,65 @@ export interface components {
         };
         /** CatalogStats */
         CatalogStats: {
-            /** Coverage Min */
-            coverage_min?: number | null;
+            /** Alpha Count Max */
+            alpha_count_max?: number | null;
             /** Coverage Max */
             coverage_max?: number | null;
             /** Coverage Median */
             coverage_median?: number | null;
-            /** Alpha Count Max */
-            alpha_count_max?: number | null;
-            /** User Count Max */
-            user_count_max?: number | null;
+            /** Coverage Min */
+            coverage_min?: number | null;
             /** Pyramid Multiplier Max */
             pyramid_multiplier_max?: number | null;
+            /** User Count Max */
+            user_count_max?: number | null;
         };
         /** CategoryFacet */
         CategoryFacet: {
             /** Id */
             id: string;
-            /** Name */
-            name: string | null;
             /** N */
             n: number;
+            /** Name */
+            name: string | null;
         };
         /** CategoryPoolCoverage */
         CategoryPoolCoverage: {
+            /** Catalogfields */
+            catalogFields: number;
+            /** Catalogshare */
+            catalogShare: number;
             /** Categoryid */
             categoryId: string;
             /** Categoryname */
             categoryName: string | null;
-            /** Catalogfields */
-            catalogFields: number;
-            /** Poolfields */
-            poolFields: number;
-            /** Poolalphas */
-            poolAlphas: number;
-            /** Catalogshare */
-            catalogShare: number;
-            /** Poolshare */
-            poolShare: number;
             /** Gap */
             gap: number;
-            /** Pyramidmultiplier */
-            pyramidMultiplier: number | null;
+            /** Opportunity */
+            opportunity: number;
+            /** Poolalphas */
+            poolAlphas: number;
+            /** Poolfields */
+            poolFields: number;
+            /** Poolshare */
+            poolShare: number;
             /** Pyramidalphacount */
             pyramidAlphaCount: number | null;
             /** Pyramidlit */
             pyramidLit: boolean | null;
-            /** Opportunity */
-            opportunity: number;
+            /** Pyramidmultiplier */
+            pyramidMultiplier: number | null;
         };
         /** ChatMessageOut */
         ChatMessageOut: {
+            /** Createdat */
+            createdAt: string | null;
             /** Id */
             id: number;
+            /** Meta */
+            meta: {
+                [key: string]: unknown;
+            };
             /**
              * Role
              * @enum {string}
@@ -2454,80 +2820,74 @@ export interface components {
             role: "user" | "assistant";
             /** Text */
             text: string;
-            /** Meta */
-            meta: {
-                [key: string]: unknown;
-            };
-            /** Createdat */
-            createdAt: string | null;
         };
         /** ChatOptions */
         ChatOptions: {
-            models: components["schemas"]["LLMModels"];
-            /** Reasoning */
-            reasoning: components["schemas"]["ReasoningOption"][];
             /**
              * Defaultreasoning
              * @enum {string}
              */
             defaultReasoning: "quick" | "normal" | "careful" | "deep";
+            models: components["schemas"]["LLMModels"];
             /** Note */
             note: string;
+            /** Reasoning */
+            reasoning: components["schemas"]["ReasoningOption"][];
         };
         /** ChatReply */
         ChatReply: {
-            /** Threadid */
-            threadId: number;
-            /** Reply */
-            reply: string;
-            /** Picks */
-            picks: {
-                [key: string]: unknown;
-            }[];
+            /** Catalognote */
+            catalogNote: string | null;
             /** Datasets */
             datasets: string[];
             /** Dropped */
             dropped: string[];
-            /** Catalognote */
-            catalogNote: string | null;
-            usage: components["schemas"]["LLMUsage"];
             /** Model */
             model: string;
+            /** Picks */
+            picks: {
+                [key: string]: unknown;
+            }[];
             /**
              * Reasoning
              * @enum {string}
              */
             reasoning: "quick" | "normal" | "careful" | "deep";
+            /** Reply */
+            reply: string;
+            /** Threadid */
+            threadId: number;
+            usage: components["schemas"]["LLMUsage"];
         };
         /** ChatThreadOut */
         ChatThreadOut: {
             /** Id */
             id: number;
-            /** Title */
-            title: string;
-            scope: components["schemas"]["ThreadScope"];
             /** Messages */
             messages: components["schemas"]["ChatMessageOut"][];
+            scope: components["schemas"]["ThreadScope"];
+            /** Title */
+            title: string;
         };
         /** ChatThreadSummary */
         ChatThreadSummary: {
             /** Id */
             id: number;
-            /** Title */
-            title: string;
             /** Scope */
             scope: string;
+            /** Title */
+            title: string;
             /** Updatedat */
             updatedAt: string | null;
         };
         /** ContextCounts */
         ContextCounts: {
-            /** Fields */
-            fields: number;
-            /** Datasets */
-            datasets: number;
             /** Categories */
             categories: number;
+            /** Datasets */
+            datasets: number;
+            /** Fields */
+            fields: number;
             /** Subcategories */
             subcategories: number;
         };
@@ -2544,133 +2904,150 @@ export interface components {
              */
             email?: string | null;
         };
+        /** CorrelatedPair */
+        CorrelatedPair: {
+            /** A */
+            a: string;
+            /** B */
+            b: string;
+            /** Correlation */
+            correlation: number;
+        };
         /** DataFieldDetail */
         DataFieldDetail: {
-            /** Field Id */
-            field_id: string;
-            /** Dataset Id */
-            dataset_id: string | null;
+            /** Alpha Count */
+            alpha_count: number | null;
             /** Category Id */
             category_id: string | null;
             /** Category Name */
             category_name: string | null;
+            /** Coverage */
+            coverage: number | null;
+            /** Dataset Id */
+            dataset_id: string | null;
+            /** Date Coverage */
+            date_coverage: number | null;
+            /** Date Created */
+            date_created: string | null;
+            /** Delay */
+            delay: number;
+            /** Description */
+            description: string | null;
+            /** Field Id */
+            field_id: string;
+            /** Field Type */
+            field_type: string | null;
+            /** Instrument Type */
+            instrument_type: string;
+            /** Pyramid Multiplier */
+            pyramid_multiplier: number | null;
+            /** Region */
+            region: string;
             /** Subcategory Id */
             subcategory_id: string | null;
             /** Subcategory Name */
             subcategory_name: string | null;
-            /** Description */
-            description: string | null;
-            /** Field Type */
-            field_type: string | null;
-            /** Coverage */
-            coverage: number | null;
-            /** User Count */
-            user_count: number | null;
-            /** Alpha Count */
-            alpha_count: number | null;
-            /** Pyramid Multiplier */
-            pyramid_multiplier: number | null;
-            /** Themes */
-            themes: string | null;
-            /** Instrument Type */
-            instrument_type: string;
-            /** Region */
-            region: string;
-            /** Delay */
-            delay: number;
-            /** Universe */
-            universe: string;
             /** Synced At */
             synced_at: string | null;
+            /** Themes */
+            themes: string | null;
+            /** Universe */
+            universe: string;
+            /** User Count */
+            user_count: number | null;
         };
         /** DataFieldRow */
         DataFieldRow: {
-            /** Field Id */
-            field_id: string;
-            /** Dataset Id */
-            dataset_id: string | null;
+            /** Alpha Count */
+            alpha_count: number | null;
             /** Category Id */
             category_id: string | null;
             /** Category Name */
             category_name: string | null;
+            /** Coverage */
+            coverage: number | null;
+            /** Dataset Id */
+            dataset_id: string | null;
+            /** Date Coverage */
+            date_coverage: number | null;
+            /** Date Created */
+            date_created: string | null;
+            /** Description */
+            description: string | null;
+            /** Field Id */
+            field_id: string;
+            /** Field Type */
+            field_type: string | null;
+            /** Pyramid Multiplier */
+            pyramid_multiplier: number | null;
             /** Subcategory Id */
             subcategory_id: string | null;
             /** Subcategory Name */
             subcategory_name: string | null;
-            /** Description */
-            description: string | null;
-            /** Field Type */
-            field_type: string | null;
-            /** Coverage */
-            coverage: number | null;
-            /** User Count */
-            user_count: number | null;
-            /** Alpha Count */
-            alpha_count: number | null;
-            /** Pyramid Multiplier */
-            pyramid_multiplier: number | null;
             /** Themes */
             themes: string | null;
+            /** User Count */
+            user_count: number | null;
         };
         /** DatasetFacet */
         DatasetFacet: {
-            /** Id */
-            id: string;
             /** Category Id */
             category_id: string | null;
-            /** Subcategory Id */
-            subcategory_id: string | null;
+            /** Id */
+            id: string;
             /** N */
             n: number;
+            /** Subcategory Id */
+            subcategory_id: string | null;
         };
         /** DatasetRow */
         DatasetRow: {
-            /** Dataset Id */
-            dataset_id: string;
-            /** Name */
-            name: string | null;
-            /** Description */
-            description: string | null;
+            /** Alpha Count */
+            alpha_count: number | null;
             /** Category Id */
             category_id: string | null;
             /** Category Name */
             category_name: string | null;
+            /** Coverage */
+            coverage: number | null;
+            /** Dataset Id */
+            dataset_id: string;
+            /** Description */
+            description: string | null;
+            /** Field Count */
+            field_count: number | null;
+            /** Name */
+            name: string | null;
+            /** Pyramid Multiplier */
+            pyramid_multiplier: number | null;
             /** Subcategory Id */
             subcategory_id: string | null;
             /** Subcategory Name */
             subcategory_name: string | null;
-            /** Coverage */
-            coverage: number | null;
-            /** Value Score */
-            value_score: number | null;
             /** User Count */
             user_count: number | null;
-            /** Alpha Count */
-            alpha_count: number | null;
-            /** Field Count */
-            field_count: number | null;
-            /** Pyramid Multiplier */
-            pyramid_multiplier: number | null;
+            /** Value Score */
+            value_score: number | null;
         };
         /** DescAwareCandidate */
         DescAwareCandidate: {
-            /** Fieldid */
-            fieldId: string;
-            /** Description */
-            description: string;
             /** Classification */
             classification: string;
-            /** Templateused */
-            templateUsed: string;
+            /** Description */
+            description: string;
             /** Expression */
             expression: string;
+            /** Fieldid */
+            fieldId: string;
+            /** Templateused */
+            templateUsed: string;
         };
         /** DescAwareCandidateInput */
         DescAwareCandidateInput: {
-            /** Field Id */
-            field_id: string;
             /** Expression */
             expression: string;
+            /** Field Id */
+            field_id: string;
         };
         /** DescAwareSweepResult */
         DescAwareSweepResult: {
@@ -2686,25 +3063,25 @@ export interface components {
             /** Candidates */
             candidates: components["schemas"]["DescAwareCandidateInput"][];
             /**
+             * Cores
+             * @default 4
+             */
+            cores: number;
+            /**
              * Decay
              * @default 6
              */
             decay: number;
-            /**
-             * Truncation
-             * @default 0.08
-             */
-            truncation: number;
             /**
              * Neutralization
              * @default NONE
              */
             neutralization: string;
             /**
-             * Cores
-             * @default 4
+             * Truncation
+             * @default 0.08
              */
-            cores: number;
+            truncation: number;
         };
         /** DropResult */
         DropResult: {
@@ -2716,123 +3093,125 @@ export interface components {
          * @description Slot occupancy, queue depth and task quotas — what the matrix header shows.
          */
         EngineStatus: {
-            /** Slots */
-            slots: number;
+            /**
+             * Awake
+             * @enum {string}
+             */
+            awake: "idle" | "held" | "unavailable";
+            /** Dailylimithit */
+            dailyLimitHit: boolean;
+            /** Inflight */
+            inFlight: {
+                [key: string]: number;
+            };
+            lastPause: components["schemas"]["Pause"] | null;
             /** Maxbatch */
             maxBatch: number;
-            /** Slotsused */
-            slotsUsed: number;
-            /** Slotsfree */
-            slotsFree: number;
+            /** Minutesleft */
+            minutesLeft: number | null;
             /** Queued */
             queued: {
                 [key: string]: number;
             };
             /** Queuedtotal */
             queuedTotal: number;
-            /** Inflight */
-            inFlight: {
-                [key: string]: number;
-            };
             /** Quotas */
             quotas: {
                 [key: string]: number;
             };
-            /** Dailylimithit */
-            dailyLimitHit: boolean;
             /** Sessionlost */
             sessionLost: boolean;
-            /**
-             * Awake
-             * @enum {string}
-             */
-            awake: "idle" | "held" | "unavailable";
-            lastPause: components["schemas"]["Pause"] | null;
-            /** Minutesleft */
-            minutesLeft: number | null;
+            /** Slots */
+            slots: number;
+            /** Slotsfree */
+            slotsFree: number;
+            /** Slotsused */
+            slotsUsed: number;
         };
         /** EvolutionDefaults */
         EvolutionDefaults: {
-            /** Population */
-            population: number | null;
             /** Mutationrate */
             mutationRate: number;
+            /** Population */
+            population: number | null;
         };
         /**
          * EvolutionMarket
          * @description A market holding unsubmitted Alphas, and how many.
          */
         EvolutionMarket: {
-            /** Region */
-            region: string;
-            /** Delay */
-            delay: number;
-            /** Universe */
-            universe: string;
             /** Alphas */
             alphas: number;
+            /** Delay */
+            delay: number;
+            /** Region */
+            region: string;
+            /** Universe */
+            universe: string;
         };
         /** EvolutionOptions */
         EvolutionOptions: {
-            operators: components["schemas"]["OperatorsRead"];
+            defaults: components["schemas"]["EvolutionDefaults"];
             /** Markets */
             markets: components["schemas"]["EvolutionMarket"][];
-            /** Populations */
-            populations: number[];
-            /** Mutationrates */
-            mutationRates: number[];
-            defaults: components["schemas"]["EvolutionDefaults"];
             /** Maxcores */
             maxCores: number;
-            /** Maxsimulations */
-            maxSimulations: number;
             /** Maxseeds */
             maxSeeds: number;
+            /** Maxsimulations */
+            maxSimulations: number;
+            /** Mutationrates */
+            mutationRates: number[];
+            operators: components["schemas"]["OperatorsRead"];
+            /** Populations */
+            populations: number[];
         };
         /** EvolutionPreview */
         EvolutionPreview: {
+            /** Generations */
+            generations: number;
+            /** Population */
+            population: number;
+            /** Problems */
+            problems: string[];
+            /** Sample */
+            sample: components["schemas"]["SampleAlpha"][];
             /** Seeds */
             seeds: components["schemas"]["SeedRow"][];
             /** Skipped */
             skipped: components["schemas"]["SeedReason"][];
-            /** Population */
-            population: number;
-            /** Generations */
-            generations: number;
-            /** Sample */
-            sample: components["schemas"]["SampleAlpha"][];
-            /** Problems */
-            problems: string[];
             /** Warnings */
             warnings: string[];
         };
         /** EvolutionRequest */
         EvolutionRequest: {
-            /** Region */
-            region: string;
-            /** Delay */
-            delay: number;
-            /** Universe */
-            universe: string;
             /** Alpha Ids */
             alpha_ids?: string[];
             /**
              * Cores
-             * @default 4
+             * @default 8
              */
             cores: number;
-            /** Population */
-            population?: (50 | 100 | 200) | null;
+            /** Delay */
+            delay: number;
             /**
              * Mutation Rate
              * @default 0.05
              */
             mutation_rate: number;
+            /** Neutralizations */
+            neutralizations?: string[];
+            /** Population */
+            population?: (50 | 100 | 200) | null;
+            /** Region */
+            region: string;
             /**
              * Simulations
              * @default 0
              */
             simulations: number;
+            /** Universe */
+            universe: string;
         };
         /** Feature */
         Feature: {
@@ -2845,27 +3224,27 @@ export interface components {
         };
         /** FieldAvailabilityRow */
         FieldAvailabilityRow: {
+            /** Alpha Count */
+            alpha_count: number | null;
+            /** Coverage */
+            coverage: number | null;
+            /** Delay */
+            delay: number;
+            /** Field Type */
+            field_type: string | null;
             /** Instrument Type */
             instrument_type: string;
             /** Region */
             region: string;
-            /** Delay */
-            delay: number;
             /** Universe */
             universe: string;
-            /** Coverage */
-            coverage: number | null;
-            /** Alpha Count */
-            alpha_count: number | null;
-            /** Field Type */
-            field_type: string | null;
         };
         /** FieldCounts */
         FieldCounts: {
-            /** Total */
-            total: number;
             /** Matrix */
             matrix: number;
+            /** Total */
+            total: number;
             /** Vector */
             vector: number;
         };
@@ -2877,42 +3256,22 @@ export interface components {
          *     returns would defeat the purpose of the tab.
          */
         FieldFilter: {
-            /** Search */
-            search?: string | null;
-            /** Dataset Ids */
-            dataset_ids?: string[];
-            /** Category Ids */
-            category_ids?: string[];
-            /** Subcategory Ids */
-            subcategory_ids?: string[];
-            /** Field Types */
-            field_types?: string[];
-            /** Coverage Min */
-            coverage_min?: number | null;
-            /** Coverage Max */
-            coverage_max?: number | null;
-            /** Alpha Count Min */
-            alpha_count_min?: number | null;
             /** Alpha Count Max */
             alpha_count_max?: number | null;
-            /** User Count Min */
-            user_count_min?: number | null;
-            /** User Count Max */
-            user_count_max?: number | null;
-            /** Pyramid Multiplier Min */
-            pyramid_multiplier_min?: number | null;
+            /** Alpha Count Min */
+            alpha_count_min?: number | null;
+            /** Category Ids */
+            category_ids?: string[];
+            /** Coverage Max */
+            coverage_max?: number | null;
+            /** Coverage Min */
+            coverage_min?: number | null;
+            /** Dataset Ids */
+            dataset_ids?: string[];
+            /** Field Types */
+            field_types?: string[];
             /** Has Theme */
             has_theme?: boolean | null;
-            /**
-             * Sort By
-             * @default alpha_count
-             */
-            sort_by: string;
-            /**
-             * Sort Desc
-             * @default true
-             */
-            sort_desc: boolean;
             /**
              * Limit
              * @default 100
@@ -2923,37 +3282,67 @@ export interface components {
              * @default 0
              */
             offset: number;
+            /** Pyramid Multiplier Min */
+            pyramid_multiplier_min?: number | null;
+            /**
+             * Region Agnostic
+             * @default false
+             */
+            region_agnostic: boolean;
+            /** Search */
+            search?: string | null;
+            /**
+             * Search Mode
+             * @default smart
+             */
+            search_mode: string;
+            /**
+             * Sort By
+             * @default alpha_count
+             */
+            sort_by: string;
+            /**
+             * Sort Desc
+             * @default true
+             */
+            sort_desc: boolean;
+            /** Subcategory Ids */
+            subcategory_ids?: string[];
+            /** User Count Max */
+            user_count_max?: number | null;
+            /** User Count Min */
+            user_count_min?: number | null;
         };
         /** FieldIntelligence */
         FieldIntelligence: {
-            /** Performance */
-            performance: components["schemas"]["FieldPerformanceRecord"][];
-            /** Neutralizationworks */
-            neutralizationWorks: components["schemas"]["NeutralizationSignal"][];
             /** Neutralizationfails */
             neutralizationFails: components["schemas"]["NeutralizationSignal"][];
+            /** Neutralizationworks */
+            neutralizationWorks: components["schemas"]["NeutralizationSignal"][];
+            /** Performance */
+            performance: components["schemas"]["FieldPerformanceRecord"][];
         };
         /** FieldPage */
         FieldPage: {
-            /** Total */
-            total: number;
             /** Limit */
             limit: number;
             /** Offset */
             offset: number;
             /** Results */
             results: components["schemas"]["DataFieldRow"][];
+            /** Total */
+            total: number;
         };
         /** FieldPerformanceRecord */
         FieldPerformanceRecord: {
-            /** Scope */
-            scope: string;
-            /** N */
-            n: number;
-            /** Meansharpe */
-            meanSharpe: number | null;
             /** Meanfitness */
             meanFitness: number | null;
+            /** Meansharpe */
+            meanSharpe: number | null;
+            /** N */
+            n: number;
+            /** Scope */
+            scope: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2962,17 +3351,17 @@ export interface components {
         };
         /** Health */
         Health: {
-            /** Ok */
-            ok: boolean;
-            /** Version */
-            version: string;
+            /** Activesimulations */
+            activeSimulations: number;
             /** Datadir */
             dataDir: string;
             /** Database */
             database: boolean;
+            /** Ok */
+            ok: boolean;
             session: components["schemas"]["Session"];
-            /** Activesimulations */
-            activeSimulations: number;
+            /** Version */
+            version: string;
             /** Websocketclients */
             websocketClients: number;
         };
@@ -2987,37 +3376,27 @@ export interface components {
         };
         /** HighImpactCandidate */
         HighImpactCandidate: {
-            /** Fieldid */
-            fieldId: string;
-            /** Description */
-            description: string;
-            /** Classification */
-            classification: string;
-            /** Templateused */
-            templateUsed: string;
-            /** Expression */
-            expression: string;
             /** Categoryid */
             categoryId: string;
             /** Categoryname */
             categoryName: string | null;
+            /** Classification */
+            classification: string;
+            /** Description */
+            description: string;
+            /** Expression */
+            expression: string;
+            /** Fieldid */
+            fieldId: string;
             /** Opportunity */
             opportunity: number;
-        };
-        /** KRatioRequest */
-        KRatioRequest: {
-            /** Alpha Ids */
-            alpha_ids: string[];
-        };
-        /** KRatioStarted */
-        KRatioStarted: {
-            /** Taskid */
-            taskId: string;
-            /** Alphas */
-            alphas: number;
+            /** Templateused */
+            templateUsed: string;
         };
         /** KeyFailed */
         KeyFailed: {
+            /** Error */
+            error: string;
             /** Keyid */
             keyId: number;
             /**
@@ -3025,11 +3404,20 @@ export interface components {
              * @constant
              */
             ok: false;
-            /** Error */
-            error: string;
         };
         /** KeyToggle */
         KeyToggle: {
+            /**
+             * Clear Daily Limit
+             * @description Remove this key's daily cap, going back to the model's.
+             * @default false
+             */
+            clear_daily_limit: boolean;
+            /**
+             * Daily Limit
+             * @description Move this key's daily cap. Left alone when omitted.
+             */
+            daily_limit?: number | null;
             /** Enabled */
             enabled: boolean;
         };
@@ -3037,175 +3425,181 @@ export interface components {
         KeyWorks: {
             /** Keyid */
             keyId: number;
+            /** Models */
+            models: number;
+            /** Newmodels */
+            newModels: string[];
             /**
              * Ok
              * @constant
              */
             ok: true;
-            /** Models */
-            models: number;
-            /** Newmodels */
-            newModels: string[];
         };
         /** LLMBudget */
         LLMBudget: {
-            /** Model */
-            model: string;
-            /** Label */
-            label: string;
-            /** Provider */
-            provider: string;
-            /** Perkeyperday */
-            perKeyPerDay: number;
-            /** Remainingtoday */
-            remainingToday: number;
             /** Bulk */
             bulk: boolean;
+            /** Label */
+            label: string;
+            /** Model */
+            model: string;
+            /** Perkeyperday */
+            perKeyPerDay: number;
+            /** Provider */
+            provider: string;
+            /** Remainingtoday */
+            remainingToday: number;
         };
         /** LLMContextRendered */
         LLMContextRendered: {
-            /** Text */
-            text: string;
-            /** Scope */
-            scope: string;
-            counts: components["schemas"]["ContextCounts"];
             /** Characters */
             characters: number;
+            counts: components["schemas"]["ContextCounts"];
             /** Estimatedtokens */
             estimatedTokens: number;
+            /** Scope */
+            scope: string;
+            /** Text */
+            text: string;
         };
         /** LLMContextTree */
         LLMContextTree: {
-            /** Scope */
-            scope: string;
-            counts: components["schemas"]["ContextCounts"];
             /** Categories */
             categories: {
                 [key: string]: unknown;
             }[];
+            counts: components["schemas"]["ContextCounts"];
+            /** Scope */
+            scope: string;
         };
         /** LLMKey */
         LLMKey: {
+            /** Createdat */
+            createdAt: string | null;
+            /** Dailylimit */
+            dailyLimit: number | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Hint */
+            hint: string;
             /** Id */
             id: number;
             /** Label */
             label: string;
-            /** Provider */
-            provider: string;
-            /** Hint */
-            hint: string;
-            /** Enabled */
-            enabled: boolean;
-            /** Lastokat */
-            lastOkAt: string | null;
             /** Lasterror */
             lastError: string | null;
-            /** Createdat */
-            createdAt: string | null;
+            /** Lastokat */
+            lastOkAt: string | null;
+            /** Provider */
+            provider: string;
             /** Usage */
             usage: components["schemas"]["LLMKeyUsage"][];
         };
         /** LLMKeyStatus */
         LLMKeyStatus: {
-            /** Keys */
-            keys: components["schemas"]["LLMKey"][];
-            /** Enabled */
-            enabled: number;
             /** Budget */
             budget: components["schemas"]["LLMBudget"][];
-            /** Resetinseconds */
-            resetInSeconds: number;
+            /** Enabled */
+            enabled: number;
+            /** Keys */
+            keys: components["schemas"]["LLMKey"][];
             /** Quotatimezone */
             quotaTimezone: string;
+            /** Resetinseconds */
+            resetInSeconds: number;
         };
         /** LLMKeyUsage */
         LLMKeyUsage: {
-            /** Keyid */
-            keyId: number;
-            /** Model */
-            model: string;
             /** Day */
             day: string;
+            /** Keyid */
+            keyId: number;
+            /** Lastrequestat */
+            lastRequestAt: string | null;
+            /** Model */
+            model: string;
             /** Requests */
             requests: number;
             /** Tokens */
             tokens: number;
-            /** Lastrequestat */
-            lastRequestAt: string | null;
         };
         /**
          * LLMModel
          * @description :class:`ModelInfo` on the wire.
          */
         LLMModel: {
+            /** Bulk */
+            bulk: boolean;
+            /** Discovered */
+            discovered: boolean;
             /** Id */
             id: string;
-            /** Label */
-            label: string;
             /**
              * Kind
              * @enum {string}
              */
             kind: "text" | "embedding" | "open";
-            /** Rpm */
-            rpm: number;
-            /** Tpm */
-            tpm: number;
-            /** Rpd */
-            rpd: number;
-            /** Summary */
-            summary: string;
-            /** Bulk */
-            bulk: boolean;
-            /** Recommended */
-            recommended: boolean;
-            /** Discovered */
-            discovered: boolean;
+            /** Label */
+            label: string;
             /** Provider */
             provider: string;
+            /** Recommended */
+            recommended: boolean;
+            /** Rpd */
+            rpd: number;
+            /** Rpm */
+            rpm: number;
+            /** Summary */
+            summary: string;
+            /** Tpm */
+            tpm: number;
         };
         /** LLMModels */
         LLMModels: {
+            defaults: components["schemas"]["ModelDefaults"];
             /** Models */
             models: components["schemas"]["LLMModel"][];
-            defaults: components["schemas"]["ModelDefaults"];
             /** Note */
             note: string;
         };
         /** LLMProvider */
         LLMProvider: {
-            /** Id */
-            id: string;
-            /** Label */
-            label: string;
             /** Baseurl */
             baseUrl: string;
-            /** Onboardingurl */
-            onboardingUrl: string;
+            /** Id */
+            id: string;
             /** Keyhint */
             keyHint: string;
-            /** Freenote */
-            freeNote: string;
-            /** Openaicompatible */
-            openaiCompatible: boolean;
+            /** Label */
+            label: string;
             /** Models */
             models: components["schemas"]["LLMModel"][];
+            /** Onboardingurl */
+            onboardingUrl: string;
+            /** Openaicompatible */
+            openaiCompatible: boolean;
+            /** Paid */
+            paid: boolean;
+            /** Tiernote */
+            tierNote: string;
         };
         /** LLMProviders */
         LLMProviders: {
-            /** Providers */
-            providers: components["schemas"]["LLMProvider"][];
             /** Default */
             default: string;
             /** Note */
             note: string;
+            /** Paidnote */
+            paidNote: string;
+            /** Providers */
+            providers: components["schemas"]["LLMProvider"][];
         };
         /** LLMUsage */
         LLMUsage: {
-            /** Prompttokens */
-            promptTokens: number;
             /** Outputtokens */
             outputTokens: number;
+            /** Prompttokens */
+            promptTokens: number;
             /** Thinkingtokens */
             thinkingTokens: number;
             /** Totaltokens */
@@ -3213,71 +3607,71 @@ export interface components {
         };
         /** LabTask */
         LabTask: {
+            /** Alphaid */
+            alphaId?: string | null;
+            /** Best */
+            best: number | null;
+            /** Cached */
+            cached: number;
+            /** Cores */
+            cores: number;
+            /** Createdat */
+            createdAt: string | null;
+            /** Datasetids */
+            datasetIds: string[];
+            /** Decay */
+            decay: number | null;
+            /** Delay */
+            delay: number | null;
+            /** Failed */
+            failed: number;
+            /** Fields */
+            fields: number;
+            /** Finishedat */
+            finishedAt: string | null;
             /** Id */
             id: number;
             /** Lab */
             lab: string;
             /** Labname */
             labName: string;
-            /** Templatename */
-            templateName: string | null;
-            /** Template */
-            template: string | null;
+            /** Markets */
+            markets?: number | null;
+            /** Message */
+            message: string | null;
+            /** Mutationrate */
+            mutationRate: number | null;
+            /** Nanhandling */
+            nanHandling?: string | null;
+            /** Objectivelabel */
+            objectiveLabel: string;
+            /** Population */
+            population: number | null;
+            /** Queued */
+            queued: number;
+            /** Region */
+            region: string | null;
+            /** Running */
+            running: number;
+            /** Seeds */
+            seeds: number;
+            /** Simulated */
+            simulated: number;
+            /** Startedat */
+            startedAt: string | null;
             status: components["schemas"]["StudyStatus"];
             /** Stopping */
             stopping: boolean;
-            /** Message */
-            message: string | null;
-            /** Region */
-            region: string | null;
-            /** Delay */
-            delay: number | null;
-            /** Alphaid */
-            alphaId?: string | null;
-            /** Markets */
-            markets?: number | null;
-            /** Truncation */
-            truncation?: number | null;
-            /** Nanhandling */
-            nanHandling?: string | null;
-            /** Universe */
-            universe: string | null;
-            /** Seeds */
-            seeds: number;
-            /** Population */
-            population: number | null;
-            /** Mutationrate */
-            mutationRate: number | null;
-            /** Decay */
-            decay: number | null;
-            /** Cores */
-            cores: number;
-            /** Datasetids */
-            datasetIds: string[];
-            /** Fields */
-            fields: number;
             /** Target */
             target: number;
-            /** Simulated */
-            simulated: number;
-            /** Cached */
-            cached: number;
-            /** Queued */
-            queued: number;
-            /** Running */
-            running: number;
-            /** Failed */
-            failed: number;
-            /** Best */
-            best: number | null;
-            /** Objectivelabel */
-            objectiveLabel: string;
-            /** Createdat */
-            createdAt: string | null;
-            /** Startedat */
-            startedAt: string | null;
-            /** Finishedat */
-            finishedAt: string | null;
+            /** Template */
+            template: string | null;
+            /** Templatename */
+            templateName: string | null;
+            /** Truncation */
+            truncation?: number | null;
+            /** Universe */
+            universe: string | null;
         };
         /** LabTasks */
         LabTasks: {
@@ -3288,17 +3682,17 @@ export interface components {
         };
         /** LastSync */
         LastSync: {
+            /** Error */
+            error?: string | null;
+            /** Finishedat */
+            finishedAt: string;
+            /** Imported */
+            imported: number;
             /**
              * State
              * @enum {string}
              */
             state: "done" | "failed" | "cancelled";
-            /** Imported */
-            imported: number;
-            /** Error */
-            error?: string | null;
-            /** Finishedat */
-            finishedAt: string;
         };
         /** LeftOut */
         LeftOut: {
@@ -3329,51 +3723,51 @@ export interface components {
         };
         /** Market */
         Market: {
+            /** Delay */
+            delay: number;
             /** Instrumenttype */
             instrumentType: string;
             /** Region */
             region: string;
-            /** Delay */
-            delay: number;
             /** Universe */
             universe: string;
         };
         /** MarketPick */
         MarketPick: {
-            /** Region */
-            region: string;
             /** Delay */
             delay: number;
+            /** Region */
+            region: string;
             /** Universe */
             universe: string;
         };
         /** MarketRow */
         MarketRow: {
-            /** Region */
-            region: string;
-            /** Delay */
-            delay: number;
-            /** Universe */
-            universe: string;
             /** Coverage */
             coverage: number;
+            /** Delay */
+            delay: number;
+            /** Region */
+            region: string;
             /** Total */
             total: number;
+            /** Universe */
+            universe: string;
         };
         /** ModelBudget */
         ModelBudget: {
-            /** Model */
-            model: string;
-            /** Label */
-            label: string;
-            /** Provider */
-            provider: string;
-            /** Perkeyperday */
-            perKeyPerDay: number;
-            /** Remainingtoday */
-            remainingToday: number;
             /** Bulk */
             bulk: boolean;
+            /** Label */
+            label: string;
+            /** Model */
+            model: string;
+            /** Perkeyperday */
+            perKeyPerDay: number;
+            /** Provider */
+            provider: string;
+            /** Remainingtoday */
+            remainingToday: number;
         };
         /** ModelDefaults */
         ModelDefaults: {
@@ -3384,56 +3778,56 @@ export interface components {
         };
         /** NeutralizationSignal */
         NeutralizationSignal: {
-            /** Neutralization */
-            neutralization: string;
-            /** N */
-            n: number;
-            /** Meansharpe */
-            meanSharpe: number | null;
             /** Meanfitness */
             meanFitness: number | null;
+            /** Meansharpe */
+            meanSharpe: number | null;
+            /** N */
+            n: number;
+            /** Neutralization */
+            neutralization: string;
         };
         /** OperatorsRead */
         OperatorsRead: {
-            /** Synced */
-            synced: boolean;
             /** Count */
             count: number;
+            /** Synced */
+            synced: boolean;
         };
         /** Options */
         Options: {
-            operators: components["schemas"]["OperatorsRead"];
             /** Crosssectional */
             crossSectional: string[];
-            /** Timeseries */
-            timeSeries: string[];
-            /** Group */
-            group: string[];
-            /** Vector */
-            vector: string[];
-            /** Lookbacks */
-            lookbacks: number[];
-            /** Groups */
-            groups: string[];
             /** Decays */
             decays: number[];
-            /** Truncation */
-            truncation: number;
+            /** Group */
+            group: string[];
+            /** Groups */
+            groups: string[];
+            /** Lookbacks */
+            lookbacks: number[];
             /** Maxcores */
             maxCores: number;
             /** Maxsimulations */
             maxSimulations: number;
+            operators: components["schemas"]["OperatorsRead"];
+            /** Timeseries */
+            timeSeries: string[];
+            /** Truncation */
+            truncation: number;
+            /** Vector */
+            vector: string[];
         };
         /** OsmosisCoverageResult */
         OsmosisCoverageResult: {
-            /** Scopes */
-            scopes: components["schemas"]["OsmosisScopeCoverage"][];
+            /** Alphasexamined */
+            alphasExamined: number;
             /** Completescopes */
             completeScopes: number;
             /** Meetsminimumscopes */
             meetsMinimumScopes: boolean;
-            /** Alphasexamined */
-            alphasExamined: number;
+            /** Scopes */
+            scopes: components["schemas"]["OsmosisScopeCoverage"][];
             /** Totalactive */
             totalActive: number | null;
         };
@@ -3448,69 +3842,82 @@ export interface components {
             alphaId: string;
             /** Fitness */
             fitness: number | null;
-            /** Sharpe */
-            sharpe: number | null;
             /** Osmosispoints */
             osmosisPoints: number;
+            /** Sharpe */
+            sharpe: number | null;
         };
         /** OsmosisScopeCoverage */
         OsmosisScopeCoverage: {
-            /** Region */
-            region: string;
             /** Delay */
             delay: number;
+            /** Fullyallocated */
+            fullyAllocated: boolean;
+            /** Meetsalphaminimum */
+            meetsAlphaMinimum: boolean;
             /** Nalphas */
             nAlphas: number;
             /** Pointstotal */
             pointsTotal: number;
-            /** Meetsalphaminimum */
-            meetsAlphaMinimum: boolean;
-            /** Fullyallocated */
-            fullyAllocated: boolean;
+            /** Region */
+            region: string;
             /** Universes */
             universes: components["schemas"]["OsmosisUniverseBreakdown"][];
         };
         /** OsmosisUniverseBreakdown */
         OsmosisUniverseBreakdown: {
-            /** Universe */
-            universe: string;
             /** Nalphas */
             nAlphas: number;
             /** Pointstotal */
             pointsTotal: number;
+            /** Universe */
+            universe: string;
         };
         /** Pair */
         Pair: {
-            /** Maxtrade */
-            maxTrade: string;
             /** Maxposition */
             maxPosition: string;
+            /** Maxtrade */
+            maxTrade: string;
         };
         /** PairPick */
         PairPick: {
-            /**
-             * Maxtrade
-             * @enum {string}
-             */
-            maxTrade: "ON" | "OFF";
             /**
              * Maxposition
              * @enum {string}
              */
             maxPosition: "ON" | "OFF";
+            /**
+             * Maxtrade
+             * @enum {string}
+             */
+            maxTrade: "ON" | "OFF";
         };
         /** Pause */
         Pause: {
-            /**
-             * Start
-             * Format: date-time
-             */
-            start: string;
             /**
              * End
              * Format: date-time
              */
             end: string;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+        };
+        /** Period */
+        Period: {
+            /** End */
+            end: string;
+            /** Start */
+            start: string;
+        };
+        /** Periods */
+        Periods: {
+            inSample: components["schemas"]["Period"];
+            test: components["schemas"]["Period"] | null;
+            train: components["schemas"]["Period"] | null;
         };
         /** Pick */
         Pick: {
@@ -3528,45 +3935,45 @@ export interface components {
         };
         /** PlanTotals */
         PlanTotals: {
-            /** Total */
-            total: number;
             /** Batches */
             batches: number;
+            /** Total */
+            total: number;
         };
         /** PlannedPortfolio */
         PlannedPortfolio: {
-            /** Candidates */
-            candidates: number;
-            /** Locked */
-            locked: number;
-            /** Missing */
-            missing: string[];
-            /** Size */
-            size: number;
-            /** Order */
-            order: components["schemas"]["Pick"][];
-            /** Sizes */
-            sizes: number[];
-            /** Trainsharpe */
-            trainSharpe: number;
-            /** Heldoutsharpe */
-            heldOutSharpe: number;
-            /** Sharpe */
-            sharpe: number;
             /** Bestsingle */
             bestSingle: number;
-            /** Maxcorrelation */
-            maxCorrelation: number | null;
-            /** Worstpair */
-            worstPair: string[];
-            /** Escapeused */
-            escapeUsed: boolean;
-            /** Days */
-            days: number;
+            /** Candidates */
+            candidates: number;
             /** Curve */
             curve: number[];
             /** Dates */
             dates: string[];
+            /** Days */
+            days: number;
+            /** Escapeused */
+            escapeUsed: boolean;
+            /** Heldoutsharpe */
+            heldOutSharpe: number;
+            /** Locked */
+            locked: number;
+            /** Maxcorrelation */
+            maxCorrelation: number | null;
+            /** Missing */
+            missing: string[];
+            /** Order */
+            order: components["schemas"]["Pick"][];
+            /** Sharpe */
+            sharpe: number;
+            /** Size */
+            size: number;
+            /** Sizes */
+            sizes: number[];
+            /** Trainsharpe */
+            trainSharpe: number;
+            /** Worstpair */
+            worstPair: string[];
         };
         /** PoolCoverageResult */
         PoolCoverageResult: {
@@ -3577,28 +3984,140 @@ export interface components {
             /** Unreadable */
             unreadable: number;
         };
+        /** PortfolioMember */
+        PortfolioMember: {
+            /** Alphaid */
+            alphaId: string;
+            /** Categories */
+            categories: string[];
+            /** Classifications */
+            classifications: string[];
+            /** Delay */
+            delay: number | null;
+            /** Drawdown */
+            drawdown: number | null;
+            /** Fitness */
+            fitness: number | null;
+            /** Hasseries */
+            hasSeries: boolean;
+            /**
+             * Investability
+             * @enum {string}
+             */
+            investability: "max_trade" | "max_position" | "none";
+            /** Labelled */
+            labelled: boolean;
+            /** Margin */
+            margin: number | null;
+            /** Name */
+            name: string | null;
+            /** Pyramids */
+            pyramids: string[];
+            /** Region */
+            region: string | null;
+            /** Returns */
+            returns: number | null;
+            /** Sharpe */
+            sharpe: number | null;
+            /** Tags */
+            tags: string[];
+            /** Turnover */
+            turnover: number | null;
+            /** Universe */
+            universe: string | null;
+        };
+        /** PortfolioMembers */
+        PortfolioMembers: {
+            /** Members */
+            members: components["schemas"]["PortfolioMember"][];
+        };
+        /** PortfolioRequest */
+        PortfolioRequest: {
+            /** Alpha Ids */
+            alpha_ids: string[];
+            /**
+             * Cost Bps
+             * @default 5
+             */
+            cost_bps: number;
+        };
+        /** PortfolioResult */
+        PortfolioResult: {
+            afterCost: components["schemas"]["Windows"] | null;
+            /** Aftercostcurve */
+            afterCostCurve: number[];
+            /** Alphas */
+            alphas: number;
+            /** Correlation */
+            correlation: (number | null)[][];
+            /** Curve */
+            curve: number[];
+            /** Dates */
+            dates: string[];
+            highest: components["schemas"]["CorrelatedPair"] | null;
+            /** Ids */
+            ids: string[];
+            /** Measuredpairs */
+            measuredPairs: number;
+            /** Missing */
+            missing: string[];
+            periods: components["schemas"]["Periods"] | null;
+            /** Problem */
+            problem?: string | null;
+            stats: components["schemas"]["Windows"] | null;
+            /** Teststart */
+            testStart: string | null;
+            /** Toppairs */
+            topPairs: components["schemas"]["CorrelatedPair"][];
+            /** Yearly */
+            yearly: components["schemas"]["YearRow"][];
+        };
+        /** PortfolioStats */
+        PortfolioStats: {
+            /** Days */
+            days: number;
+            /** Drawdown */
+            drawdown: number;
+            /** Fitness */
+            fitness: number | null;
+            /** Margin */
+            margin: number;
+            /** Pnl */
+            pnl: number;
+            /** Returns */
+            returns: number;
+            /** Sharpe */
+            sharpe: number | null;
+            /** Turnover */
+            turnover: number;
+        };
+        /** PortfolioSyncStarted */
+        PortfolioSyncStarted: {
+            /** Taskid */
+            taskId: string;
+        };
         /** PowerPoolCandidate */
         PowerPoolCandidate: {
             /** Alphaid */
             alphaId: string;
-            /** Sharpe */
-            sharpe: number | null;
-            /** Operators */
-            operators: number | null;
-            /** Fields */
-            fields: number | null;
-            /** Turnoverpass */
-            turnoverPass: boolean | null;
-            /** Subuniversepass */
-            subUniversePass: boolean | null;
-            /** Robustuniversepass */
-            robustUniversePass: boolean | null;
-            /** Powerpoolcorrelation */
-            powerPoolCorrelation: string | null;
-            /** Eligibleonknowncriteria */
-            eligibleOnKnownCriteria: boolean;
             /** Degeneratewarning */
             degenerateWarning: string | null;
+            /** Eligibleonknowncriteria */
+            eligibleOnKnownCriteria: boolean;
+            /** Fields */
+            fields: number | null;
+            /** Operators */
+            operators: number | null;
+            /** Powerpoolcorrelation */
+            powerPoolCorrelation: string | null;
+            /** Robustuniversepass */
+            robustUniversePass: boolean | null;
+            /** Sharpe */
+            sharpe: number | null;
+            /** Subuniversepass */
+            subUniversePass: boolean | null;
+            /** Turnoverpass */
+            turnoverPass: boolean | null;
         };
         /** PowerPoolModel */
         PowerPoolModel: {
@@ -3608,117 +4127,135 @@ export interface components {
             label: string;
             /** Provider */
             provider: string;
-            /** Tpm */
-            tpm: number;
             /** Remainingtoday */
             remainingToday: number;
+            /** Tpm */
+            tpm: number;
         };
         /** PowerPoolOptions */
         PowerPoolOptions: {
-            /** Models */
-            models: components["schemas"]["PowerPoolModel"][];
             /** Defaultmodel */
             defaultModel: string | null;
             /** Maxsimulations */
             maxSimulations: number;
+            /** Models */
+            models: components["schemas"]["PowerPoolModel"][];
         };
         /** PowerPoolPreview */
         PowerPoolPreview: {
             /** Fields */
             fields: number;
-            /** Universes */
-            universes: string[];
-            /** Neutralizations */
-            neutralizations: string[];
             /** Llmcalls */
             llmCalls: number;
-            prompt: components["schemas"]["PowerPoolPrompt"] | null;
-            /** Problems */
-            problems: string[];
-            /** Warnings */
-            warnings: string[];
             /** Model */
             model: string;
+            /** Neutralizations */
+            neutralizations: string[];
+            /** Problems */
+            problems: string[];
+            prompt: components["schemas"]["PowerPoolPrompt"] | null;
+            /** Universes */
+            universes: string[];
+            /** Warnings */
+            warnings: string[];
         };
         /** PowerPoolPrompt */
         PowerPoolPrompt: {
             /** System */
             system: string;
-            /** User */
-            user: string;
             /** Tokens */
             tokens: number;
+            /** User */
+            user: string;
         };
         /** PowerPoolRequest */
         PowerPoolRequest: {
-            /** Region */
-            region: string;
-            /** Delay */
-            delay: number;
-            /** Universe */
-            universe: string;
-            /** Dataset Ids */
-            dataset_ids?: string[];
-            /** Model */
-            model?: string | null;
             /**
              * Cores
-             * @default 4
+             * @default 8
              */
             cores: number;
+            /** Dataset Ids */
+            dataset_ids?: string[];
+            /** Delay */
+            delay: number;
+            /** Model */
+            model?: string | null;
+            /** Neutralizations */
+            neutralizations?: string[];
+            /** Region */
+            region: string;
             /**
              * Simulations
              * @default 0
              */
             simulations: number;
+            /** Universe */
+            universe: string;
         };
         /** Preview */
         Preview: {
-            /** Round */
-            round: number;
-            fields: components["schemas"]["FieldCounts"];
-            leftOut: components["schemas"]["LeftOut"];
-            /** Universes */
-            universes: string[];
-            /** Neutralizations */
-            neutralizations: string[];
             /** Families */
             families: string[];
-            /** Sample */
-            sample: components["schemas"]["SampleAlpha"][];
+            fields: components["schemas"]["FieldCounts"];
+            leftOut: components["schemas"]["LeftOut"];
+            /** Neutralizations */
+            neutralizations: string[];
             /** Problems */
             problems: string[];
+            /** Round */
+            round: number;
+            /** Sample */
+            sample: components["schemas"]["SampleAlpha"][];
+            /** Universes */
+            universes: string[];
             /** Warnings */
             warnings: string[];
         };
-        /** PreviewRequest */
+        /**
+         * PreviewRequest
+         * @description An Alpha to read, or a bare expression with the decay and truncation to hold it at.
+         */
         PreviewRequest: {
-            /** Alphaid */
+            /**
+             * Alphaid
+             * @default
+             */
             alphaId: string;
+            /** Decay */
+            decay?: number | null;
+            /** Expression */
+            expression?: string | null;
+            /** Nanhandling */
+            nanHandling?: ("ON" | "OFF") | null;
+            /** Testperiod */
+            testPeriod?: string | null;
+            /** Truncation */
+            truncation?: number | null;
         };
         /** PromptInfo */
         PromptInfo: {
-            /** Slug */
-            slug: string;
-            /** Label */
-            label: string;
-            /** Purpose */
-            purpose: string;
+            /** Body */
+            body: string;
+            /** Characters */
+            characters: number;
             /**
              * Context
              * @enum {string}
              */
             context: "none" | "catalog_tree" | "dataset_fields";
-            /** Model */
-            model: string | null;
-            /** Temperature */
-            temperature: number;
-            /** Body */
-            body: string;
-            /** Characters */
-            characters: number;
             /** Estimatedtokens */
             estimatedTokens: number;
+            /** Label */
+            label: string;
+            /** Model */
+            model: string | null;
+            /** Purpose */
+            purpose: string;
+            /** Slug */
+            slug: string;
+            /** Temperature */
+            temperature: number;
         };
         /** PromptList */
         PromptList: {
@@ -3729,29 +4266,29 @@ export interface components {
         ProvenPatternBatchResult: {
             /** Candidates */
             candidates: components["schemas"]["ProvenPatternCandidate"][];
-            /** Provenalphasexamined */
-            provenAlphasExamined: number;
             /** Poolsize */
             poolSize: number;
+            /** Provenalphasexamined */
+            provenAlphasExamined: number;
         };
         /** ProvenPatternCandidate */
         ProvenPatternCandidate: {
+            /** Matchedfielddescription */
+            matchedFieldDescription: string | null;
+            /** Matchedfieldid */
+            matchedFieldId: string;
+            /** Newexpression */
+            newExpression: string;
             /** Provenalphaid */
             provenAlphaId: string;
+            /** Provenexpression */
+            provenExpression: string;
             /** Provenfieldid */
             provenFieldId: string;
             /** Provenfitness */
             provenFitness: number | null;
-            /** Provenexpression */
-            provenExpression: string;
-            /** Matchedfieldid */
-            matchedFieldId: string;
-            /** Matchedfielddescription */
-            matchedFieldDescription: string | null;
             /** Similarity */
             similarity: number;
-            /** Newexpression */
-            newExpression: string;
         };
         /** PyramidCategory */
         PyramidCategory: {
@@ -3762,36 +4299,38 @@ export interface components {
         };
         /** PyramidCell */
         PyramidCell: {
-            /** Categoryid */
-            categoryId: string;
-            /** Region */
-            region: string;
-            /** Delay */
-            delay: number;
-            /** Multiplier */
-            multiplier: number | null;
             /** Alphacount */
             alphaCount: number;
+            /** Categoryid */
+            categoryId: string;
+            /** Delay */
+            delay: number;
             /** Lit */
             lit: boolean;
+            /** Multiplier */
+            multiplier: number | null;
+            /** Region */
+            region: string;
             /** Synced */
             synced: boolean;
         };
         /** PyramidColumn */
         PyramidColumn: {
-            /** Region */
-            region: string;
             /** Delay */
             delay: number;
+            /** Region */
+            region: string;
         };
         /** PyramidGrid */
         PyramidGrid: {
-            /** Columns */
-            columns: components["schemas"]["PyramidColumn"][];
+            /** Alphasperpyramid */
+            alphasPerPyramid: number;
             /** Categories */
             categories: components["schemas"]["PyramidCategory"][];
             /** Cells */
             cells: components["schemas"]["PyramidCell"][];
+            /** Columns */
+            columns: components["schemas"]["PyramidColumn"][];
             quarter: components["schemas"]["Quarter"];
         };
         /**
@@ -3799,138 +4338,162 @@ export interface components {
          * @description Calendar quarter in platform time; ``end`` is the next quarter's first day.
          */
         Quarter: {
-            /** Start */
-            start: string;
             /** End */
             end: string;
+            /** Start */
+            start: string;
             /** Today */
             today: string;
+        };
+        /** QuarterStanding */
+        QuarterStanding: {
+            /** Alphasperpyramid */
+            alphasPerPyramid: number;
+            /** End */
+            end: string;
+            /** Label */
+            label: string;
+            /** Pyramidsformulated */
+            pyramidsFormulated: number;
+            /** Pyramidsstarted */
+            pyramidsStarted: number;
+            /** Start */
+            start: string;
+            /** Submitted */
+            submitted: number;
         };
         /**
          * QuickRequest
          * @description The market to run in, and the datasets last chosen there; none means the pyramids.
          */
         QuickRequest: {
-            /**
-             * Region
-             * @default USA
-             */
-            region: string;
+            /** Dataset Ids */
+            dataset_ids?: string[];
             /**
              * Delay
              * @default 1
              */
             delay: number;
             /**
+             * Region
+             * @default USA
+             */
+            region: string;
+            /** Simulations */
+            simulations?: number | null;
+            /**
              * Universe
              * @default TOP3000
              */
             universe: string | null;
-            /** Dataset Ids */
-            dataset_ids?: string[];
-            /** Simulations */
-            simulations?: number | null;
         };
         /** QuickRun */
         QuickRun: {
-            /** Tasks */
-            tasks: components["schemas"]["QuickTask"][];
             /** Simulations */
             simulations: number;
+            /** Tasks */
+            tasks: components["schemas"]["QuickTask"][];
         };
         /** QuickTask */
         QuickTask: {
+            /** Datasetids */
+            datasetIds: string[];
             /** Id */
             id: number;
             /** Name */
             name: string;
-            /** Datasetids */
-            datasetIds: string[];
             /** Simulations */
             simulations: number;
         };
+        /** Quitting */
+        Quitting: {
+            /** Stopping */
+            stopping: boolean;
+        };
         /** RankedAlpha */
         RankedAlpha: {
-            /** Trialid */
-            trialId: number;
-            /** Number */
-            number: number;
             /** Alphaid */
             alphaId: string | null;
-            /** Expression */
-            expression: string | null;
-            /** Settings */
-            settings: {
-                [key: string]: unknown;
-            } | null;
-            /** Value */
-            value: number;
-            /** Sharpe */
-            sharpe: number | null;
-            /** Fitness */
-            fitness: number | null;
-            /** Turnover */
-            turnover: number | null;
-            /** Returns */
-            returns: number | null;
             /** Drawdown */
             drawdown: number | null;
-            /** Margin */
-            margin: number | null;
-            /** Kratio */
-            kRatio: number | null;
-            /** Feasible */
-            feasible: boolean | null;
+            /** Expression */
+            expression: string | null;
             /** Failedchecks */
             failedChecks: string[];
-            /** Submittable */
-            submittable: boolean;
+            /** Feasible */
+            feasible: boolean | null;
+            /** Fitness */
+            fitness: number | null;
+            /** Longcount */
+            longCount?: number | null;
+            /** Margin */
+            margin: number | null;
+            /** Number */
+            number: number;
             /**
              * Pending
              * @default false
              */
             pending: boolean;
+            /** Returns */
+            returns: number | null;
+            /** Settings */
+            settings: {
+                [key: string]: unknown;
+            } | null;
+            /** Sharpe */
+            sharpe: number | null;
+            /** Shortcount */
+            shortCount?: number | null;
             /**
              * Source
              * @default false
              */
             source: boolean;
+            /** Submittable */
+            submittable: boolean;
+            /** Trialid */
+            trialId: number;
+            /** Turnover */
+            turnover: number | null;
+            /** Value */
+            value: number;
         };
         /** ReasoningOption */
         ReasoningOption: {
-            /**
-             * Value
-             * @enum {string}
-             */
-            value: "quick" | "normal" | "careful" | "deep";
+            /** Description */
+            description: string;
+            /** Label */
+            label: string;
             /**
              * Level
              * @enum {string}
              */
             level: "MINIMAL" | "LOW" | "MEDIUM" | "HIGH";
-            /** Label */
-            label: string;
-            /** Description */
-            description: string;
+            /**
+             * Value
+             * @enum {string}
+             */
+            value: "quick" | "normal" | "careful" | "deep";
         };
         /** RegionPlan */
         RegionPlan: {
-            /** Region */
-            region: string;
             /** Delays */
             delays: number[];
-            /** Universes */
-            universes: string[];
+            /** Markets */
+            markets: components["schemas"]["MarketRow"][];
             /** Neutralizations */
             neutralizations: string[];
             /** Pairs */
             pairs: components["schemas"]["Pair"][];
             /** Positionavailable */
             positionAvailable: boolean;
-            /** Markets */
-            markets: components["schemas"]["MarketRow"][];
+            /** Region */
+            region: string;
             /** Total */
             total: number;
+            /** Universes */
+            universes: string[];
         };
         /**
          * ResolveOptionsRequest
@@ -3956,19 +4519,32 @@ export interface components {
          * @description What to queue. An empty list means "everything the plan offers".
          */
         SampleRequest: {
-            /** Alphaid */
+            /**
+             * Alphaid
+             * @default
+             */
             alphaId: string;
-            /** Markets */
-            markets?: components["schemas"]["MarketPick"][];
-            /** Neutralizations */
-            neutralizations?: string[];
-            /** Pairs */
-            pairs?: components["schemas"]["PairPick"][];
             /**
              * Cores
              * @default 8
              */
             cores: number;
+            /** Decay */
+            decay?: number | null;
+            /** Expression */
+            expression?: string | null;
+            /** Markets */
+            markets?: components["schemas"]["MarketPick"][];
+            /** Nanhandling */
+            nanHandling?: ("ON" | "OFF") | null;
+            /** Neutralizations */
+            neutralizations?: string[];
+            /** Pairs */
+            pairs?: components["schemas"]["PairPick"][];
+            /** Testperiod */
+            testPeriod?: string | null;
+            /** Truncation */
+            truncation?: number | null;
         };
         /**
          * Say
@@ -3976,16 +4552,10 @@ export interface components {
          */
         Say: {
             /**
-             * Text
-             * @description Your idea, in your own words
+             * Dataset Ids
+             * @description Narrow it to particular datasets
              */
-            text: string;
-            scope: components["schemas"]["Scope"];
-            /**
-             * Thread Id
-             * @description Omit to start a new conversation
-             */
-            thread_id?: number | null;
+            dataset_ids?: string[];
             /** Model */
             model?: string | null;
             /**
@@ -3994,14 +4564,22 @@ export interface components {
              * @default normal
              */
             reasoning: string;
+            scope: components["schemas"]["Scope"];
             /**
-             * Dataset Ids
-             * @description Narrow it to particular datasets
+             * Text
+             * @description Your idea, in your own words
              */
-            dataset_ids?: string[];
+            text: string;
+            /**
+             * Thread Id
+             * @description Omit to start a new conversation
+             */
+            thread_id?: number | null;
         };
         /** Scope */
         Scope: {
+            /** Delay */
+            delay: number;
             /**
              * Instrument Type
              * @default EQUITY
@@ -4009,38 +4587,38 @@ export interface components {
             instrument_type: string;
             /** Region */
             region: string;
-            /** Delay */
-            delay: number;
             /** Universe */
             universe: string;
         };
         /** SearchRequest */
         SearchRequest: {
-            /** Region */
-            region: string;
-            /** Delay */
-            delay: number;
-            /** Universe */
-            universe?: string | null;
+            /**
+             * Cores
+             * @default 8
+             */
+            cores: number;
             /** Dataset Ids */
             dataset_ids?: string[];
-            /** Vector Operators */
-            vector_operators?: string[];
             /**
              * Decay
              * @default 0
              */
             decay: number;
-            /**
-             * Cores
-             * @default 4
-             */
-            cores: number;
+            /** Delay */
+            delay: number;
+            /** Neutralizations */
+            neutralizations?: string[];
+            /** Region */
+            region: string;
             /**
              * Simulations
              * @default 0
              */
             simulations: number;
+            /** Universe */
+            universe?: string | null;
+            /** Vector Operators */
+            vector_operators?: string[];
         };
         /** SeedReason */
         SeedReason: {
@@ -4053,72 +4631,74 @@ export interface components {
         SeedRow: {
             /** Alphaid */
             alphaId: string;
-            /** Expression */
-            expression: string;
-            /** Sharpe */
-            sharpe: number | null;
-            /** Fitness */
-            fitness: number | null;
-            /** Turnover */
-            turnover: number | null;
-            /** Returns */
-            returns: number | null;
             /** Drawdown */
             drawdown: number | null;
+            /** Expression */
+            expression: string;
+            /** Fitness */
+            fitness: number | null;
             /** Margin */
             margin: number | null;
+            /** Returns */
+            returns: number | null;
             /** Score */
             score: number | null;
+            /** Sharpe */
+            sharpe: number | null;
+            /** Turnover */
+            turnover: number | null;
         };
         /** Session */
         Session: {
             /** Authenticated */
             authenticated: boolean;
-            /** Userid */
-            userId: string | null;
-            /** Fullname */
-            fullName: string | null;
-            /** Permissions */
-            permissions: string[];
-            /** Expiresat */
-            expiresAt: number | null;
-            /** Restoredfromcache */
-            restoredFromCache: boolean;
-            /** Verificationurl */
-            verificationUrl: string | null;
-            /** Detail */
-            detail: string | null;
             /** Canmultisimulate */
             canMultiSimulate: boolean;
-            /** Isconsultant */
-            isConsultant: boolean;
+            /** Detail */
+            detail: string | null;
+            /** Expiresat */
+            expiresAt: number | null;
             /** Expiresinseconds */
             expiresInSeconds: number | null;
+            /** Fullname */
+            fullName: string | null;
+            /** Inquiry */
+            inquiry: string | null;
+            /** Isconsultant */
+            isConsultant: boolean;
+            /** Permissions */
+            permissions: string[];
+            /** Restoredfromcache */
+            restoredFromCache: boolean;
+            /** Userid */
+            userId: string | null;
+            /** Verificationurl */
+            verificationUrl: string | null;
         };
         /** SettingsField */
         SettingsField: {
-            /** Name */
-            name: string;
-            /** Label */
-            label: string;
-            /** Type */
-            type: string | null;
-            /** Required */
-            required: boolean;
-            /** Readonly */
-            readOnly: boolean;
+            /** Blocked */
+            blocked: boolean;
             /** Choices */
             choices: {
                 [key: string]: unknown;
             }[] | null;
             /** Dependson */
             dependsOn: string[];
-            /** Blocked */
-            blocked: boolean;
-            /** Min */
-            min: number | string | null;
+            /** Label */
+            label: string;
             /** Max */
             max: number | string | null;
+            /** Min */
+            min: number | string | null;
+            /** Name */
+            name: string;
+            /** Readonly */
+            readOnly: boolean;
+            /** Required */
+            required: boolean;
+            /** Type */
+            type: string | null;
         };
         /** SettingsOptions */
         SettingsOptions: {
@@ -4126,27 +4706,29 @@ export interface components {
             fields: {
                 [key: string]: components["schemas"]["SettingsField"];
             };
-            /** Problems */
-            problems: string[];
             /** Missing */
             missing: string[];
+            /** Problems */
+            problems: string[];
         };
         /** SettingsPlan */
         SettingsPlan: {
             /** Alphaid */
             alphaId: string;
-            /** Expression */
-            expression: string;
             /** Datafields */
             dataFields: string[];
-            settings: components["schemas"]["SourceSettings"];
-            /** Regions */
-            regions: components["schemas"]["RegionPlan"][];
-            totals: components["schemas"]["PlanTotals"];
+            /** Expression */
+            expression: string;
+            /** Groupingfields */
+            groupingFields: string[];
             /** Maxcores */
             maxCores: number;
             /** Problems */
             problems: string[];
+            /** Regions */
+            regions: components["schemas"]["RegionPlan"][];
+            settings: components["schemas"]["SourceSettings"];
+            totals: components["schemas"]["PlanTotals"];
             /** Warnings */
             warnings: string[];
         };
@@ -4170,72 +4752,76 @@ export interface components {
          * @description One simulation record. A multi-simulation parent holds one of the 8 slots.
          */
         SimulationRow: {
-            /** Id */
-            id: number;
-            /** Platformid */
-            platformId: string | null;
             /** Alphaid */
             alphaId: string | null;
-            status: components["schemas"]["SimStatus"];
+            /** Childids */
+            childIds: string[];
+            /** Createdat */
+            createdAt: string | null;
+            /** Delay */
+            delay: number;
+            /** Elapsedseconds */
+            elapsedSeconds: number | null;
+            /** Expression */
+            expression: string | null;
+            /** Finishedat */
+            finishedAt: string | null;
+            /** Id */
+            id: number;
+            /** Instrumenttype */
+            instrumentType: string;
+            /** Isbatch */
+            isBatch: boolean;
+            /** Language */
+            language: string;
+            /** Message */
+            message: string | null;
+            /** Parentid */
+            parentId: number | null;
+            /** Platformid */
+            platformId: string | null;
             /** Platformstatus */
             platformStatus: string | null;
             /** Progress */
             progress: number | null;
-            /** Message */
-            message: string | null;
-            /** Expression */
-            expression: string | null;
-            /** Task */
-            task: string;
             /** Region */
             region: string;
-            /** Delay */
-            delay: number;
-            /** Universe */
-            universe: string | null;
-            /** Instrumenttype */
-            instrumentType: string;
-            /** Language */
-            language: string;
-            /** Simtype */
-            simType: string;
-            /** Isbatch */
-            isBatch: boolean;
-            /** Childids */
-            childIds: string[];
-            /** Parentid */
-            parentId: number | null;
-            /** Createdat */
-            createdAt: string | null;
-            /** Submittedat */
-            submittedAt: string | null;
-            /** Finishedat */
-            finishedAt: string | null;
-            /** Elapsedseconds */
-            elapsedSeconds: number | null;
             /** Settings */
             settings: {
                 [key: string]: unknown;
             } | null;
+            /** Simtype */
+            simType: string;
+            status: components["schemas"]["SimStatus"];
+            /** Submittedat */
+            submittedAt: string | null;
+            /** Task */
+            task: string;
+            /** Universe */
+            universe: string | null;
         };
         /** SourceSettings */
         SourceSettings: {
-            /** Region */
-            region: string | null;
-            /** Universe */
-            universe: string | null;
-            /** Delay */
-            delay: number | null;
-            /** Neutralization */
-            neutralization: string | null;
             /** Decay */
             decay: number | null;
-            /** Truncation */
-            truncation: number | null;
-            /** Maxtrade */
-            maxTrade: string;
+            /** Delay */
+            delay: number | null;
             /** Maxposition */
             maxPosition: string;
+            /** Maxtrade */
+            maxTrade: string;
+            /** Nanhandling */
+            nanHandling: string;
+            /** Neutralization */
+            neutralization: string | null;
+            /** Region */
+            region: string | null;
+            /** Testperiod */
+            testPeriod: string;
+            /** Truncation */
+            truncation: number | null;
+            /** Universe */
+            universe: string | null;
         };
         /**
          * StudyStatus
@@ -4244,71 +4830,69 @@ export interface components {
         StudyStatus: "IDLE" | "QUEUED" | "RUNNING" | "PAUSED" | "COMPLETE" | "FAILED";
         /** SubcategoryFacet */
         SubcategoryFacet: {
-            /** Id */
-            id: string;
-            /** Name */
-            name: string | null;
-            /** N */
-            n: number;
             /** Category Id */
             category_id: string | null;
+            /** Id */
+            id: string;
+            /** N */
+            n: number;
+            /** Name */
+            name: string | null;
         };
         /** SubmittableAlpha */
         SubmittableAlpha: {
             /** Alphaid */
             alphaId: string;
-            /** Expression */
-            expression: string | null;
-            /** Lab */
-            lab: string | null;
-            /** Datecreated */
-            dateCreated: string | null;
-            settings: components["schemas"]["AlphaSettings"];
-            /** Sharpe */
-            sharpe: number | null;
-            /** Fitness */
-            fitness: number | null;
-            /** Turnover */
-            turnover: number | null;
-            /** Returns */
-            returns: number | null;
-            /** Drawdown */
-            drawdown: number | null;
-            /** Margin */
-            margin: number | null;
-            /** Trainsharpe */
-            trainSharpe: number | null;
-            /** Testsharpe */
-            testSharpe: number | null;
-            /** Kratio */
-            kRatio: number | null;
+            /** Brainurl */
+            brainUrl: string;
             /** Checks */
             checks: {
                 [key: string]: unknown;
             }[];
+            /** Datecreated */
+            dateCreated: string | null;
+            /** Drawdown */
+            drawdown: number | null;
+            /** Expression */
+            expression: string | null;
+            /** Fitness */
+            fitness: number | null;
+            /** Lab */
+            lab: string | null;
+            /** Margin */
+            margin: number | null;
             /** Pnl */
             pnl: number[];
-            /** Brainurl */
-            brainUrl: string;
+            /** Returns */
+            returns: number | null;
+            settings: components["schemas"]["AlphaSettings"];
+            /** Sharpe */
+            sharpe: number | null;
+            /** Testsharpe */
+            testSharpe: number | null;
+            /** Trainsharpe */
+            trainSharpe: number | null;
+            /** Turnover */
+            turnover: number | null;
         };
         /** SubmittableResponse */
         SubmittableResponse: {
-            /** Shortlist */
-            shortlist: components["schemas"]["SubmittableAlpha"][];
             /** Alphas */
             alphas: components["schemas"]["SubmittableAlpha"][];
-            /** Total */
-            total: number;
-            /** Pending */
-            pending: number;
-            /** Nearmisses */
-            nearMisses: number;
-            /** Heldoutfailed */
-            heldOutFailed: number;
-            /** Unvalidated */
-            unvalidated: number;
             /** Correlatedpruned */
             correlatedPruned: number;
+            /** Heldoutfailed */
+            heldOutFailed: number;
+            /** Nearmisses */
+            nearMisses: number;
+            /** Pending */
+            pending: number;
+            /** Shortlist */
+            shortlist: components["schemas"]["SubmittableAlpha"][];
+            /** Total */
+            total: number;
+            /** Unvalidated */
+            unvalidated: number;
         };
         /** SubmittedRequest */
         SubmittedRequest: {
@@ -4322,133 +4906,189 @@ export interface components {
          * @description The whole-catalog run, with every market's live state.
          */
         SyncAllRun: {
+            /** All */
+            all: boolean;
+            /** Categoriessynced */
+            categoriesSynced: number;
+            /** Cursordataset */
+            cursorDataset: string | null;
+            /** Cursoroffset */
+            cursorOffset: number;
+            /** Datasetssynced */
+            datasetsSynced: number;
+            /** Delay */
+            delay: number;
+            /** Error */
+            error: string | null;
+            /** Fieldsexpected */
+            fieldsExpected: number | null;
+            /** Fieldssynced */
+            fieldsSynced: number;
+            /** Finishedat */
+            finishedAt: string | null;
+            /** Fraction */
+            fraction: number | null;
             /** Id */
             id: number;
             /** Instrumenttype */
             instrumentType: string;
-            /** Region */
-            region: string;
-            /** Delay */
-            delay: number;
-            /** Universe */
-            universe: string;
-            /** All */
-            all: boolean;
             /** Label */
             label: string;
-            status: components["schemas"]["SyncStatus"];
+            /** Markets */
+            markets: components["schemas"]["SyncMarket"][];
             /** Phase */
             phase: ("categories" | "datasets" | "fields" | "details") | null;
-            /** Cursoroffset */
-            cursorOffset: number;
-            /** Cursordataset */
-            cursorDataset: string | null;
-            /** Categoriessynced */
-            categoriesSynced: number;
-            /** Datasetssynced */
-            datasetsSynced: number;
-            /** Fieldssynced */
-            fieldsSynced: number;
-            /** Fieldsexpected */
-            fieldsExpected: number | null;
-            /** Fraction */
-            fraction: number | null;
-            /** Truncateddatasets */
-            truncatedDatasets: string[];
-            /** Error */
-            error: string | null;
-            /** Startedat */
-            startedAt: string | null;
-            /** Finishedat */
-            finishedAt: string | null;
+            /** Region */
+            region: string;
+            /** Scopesdone */
+            scopesDone: number;
+            /** Scopestotal */
+            scopesTotal: number;
             /**
              * Stage
              * @enum {string}
              */
             stage: "fields" | "details";
-            /** Scopesdone */
-            scopesDone: number;
-            /** Scopestotal */
-            scopesTotal: number;
-            /** Markets */
-            markets: components["schemas"]["SyncMarket"][];
+            /** Startedat */
+            startedAt: string | null;
+            status: components["schemas"]["SyncStatus"];
+            /** Truncateddatasets */
+            truncatedDatasets: string[];
+            /** Universe */
+            universe: string;
         };
         /**
          * SyncMarket
          * @description One market's state inside a whole-catalog sync, for the sync matrix.
          */
         SyncMarket: {
-            /** Region */
-            region: string;
             /** Delay */
             delay: number;
-            /** Universe */
-            universe: string;
+            /** Fields */
+            fields: number | null;
+            /** Region */
+            region: string;
             /**
              * State
              * @enum {string}
              */
             state: "waiting" | "fetching" | "fields" | "details" | "done" | "failed";
-            /** Fields */
-            fields: number | null;
+            /** Universe */
+            universe: string;
         };
         /**
          * SyncRunRow
          * @description One catalog download, as :func:`alpha_harness.catalog.sync.serialise_run` writes it.
          */
         SyncRunRow: {
+            /** All */
+            all: boolean;
+            /** Categoriessynced */
+            categoriesSynced: number;
+            /** Cursordataset */
+            cursorDataset: string | null;
+            /** Cursoroffset */
+            cursorOffset: number;
+            /** Datasetssynced */
+            datasetsSynced: number;
+            /** Delay */
+            delay: number;
+            /** Error */
+            error: string | null;
+            /** Fieldsexpected */
+            fieldsExpected: number | null;
+            /** Fieldssynced */
+            fieldsSynced: number;
+            /** Finishedat */
+            finishedAt: string | null;
+            /** Fraction */
+            fraction: number | null;
             /** Id */
             id: number;
             /** Instrumenttype */
             instrumentType: string;
-            /** Region */
-            region: string;
-            /** Delay */
-            delay: number;
-            /** Universe */
-            universe: string;
-            /** All */
-            all: boolean;
             /** Label */
             label: string;
-            status: components["schemas"]["SyncStatus"];
             /** Phase */
             phase: ("categories" | "datasets" | "fields" | "details") | null;
-            /** Cursoroffset */
-            cursorOffset: number;
-            /** Cursordataset */
-            cursorDataset: string | null;
-            /** Categoriessynced */
-            categoriesSynced: number;
-            /** Datasetssynced */
-            datasetsSynced: number;
-            /** Fieldssynced */
-            fieldsSynced: number;
-            /** Fieldsexpected */
-            fieldsExpected: number | null;
-            /** Fraction */
-            fraction: number | null;
-            /** Truncateddatasets */
-            truncatedDatasets: string[];
-            /** Error */
-            error: string | null;
+            /** Region */
+            region: string;
             /** Startedat */
             startedAt: string | null;
-            /** Finishedat */
-            finishedAt: string | null;
+            status: components["schemas"]["SyncStatus"];
+            /** Truncateddatasets */
+            truncatedDatasets: string[];
+            /** Universe */
+            universe: string;
         };
         /** SyncStarted */
         SyncStarted: {
-            /** Taskid */
-            taskId: string;
             /** Since */
             since: string | null;
+            /** Taskid */
+            taskId: string;
         };
         /**
          * SyncStatus
          * @enum {string}
          */
         SyncStatus: "RUNNING" | "COMPLETE" | "FAILED" | "CANCELLED";
+        /**
+         * TaskAlpha
+         * @description A submittable Alpha, with the task that found it.
+         */
+        TaskAlpha: {
+            /** Alphaid */
+            alphaId: string | null;
+            /** Drawdown */
+            drawdown: number | null;
+            /** Expression */
+            expression: string | null;
+            /** Failedchecks */
+            failedChecks: string[];
+            /** Feasible */
+            feasible: boolean | null;
+            /** Fitness */
+            fitness: number | null;
+            /** Longcount */
+            longCount?: number | null;
+            /** Margin */
+            margin: number | null;
+            /** Number */
+            number: number;
+            /**
+             * Pending
+             * @default false
+             */
+            pending: boolean;
+            /** Returns */
+            returns: number | null;
+            /** Settings */
+            settings: {
+                [key: string]: unknown;
+            } | null;
+            /** Sharpe */
+            sharpe: number | null;
+            /** Shortcount */
+            shortCount?: number | null;
+            /**
+             * Source
+             * @default false
+             */
+            source: boolean;
+            /** Submittable */
+            submittable: boolean;
+            /** Taskid */
+            taskId: number;
+            /** Taskname */
+            taskName: string;
+            /** Trialid */
+            trialId: number;
+            /** Turnover */
+            turnover: number | null;
+            /** Value */
+            value: number;
+        };
         /** TaskChange */
         TaskChange: {
             /** Cores */
@@ -4474,21 +5114,21 @@ export interface components {
         TasksSummary: {
             /** Busy */
             busy: boolean;
-            /** Running */
-            running: number;
             /** Failed */
             failed: number;
             /** Progress */
             progress: number | null;
+            /** Running */
+            running: number;
             /** Tasks */
             tasks: components["schemas"]["BackgroundTask"][];
         };
         /** TemplateBody */
         TemplateBody: {
-            /** Name */
-            name: string;
             /** Description */
             description?: string | null;
+            /** Name */
+            name: string;
             /** Tree */
             tree: {
                 [key: string]: unknown;
@@ -4496,52 +5136,52 @@ export interface components {
         };
         /** TemplateLabOptions */
         TemplateLabOptions: {
-            operators: components["schemas"]["OperatorsRead"];
             /** Blocks */
             blocks: {
                 [key: string]: unknown;
             }[];
-            /** Variables */
-            variables: {
-                [key: string]: (number | string)[];
-            };
-            /** Tags */
-            tags: string[];
             /** Datafields */
             dataFields: string[];
-            /** Groupfields */
-            groupFields: string[];
-            /** Vector */
-            vector: string[];
             /** Decays */
             decays: number[];
-            /** Truncation */
-            truncation: number;
+            /** Groupfields */
+            groupFields: string[];
+            /** Maxblocks */
+            maxBlocks: number;
             /** Maxcores */
             maxCores: number;
             /** Maxsimulations */
             maxSimulations: number;
-            /** Maxblocks */
-            maxBlocks: number;
+            operators: components["schemas"]["OperatorsRead"];
+            /** Tags */
+            tags: string[];
+            /** Truncation */
+            truncation: number;
+            /** Variables */
+            variables: {
+                [key: string]: (number | string)[];
+            };
+            /** Vector */
+            vector: string[];
         };
         /** TemplateLabPreview */
         TemplateLabPreview: {
-            /** Round */
-            round: number;
             fields: components["schemas"]["FieldCounts"];
             leftOut: components["schemas"]["LeftOut"];
-            /** Universes */
-            universes: string[];
             /** Neutralizations */
             neutralizations: string[];
-            /** Skeleton */
-            skeleton: string;
-            /** Sample */
-            sample: components["schemas"]["SampleAlpha"][];
             /** Problems */
             problems: string[];
+            /** Round */
+            round: number;
+            /** Sample */
+            sample: components["schemas"]["SampleAlpha"][];
+            /** Skeleton */
+            skeleton: string;
             /** Templateproblems */
             templateProblems: string[];
+            /** Universes */
+            universes: string[];
             /** Warnings */
             warnings: string[];
         };
@@ -4557,58 +5197,52 @@ export interface components {
         };
         /** TemplateSummary */
         TemplateSummary: {
-            /** Id */
-            id: string | number;
-            /** Name */
-            name: string;
             /** Description */
             description: string | null;
+            /** Id */
+            id: string | number;
+            /** Missing */
+            missing: string[];
+            /** Name */
+            name: string;
             /** Preset */
             preset: boolean;
+            /** Skeleton */
+            skeleton: string;
+            /** Source */
+            source: string | null;
             /** Tree */
             tree: {
                 [key: string]: unknown;
             };
-            /** Skeleton */
-            skeleton: string;
-            /** Missing */
-            missing: string[];
-            /** Source */
-            source: string | null;
             /** Updatedat */
             updatedAt: string | null;
         };
         /** TemplateTask */
         TemplateTask: {
-            /** Region */
-            region: string;
-            /** Delay */
-            delay: number;
-            /** Universe */
-            universe?: string | null;
+            /**
+             * Cores
+             * @default 8
+             */
+            cores: number;
             /** Dataset Ids */
             dataset_ids?: string[];
-            /** Vector Operators */
-            vector_operators?: string[];
             /**
              * Decay
              * @default 0
              */
             decay: number;
-            /**
-             * Cores
-             * @default 4
-             */
-            cores: number;
+            /** Delay */
+            delay: number;
+            /** Neutralizations */
+            neutralizations?: string[];
+            /** Region */
+            region: string;
             /**
              * Simulations
              * @default 0
              */
             simulations: number;
-            /** Tree */
-            tree: {
-                [key: string]: unknown;
-            };
             /** Template Id */
             template_id?: number | null;
             /**
@@ -4616,51 +5250,59 @@ export interface components {
              * @default Template
              */
             template_name: string;
+            /** Tree */
+            tree: {
+                [key: string]: unknown;
+            };
+            /** Universe */
+            universe?: string | null;
+            /** Vector Operators */
+            vector_operators?: string[];
         };
         /** ThreadScope */
         ThreadScope: {
+            /** Delay */
+            delay: number;
             /** Instrumenttype */
             instrumentType: string;
             /** Region */
             region: string;
-            /** Delay */
-            delay: number;
             /** Universe */
             universe: string;
         };
         /** Today */
         Today: {
+            assistant: components["schemas"]["Assistant"];
+            catalog: components["schemas"]["CatalogReadiness"];
+            simulations: components["schemas"]["TodaySimulations"];
             /**
              * Step
              * @enum {string}
              */
             step: "sign-in" | "add-key" | "ready";
             you: components["schemas"]["You"];
-            simulations: components["schemas"]["TodaySimulations"];
-            assistant: components["schemas"]["Assistant"];
-            catalog: components["schemas"]["CatalogReadiness"];
         };
         /** TodaySimulations */
         TodaySimulations: {
-            /** Limit */
-            limit: number;
-            /** Used */
-            used: number;
-            /** Remaining */
-            remaining: number;
-            /** Queued */
-            queued: number;
-            /** Unspoken */
-            unspoken: number;
+            engine: components["schemas"]["EngineStatus"];
             /** Exact */
             exact: boolean;
-            /** Resetsinseconds */
-            resetsInSeconds: number;
-            /** Resetsat */
-            resetsAt: string;
-            engine: components["schemas"]["EngineStatus"];
             /** Headline */
             headline: string;
+            /** Limit */
+            limit: number;
+            /** Queued */
+            queued: number;
+            /** Remaining */
+            remaining: number;
+            /** Resetsat */
+            resetsAt: string;
+            /** Resetsinseconds */
+            resetsInSeconds: number;
+            /** Unspoken */
+            unspoken: number;
+            /** Used */
+            used: number;
         };
         /** TypeFacet */
         TypeFacet: {
@@ -4669,75 +5311,149 @@ export interface components {
             /** N */
             n: number;
         };
+        /** UpdateStarted */
+        UpdateStarted: {
+            /** Restarting */
+            restarting: boolean;
+            /** Version */
+            version: string;
+        };
+        /** UpdateStatus */
+        UpdateStatus: {
+            /** Available */
+            available: boolean;
+            /** Caninstall */
+            canInstall: boolean;
+            /** Current */
+            current: string;
+            /** Isrelease */
+            isRelease: boolean;
+            /** Latest */
+            latest: string | null;
+            /** Launcher */
+            launcher: string | null;
+            /** Launcheroutdated */
+            launcherOutdated: boolean;
+            /** Notes */
+            notes: string;
+            /** Pending */
+            pending: string | null;
+            /** Problem */
+            problem: string | null;
+            /** Publishedat */
+            publishedAt: string | null;
+            /** Releasesurl */
+            releasesUrl: string;
+            /** Url */
+            url: string;
+        };
         /** ValidationError */
         ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
             /** Location */
             loc: (string | number)[];
             /** Message */
             msg: string;
             /** Error Type */
             type: string;
-            /** Input */
-            input?: unknown;
-            /** Context */
-            ctx?: Record<string, never>;
         };
         /** VaultCounts */
         VaultCounts: {
             /** Alphas */
             alphas: number;
-            /** Withreturns */
-            withReturns: number;
             /** Dailyrows */
             dailyRows: number;
-            /** Scored */
-            scored: number;
             /** Missingreturns */
             missingReturns: number;
+            /** Scored */
+            scored: number;
+            /** Withreturns */
+            withReturns: number;
         };
         /** VaultOverview */
         VaultOverview: {
-            counts: components["schemas"]["VaultCounts"];
-            /** Scopes */
-            scopes: components["schemas"]["VaultScope"][];
             /** Backfilling */
             backfilling: boolean;
+            counts: components["schemas"]["VaultCounts"];
             lastSync: components["schemas"]["LastSync"] | null;
+            /** Scopes */
+            scopes: components["schemas"]["VaultScope"][];
         };
         /**
          * VaultScope
          * @description A scope holding alphas, in the store's own snake_case column names.
          */
         VaultScope: {
+            /** Alphas */
+            alphas: number;
+            /** Best Sharpe */
+            best_sharpe: number | null;
+            /** Delay */
+            delay: number | null;
             /** Instrument Type */
             instrument_type: string | null;
             /** Region */
             region: string;
-            /** Delay */
-            delay: number | null;
-            /** Universe */
-            universe: string | null;
-            /** Alphas */
-            alphas: number;
             /** Scored */
             scored: number;
-            /** Best Sharpe */
-            best_sharpe: number | null;
+            /** Universe */
+            universe: string | null;
+        };
+        /**
+         * VerifyRequest
+         * @description The Persona inquiry a sign-in was refused with.
+         */
+        VerifyRequest: {
+            /**
+             * Inquiry
+             * @description The inquiry id from the 409 that asked for a check
+             */
+            inquiry: string;
+        };
+        /** Windows */
+        Windows: {
+            inSample: components["schemas"]["PortfolioStats"] | null;
+            test: components["schemas"]["PortfolioStats"] | null;
+            train: components["schemas"]["PortfolioStats"] | null;
+        };
+        /** YearRow */
+        YearRow: {
+            /** Days */
+            days: number;
+            /** Drawdown */
+            drawdown: number;
+            /** Fitness */
+            fitness: number | null;
+            /** Margin */
+            margin: number;
+            /** Pnl */
+            pnl: number;
+            /** Returns */
+            returns: number;
+            /** Sharpe */
+            sharpe: number | null;
+            /** Turnover */
+            turnover: number;
+            /** Year */
+            year: number;
         };
         /** You */
         You: {
-            /** Signedin */
-            signedIn: boolean;
-            /** Email */
-            email: string | null;
-            /** Userid */
-            userId: string | null;
-            /** Fullname */
-            fullName: string | null;
-            /** Features */
-            features: components["schemas"]["Feature"][];
             /** Canruntenatonce */
             canRunTenAtOnce: boolean;
+            /** Email */
+            email: string | null;
+            /** Features */
+            features: components["schemas"]["Feature"][];
+            /** Fullname */
+            fullName: string | null;
+            /** Signedin */
+            signedIn: boolean;
+            /** Userid */
+            userId: string | null;
             /** Verificationurl */
             verificationUrl: string | null;
         };
@@ -4750,861 +5466,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    login_api_auth_login_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LoginRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Session"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    login_cookie_api_auth_cookie_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CookieLoginRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Session"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    logout_api_auth_logout_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Session"];
-                };
-            };
-        };
-    };
-    settings_options_api_auth_settings_options_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ResolveOptionsRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SettingsOptions"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    markets_api_catalog_markets_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Market"][];
-                };
-            };
-        };
-    };
-    start_sync_all_api_catalog_sync_all_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SyncAllRun"];
-                };
-            };
-        };
-    };
-    cancel_run_api_catalog_sync_runs__run_id__cancel_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Cancelled"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    pyramids_api_catalog_pyramids_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PyramidGrid"];
-                };
-            };
-        };
-    };
-    scopes_api_catalog_scopes_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CatalogScopeRow"][];
-                };
-            };
-        };
-    };
-    counts_api_catalog_counts_get: {
-        parameters: {
-            query: {
-                /** @description e.g. USA, EUR, GLB */
-                region: string;
-                delay: number;
-                /** @description e.g. TOP3000 */
-                universe: string;
-                instrumentType?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CatalogCounts"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    size_api_catalog_size_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CatalogSize"];
-                };
-            };
-        };
-    };
-    stats_api_catalog_stats_get: {
-        parameters: {
-            query: {
-                /** @description e.g. USA, EUR, GLB */
-                region: string;
-                delay: number;
-                /** @description e.g. TOP3000 */
-                universe: string;
-                instrumentType?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CatalogStats"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    fields_api_catalog_fields_post: {
-        parameters: {
-            query: {
-                /** @description e.g. USA, EUR, GLB */
-                region: string;
-                delay: number;
-                /** @description e.g. TOP3000 */
-                universe: string;
-                instrumentType?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["FieldFilter"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FieldPage"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    facets_api_catalog_facets_post: {
-        parameters: {
-            query: {
-                /** @description e.g. USA, EUR, GLB */
-                region: string;
-                delay: number;
-                /** @description e.g. TOP3000 */
-                universe: string;
-                instrumentType?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["FieldFilter"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CatalogFacets"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    pool_coverage_api_catalog_pool_coverage_get: {
-        parameters: {
-            query: {
-                /** @description e.g. USA, EUR, GLB */
-                region: string;
-                delay: number;
-                /** @description e.g. TOP3000 */
-                universe: string;
-                instrumentType?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PoolCoverageResult"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    high_impact_batch_api_catalog_high_impact_batch_get: {
-        parameters: {
-            query: {
-                top_n?: number;
-                per_category_limit?: number;
-                /** @description e.g. USA, EUR, GLB */
-                region: string;
-                delay: number;
-                /** @description e.g. TOP3000 */
-                universe: string;
-                instrumentType?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HighImpactBatchResult"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    proven_pattern_batch_api_catalog_proven_pattern_batch_get: {
-        parameters: {
-            query: {
-                min_fitness?: number;
-                similarity_threshold?: number;
-                top_n?: number;
-                max_proven?: number;
-                /** @description e.g. USA, EUR, GLB */
-                region: string;
-                delay: number;
-                /** @description e.g. TOP3000 */
-                universe: string;
-                instrumentType?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProvenPatternBatchResult"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    description_aware_sweep_api_catalog_description_aware_sweep_post: {
-        parameters: {
-            query: {
-                /** @description e.g. USA, EUR, GLB */
-                region: string;
-                delay: number;
-                /** @description e.g. TOP3000 */
-                universe: string;
-                instrumentType?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["FieldFilter"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DescAwareSweepResult"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    field_intelligence_route_api_catalog_fields__field_id__intelligence_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                field_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FieldIntelligence"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    description_aware_sweep_task_api_catalog_description_aware_sweep_task_post: {
-        parameters: {
-            query: {
-                /** @description e.g. USA, EUR, GLB */
-                region: string;
-                delay: number;
-                /** @description e.g. TOP3000 */
-                universe: string;
-                instrumentType?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DescAwareTaskRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AddedTask"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    field_detail_api_catalog_fields__field_id__get: {
-        parameters: {
-            query: {
-                /** @description e.g. USA, EUR, GLB */
-                region: string;
-                delay: number;
-                /** @description e.g. TOP3000 */
-                universe: string;
-                instrumentType?: string;
-            };
-            header?: never;
-            path: {
-                field_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DataFieldDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    field_availability_api_catalog_fields__field_id__availability_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                field_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FieldAvailabilityRow"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    datasets_api_catalog_datasets_get: {
-        parameters: {
-            query: {
-                search?: string | null;
-                /** @description e.g. USA, EUR, GLB */
-                region: string;
-                delay: number;
-                /** @description e.g. TOP3000 */
-                universe: string;
-                instrumentType?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DatasetRow"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    engine_status_api_simulations_engine_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EngineStatus"];
-                };
-            };
-        };
-    };
-    drop_queue_api_simulations_queue_delete: {
-        parameters: {
-            query?: {
-                task?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DropResult"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    active_api_simulations_active_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SimulationRow"][];
-                };
-            };
-        };
-    };
-    cancel_api_simulations__record_id__cancel_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                record_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CancelResult"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    summary_api_alphas_summary_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BrainPayload"];
-                };
-            };
-        };
-    };
     osmosis_coverage_api_alphas_osmosis_coverage_get: {
         parameters: {
             query?: {
@@ -5656,6 +5517,193 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OsmosisScopeAlpha"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    summary_api_alphas_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainPayload"];
+                };
+            };
+        };
+    };
+    task_power_pool_eligibility_api_alphas_tasks__study_id__power_pool_eligibility_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskPowerPoolResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_properties_api_alphas__alpha_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alpha_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlphaProperties"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlphaInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    after_cost_api_alphas__alpha_id__after_cost_get: {
+        parameters: {
+            query?: {
+                costBps?: number;
+            };
+            header?: never;
+            path: {
+                alpha_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_alpha_api_alphas__alpha_id__check_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alpha_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainPayload"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    correlations_api_alphas__alpha_id__correlations__kind__get: {
+        parameters: {
+            query?: {
+                /** @description Ask BRAIN again instead of reading the cache. */
+                refresh?: boolean;
+                /** @description Answer only from the cache; never spend BRAIN's budget. */
+                cached_only?: boolean;
+            };
+            header?: never;
+            path: {
+                alpha_id: string;
+                kind: "self" | "prod" | "power-pool";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrainPayload"];
                 };
             };
             /** @description Validation Error */
@@ -5738,140 +5786,6 @@ export interface operations {
             };
         };
     };
-    task_power_pool_eligibility_api_alphas_tasks__study_id__power_pool_eligibility_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                study_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TaskPowerPoolResult"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_properties_api_alphas__alpha_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                alpha_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AlphaProperties"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AlphaInfo"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    check_alpha_api_alphas__alpha_id__check_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                alpha_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BrainPayload"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    correlations_api_alphas__alpha_id__correlations__kind__get: {
-        parameters: {
-            query?: {
-                /** @description Ask BRAIN again instead of reading the cache. */
-                refresh?: boolean;
-                /** @description Answer only from the cache; never spend BRAIN's budget. */
-                cached_only?: boolean;
-            };
-            header?: never;
-            path: {
-                alpha_id: string;
-                kind: "self" | "prod" | "power-pool";
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BrainPayload"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     performance_api_alphas__alpha_id__performance_get: {
         parameters: {
             query?: {
@@ -5908,10 +5822,167 @@ export interface operations {
             };
         };
     };
-    options_api_template_lab_options_get: {
+    login_cookie_api_auth_cookie_post: {
         parameters: {
-            query?: {
-                refresh?: boolean;
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CookieLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    login_api_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    logout_api_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+        };
+    };
+    settings_options_api_auth_settings_options_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveOptionsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsOptions"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_api_auth_verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    counts_api_catalog_counts_get: {
+        parameters: {
+            query: {
+                /** @description e.g. USA, EUR, GLB */
+                region: string;
+                delay: number;
+                /** @description e.g. TOP3000 */
+                universe: string;
+                instrumentType?: string;
             };
             header?: never;
             path?: never;
@@ -5925,7 +5996,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TemplateLabOptions"];
+                    "application/json": components["schemas"]["CatalogCounts"];
                 };
             };
             /** @description Validation Error */
@@ -5939,9 +6010,17 @@ export interface operations {
             };
         };
     };
-    templates_api_template_lab_templates_get: {
+    datasets_api_catalog_datasets_get: {
         parameters: {
-            query?: never;
+            query: {
+                search?: string | null;
+                /** @description e.g. USA, EUR, GLB */
+                region: string;
+                delay: number;
+                /** @description e.g. TOP3000 */
+                universe: string;
+                instrumentType?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5954,31 +6033,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TemplateList"];
-                };
-            };
-        };
-    };
-    create_template_api_template_lab_templates_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TemplateBody"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TemplateSummary"];
+                    "application/json": components["schemas"]["DatasetRow"][];
                 };
             };
             /** @description Validation Error */
@@ -5992,18 +6047,23 @@ export interface operations {
             };
         };
     };
-    update_template_api_template_lab_templates__template_id__put: {
+    description_aware_sweep_api_catalog_description_aware_sweep_post: {
         parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                template_id: number;
+            query: {
+                /** @description e.g. USA, EUR, GLB */
+                region: string;
+                delay: number;
+                /** @description e.g. TOP3000 */
+                universe: string;
+                instrumentType?: string;
             };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
-        requestBody: {
+        requestBody?: {
             content: {
-                "application/json": components["schemas"]["TemplateBody"];
+                "application/json": components["schemas"]["FieldFilter"];
             };
         };
         responses: {
@@ -6013,7 +6073,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TemplateSummary"];
+                    "application/json": components["schemas"]["DescAwareSweepResult"];
                 };
             };
             /** @description Validation Error */
@@ -6027,80 +6087,23 @@ export interface operations {
             };
         };
     };
-    delete_template_api_template_lab_templates__template_id__delete: {
+    description_aware_sweep_task_api_catalog_description_aware_sweep_task_post: {
         parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                template_id: number;
+            query: {
+                /** @description e.g. USA, EUR, GLB */
+                region: string;
+                delay: number;
+                /** @description e.g. TOP3000 */
+                universe: string;
+                instrumentType?: string;
             };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TemplateRemoved"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    preview_api_template_lab_preview_post: {
-        parameters: {
-            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TemplateTask"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TemplateLabPreview"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    add_task_api_template_lab_tasks_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TemplateTask"];
+                "application/json": components["schemas"]["DescAwareTaskRequest"];
             };
         };
         responses: {
@@ -6112,6 +6115,631 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AddedTask"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    facets_api_catalog_facets_post: {
+        parameters: {
+            query: {
+                /** @description e.g. USA, EUR, GLB */
+                region: string;
+                delay: number;
+                /** @description e.g. TOP3000 */
+                universe: string;
+                instrumentType?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["FieldFilter"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogFacets"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fields_api_catalog_fields_post: {
+        parameters: {
+            query: {
+                /** @description e.g. USA, EUR, GLB */
+                region: string;
+                delay: number;
+                /** @description e.g. TOP3000 */
+                universe: string;
+                instrumentType?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["FieldFilter"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    field_detail_api_catalog_fields__field_id__get: {
+        parameters: {
+            query: {
+                /** @description e.g. USA, EUR, GLB */
+                region: string;
+                delay: number;
+                /** @description e.g. TOP3000 */
+                universe: string;
+                instrumentType?: string;
+            };
+            header?: never;
+            path: {
+                field_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataFieldDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    field_availability_api_catalog_fields__field_id__availability_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                field_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldAvailabilityRow"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    field_intelligence_route_api_catalog_fields__field_id__intelligence_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                field_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldIntelligence"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    high_impact_batch_api_catalog_high_impact_batch_get: {
+        parameters: {
+            query: {
+                top_n?: number;
+                per_category_limit?: number;
+                /** @description e.g. USA, EUR, GLB */
+                region: string;
+                delay: number;
+                /** @description e.g. TOP3000 */
+                universe: string;
+                instrumentType?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HighImpactBatchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    markets_api_catalog_markets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Market"][];
+                };
+            };
+        };
+    };
+    pool_coverage_api_catalog_pool_coverage_get: {
+        parameters: {
+            query: {
+                /** @description e.g. USA, EUR, GLB */
+                region: string;
+                delay: number;
+                /** @description e.g. TOP3000 */
+                universe: string;
+                instrumentType?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PoolCoverageResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    proven_pattern_batch_api_catalog_proven_pattern_batch_get: {
+        parameters: {
+            query: {
+                min_fitness?: number;
+                similarity_threshold?: number;
+                top_n?: number;
+                max_proven?: number;
+                /** @description e.g. USA, EUR, GLB */
+                region: string;
+                delay: number;
+                /** @description e.g. TOP3000 */
+                universe: string;
+                instrumentType?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProvenPatternBatchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pyramids_api_catalog_pyramids_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PyramidGrid"];
+                };
+            };
+        };
+    };
+    scopes_api_catalog_scopes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogScopeRow"][];
+                };
+            };
+        };
+    };
+    size_api_catalog_size_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogSize"];
+                };
+            };
+        };
+    };
+    stats_api_catalog_stats_get: {
+        parameters: {
+            query: {
+                /** @description e.g. USA, EUR, GLB */
+                region: string;
+                delay: number;
+                /** @description e.g. TOP3000 */
+                universe: string;
+                instrumentType?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogStats"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_sync_all_api_catalog_sync_all_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncAllRun"];
+                };
+            };
+        };
+    };
+    start_sync_region_agnostic_api_catalog_sync_region_agnostic_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncAllRun"];
+                };
+            };
+        };
+    };
+    cancel_run_api_catalog_sync_runs__run_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cancelled"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    say_api_chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Say"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatReply"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    options_api_chat_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatOptions"];
+                };
+            };
+        };
+    };
+    threads_api_chat_threads_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatThreadSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    thread_api_chat_threads__thread_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatThreadOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_thread_api_chat_threads__thread_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -6285,7 +6913,7 @@ export interface operations {
             };
         };
     };
-    models_api_llm_models_get: {
+    health_api_health_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -6300,12 +6928,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LLMModels"];
+                    "application/json": components["schemas"]["Health"];
                 };
             };
         };
     };
-    list_prompts_api_llm_prompts_get: {
+    list_tasks_api_lab_tasks_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -6320,7 +6948,275 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PromptList"];
+                    "application/json": components["schemas"]["LabTasks"];
+                };
+            };
+        };
+    };
+    run_all_api_lab_tasks_run_all_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabTasks"];
+                };
+            };
+        };
+    };
+    submittable_alphas_api_lab_tasks_submittable_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskAlpha"][];
+                };
+            };
+        };
+    };
+    remove_api_lab_tasks__task_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskRemoved"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_api_lab_tasks__task_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabTask"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pause_api_lab_tasks__task_id__pause_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabTask"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_api_lab_tasks__task_id__run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabTask"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_api_lab_tasks__task_id__stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabTask"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    top_api_lab_tasks__task_id__top_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RankedAlpha"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    context_api_llm_context_get: {
+        parameters: {
+            query: {
+                region: string;
+                delay: number;
+                universe: string;
+                instrument_type?: string;
+                /** @description Return the exact text the model receives */
+                rendered?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LLMContextRendered"] | components["schemas"]["LLMContextTree"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -6365,57 +7261,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LLMKey"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    providers_api_llm_providers_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LLMProviders"];
-                };
-            };
-        };
-    };
-    check_key_api_llm_keys__key_id__check_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                key_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KeyWorks"] | components["schemas"]["KeyFailed"];
                 };
             };
             /** @description Validation Error */
@@ -6513,156 +7358,12 @@ export interface operations {
             };
         };
     };
-    context_api_llm_context_get: {
-        parameters: {
-            query: {
-                region: string;
-                delay: number;
-                universe: string;
-                instrument_type?: string;
-                /** @description Return the exact text the model receives */
-                rendered?: boolean;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LLMContextRendered"] | components["schemas"]["LLMContextTree"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    overview_api_vault_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VaultOverview"];
-                };
-            };
-        };
-    };
-    submittable_api_vault_submittable_get: {
-        parameters: {
-            query?: {
-                region?: string | null;
-                delay?: number | null;
-                universe?: string | null;
-                instrument_type?: string;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SubmittableResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    query_alphas_api_vault_alphas_query_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AlphaPageRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AlphaPage"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    sync_alphas_api_vault_sync_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SyncStarted"];
-                };
-            };
-        };
-    };
-    alpha_detail_api_vault_alphas__alpha_id__detail_get: {
+    check_key_api_llm_keys__key_id__check_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                alpha_id: string;
+                key_id: number;
             };
             cookie?: never;
         };
@@ -6674,7 +7375,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AlphaDetail"];
+                    "application/json": components["schemas"]["KeyWorks"] | components["schemas"]["KeyFailed"];
                 };
             };
             /** @description Validation Error */
@@ -6688,7 +7389,67 @@ export interface operations {
             };
         };
     };
-    k_ratios_api_vault_alphas_k_ratio_post: {
+    models_api_llm_models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LLMModels"];
+                };
+            };
+        };
+    };
+    list_prompts_api_llm_prompts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromptList"];
+                };
+            };
+        };
+    };
+    providers_api_llm_providers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LLMProviders"];
+                };
+            };
+        };
+    };
+    compute_api_portfolio_compute_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -6697,7 +7458,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["KRatioRequest"];
+                "application/json": components["schemas"]["PortfolioRequest"];
             };
         };
         responses: {
@@ -6707,7 +7468,407 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KRatioStarted"];
+                    "application/json": components["schemas"]["PortfolioResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    members_api_portfolio_members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioMembers"];
+                };
+            };
+        };
+    };
+    sync_api_portfolio_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioSyncStarted"];
+                };
+            };
+        };
+    };
+    options_api_power_pool_lab_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PowerPoolOptions"];
+                };
+            };
+        };
+    };
+    preview_api_power_pool_lab_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PowerPoolRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PowerPoolPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_task_api_power_pool_lab_tasks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PowerPoolRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddedTask"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    standing_api_quarter_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuarterStanding"];
+                };
+            };
+        };
+    };
+    quit_app_api_quit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Quitting"];
+                };
+            };
+        };
+    };
+    options_api_search_lab_options_get: {
+        parameters: {
+            query?: {
+                refresh?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Options"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_api_search_lab_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Preview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quick_api_search_lab_quick_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuickRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuickRun"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_task_api_search_lab_tasks_post: {
+        parameters: {
+            query?: {
+                run?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddedTask"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    active_api_simulations_active_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimulationRow"][];
+                };
+            };
+        };
+    };
+    engine_status_api_simulations_engine_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngineStatus"];
+                };
+            };
+        };
+    };
+    drop_queue_api_simulations_queue_delete: {
+        parameters: {
+            query?: {
+                task?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DropResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_api_simulations__record_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancelResult"];
                 };
             };
             /** @description Validation Error */
@@ -6737,6 +7898,222 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TasksSummary"];
+                };
+            };
+        };
+    };
+    options_api_template_lab_options_get: {
+        parameters: {
+            query?: {
+                refresh?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateLabOptions"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_api_template_lab_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateTask"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateLabPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_task_api_template_lab_tasks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateTask"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddedTask"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    templates_api_template_lab_templates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateList"];
+                };
+            };
+        };
+    };
+    create_template_api_template_lab_templates_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_template_api_template_lab_templates__template_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_template_api_template_lab_templates__template_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateRemoved"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -6791,6 +8168,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Bar"];
+                };
+            };
+        };
+    };
+    breaker_preview_api_tools_correlation_breaker_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BreakerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BreakerPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    breaker_task_api_tools_correlation_breaker_tasks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BreakerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddedTask"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -6958,7 +8401,7 @@ export interface operations {
             };
         };
     };
-    options_api_search_lab_options_get: {
+    status_api_update_get: {
         parameters: {
             query?: {
                 refresh?: boolean;
@@ -6975,7 +8418,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Options"];
+                    "application/json": components["schemas"]["UpdateStatus"];
                 };
             };
             /** @description Validation Error */
@@ -6989,7 +8432,47 @@ export interface operations {
             };
         };
     };
-    preview_api_search_lab_preview_post: {
+    apply_api_update_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateStarted"];
+                };
+            };
+        };
+    };
+    overview_api_vault_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VaultOverview"];
+                };
+            };
+        };
+    };
+    query_alphas_api_vault_alphas_query_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -6998,7 +8481,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SearchRequest"];
+                "application/json": components["schemas"]["AlphaPageRequest"];
             };
         };
         responses: {
@@ -7008,7 +8491,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Preview"];
+                    "application/json": components["schemas"]["AlphaPage"];
                 };
             };
             /** @description Validation Error */
@@ -7022,415 +8505,44 @@ export interface operations {
             };
         };
     };
-    add_task_api_search_lab_tasks_post: {
+    alpha_detail_api_vault_alphas__alpha_id__detail_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alpha_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlphaDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submittable_api_vault_submittable_get: {
         parameters: {
             query?: {
-                run?: boolean;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SearchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AddedTask"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    quick_api_search_lab_quick_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["QuickRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["QuickRun"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_tasks_api_lab_tasks_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LabTasks"];
-                };
-            };
-        };
-    };
-    run_all_api_lab_tasks_run_all_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LabTasks"];
-                };
-            };
-        };
-    };
-    run_api_lab_tasks__task_id__run_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LabTask"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    pause_api_lab_tasks__task_id__pause_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LabTask"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    stop_api_lab_tasks__task_id__stop_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LabTask"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    remove_api_lab_tasks__task_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TaskRemoved"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    change_api_lab_tasks__task_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TaskChange"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LabTask"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    top_api_lab_tasks__task_id__top_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                task_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RankedAlpha"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    options_api_power_pool_lab_options_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PowerPoolOptions"];
-                };
-            };
-        };
-    };
-    preview_api_power_pool_lab_preview_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PowerPoolRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PowerPoolPreview"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    add_task_api_power_pool_lab_tasks_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PowerPoolRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AddedTask"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    options_api_chat_options_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ChatOptions"];
-                };
-            };
-        };
-    };
-    threads_api_chat_threads_get: {
-        parameters: {
-            query?: {
+                region?: string | null;
+                delay?: number | null;
+                universe?: string | null;
+                instrument_type?: string;
                 limit?: number;
             };
             header?: never;
@@ -7445,7 +8557,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ChatThreadSummary"][];
+                    "application/json": components["schemas"]["SubmittableResponse"];
                 };
             };
             /** @description Validation Error */
@@ -7459,100 +8571,7 @@ export interface operations {
             };
         };
     };
-    thread_api_chat_threads__thread_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ChatThreadOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_thread_api_chat_threads__thread_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    say_api_chat_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Say"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ChatReply"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    health_api_health_get: {
+    sync_alphas_api_vault_sync_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -7567,7 +8586,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Health"];
+                    "application/json": components["schemas"]["SyncStarted"];
                 };
             };
         };

@@ -27,6 +27,7 @@ import {
   type CheckGroups,
   checkName,
   isCeiling,
+  isQuickMode,
   matches,
   powerPoolRules,
   type Rule,
@@ -91,7 +92,7 @@ function CheckRow({ check }: { check: AlphaCheck }) {
         <span className="min-w-0 flex-1 truncate text-body text-ink" title={check.name}>
           {checkName(check.name)}
         </span>
-        {isNum(value) && (
+        {isNum(value) ? (
           <span className="num shrink-0 text-body-compact text-ink-muted">
             {figure(check.name, value)}
             {isNum(limit) && (
@@ -101,6 +102,17 @@ function CheckRow({ check }: { check: AlphaCheck }) {
               </span>
             )}
           </span>
+        ) : (
+          // Not every check measures a number: the orthogonal-neutralization one names the
+          // neutralization it found and the one it wanted.
+          typeof value === 'string' && (
+            <span className="num shrink-0 text-body-compact text-ink-muted">
+              {value}
+              {typeof limit === 'string' && limit !== value && (
+                <span className="text-ink-subtle"> · wants {limit}</span>
+              )}
+            </span>
+          )
         )}
         <Badge tone={checkTone(result)}>{result}</Badge>
       </div>
@@ -164,7 +176,9 @@ export function VerdictPanel({
             {kind === 'submitted' &&
               `Status ${alpha.status}${alpha.dateSubmitted ? `, submitted ${fmt.date(alpha.dateSubmitted)}` : ''}.`}
             {kind === 'blocked' &&
-              'Each bar shows the value against the limit it must clear. Fix these, then run Check Submission again.'}
+              (isQuickMode(alpha)
+                ? 'This was run in Quick mode. Every figure on this page is the real one, but BRAIN does not run the submission checks on a Quick mode alpha and will not accept it. Simulate the same expression again with Quick mode off.'
+                : 'Each bar shows the value against the limit it must clear. Fix these, then run Check Submission again.')}
             {kind === 'pending' &&
               (groups.pending.length === 0
                 ? 'Nothing here has been checked, so nothing says it can be submitted. Run Check Submission.'
@@ -298,6 +312,8 @@ export function AggregatesPanel({ alpha }: { alpha: AlphaInfo }) {
 // ── Yearly ─────────────────────────────────────────────────────────────────────────────────
 
 /** One row a year; Sharpe also as a bar, so a weak year is seen before it is read. */
+const STAGE_LABEL: Record<string, string> = { TRAIN: 'Train', TEST: 'Test', OS: 'OS' }
+
 export function YearlyPanel({ years, cutoff }: { years: AlphaYear[]; cutoff: number | null }) {
   if (years.length === 0) return null
   const top = Math.max(...years.map((y) => Math.abs(y.sharpe ?? 0)), cutoff ?? 0, 0.01)
@@ -334,8 +350,17 @@ export function YearlyPanel({ years, cutoff }: { years: AlphaYear[]; cutoff: num
             const s = y.sharpe ?? 0
             const below = cutoff !== null && s < cutoff
             return (
-              <tr key={y.year} className="border-b border-hairline-subtle last:border-b-0">
-                <td className="num px-3 py-1.5 text-ink-muted">{y.year}</td>
+              // BRAIN splits a year at each stage boundary, so the year alone repeats.
+              <tr
+                key={`${y.year}-${y.stage ?? ''}`}
+                className="border-b border-hairline-subtle last:border-b-0"
+              >
+                <td className="num px-3 py-1.5 text-ink-muted">
+                  {y.year}
+                  {y.stage && (
+                    <span className="ml-2 text-ink-subtle">{STAGE_LABEL[y.stage] ?? y.stage}</span>
+                  )}
+                </td>
                 <td
                   className={cn(
                     'num px-3 py-1.5 text-right',

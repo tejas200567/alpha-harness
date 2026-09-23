@@ -11,22 +11,20 @@ None of this spends simulation quota. It is all reading results that already exi
 from __future__ import annotations
 
 import asyncio
-import json
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 import structlog
 
-from ..brain.filters import AlphaQuery
+from ..brain.filters import AlphaQuery, Filter
 from ..brain.schemas import Alpha
-from .store import AlphaVault, checks_json
-from .yields import is_promising, is_submittable
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from ..brain.endpoints import BrainEndpoints
     from ..tasks import TaskRegistry
+    from .store import AlphaVault
 
 log = structlog.get_logger(__name__)
 
@@ -36,10 +34,6 @@ PAGE = 100
 #: ``dateCreated`` instead.
 MAX_OFFSET = 1_000
 
-#: How many submission checks may be in flight at once. Each one is a ``Retry-After``
-#: job on the platform's side.
-CHECK_SLOTS = 2
-
 #: Captures landing within this long of each other share one alpha-list request. A batch's
 #: children land within a second or two of each other, and one list page carries the same
 #: blocks as ten ``GET /alphas/{id}``.
@@ -48,6 +42,11 @@ CAPTURE_DEBOUNCE_SECONDS = 2.0
 #: from batches not yet read back sit ahead of the landed ones on the newest page, so one
 #: page is often not enough; newest-first paging only ever shifts rows later, never skips.
 CAPTURE_PAGES = 3
+#: Alphas read one by one at a time, for the few a list page did not carry. Measured on a
+#: region-agnostic capture, the list pages held every child and this path read nothing — but
+#: a backfill reaching past ``CAPTURE_PAGES`` does use it, and serial it is one round trip
+#: each. Four, the same width every other BRAIN read here uses.
+CAPTURE_CONCURRENCY = 4
 
 
 def _now() -> str:
@@ -63,16 +62,14 @@ class Backfill:
         endpoints: BrainEndpoints,
         tasks: TaskRegistry,
         *,
-        on_checked: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
+        on_stored: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
     ) -> None:
         self.vault = vault
         self.endpoints = endpoints
         self.tasks = tasks
-        self.on_checked = on_checked
+        self.on_stored = on_stored
         self._running: asyncio.Task[Any] | None = None
-        self._check_slots = asyncio.Semaphore(CHECK_SLOTS)
-        self._checking: set[str] = set()
-        self._check_tasks: set[asyncio.Task[Any]] = set()
+        self._background: set[asyncio.Task[Any]] = set()
         #: Alphas whose daily PnL was asked for in the background, each once per run.
         self._returns_asked: set[str] = set()
         #: Alphas waiting for the next shared list read, each with what its caller awaits.
@@ -95,12 +92,10 @@ class Backfill:
         include_returns: bool = True,
         limit: int = 5000,
         since: datetime | None = None,
-        resolve_checks: bool = True,
     ) -> str:
         """Begin a backfill in the background. Returns the task id.
 
         ``since`` makes it incremental: only alphas created after that moment are listed.
-        ``resolve_checks=False`` stops after the listing, with no request per alpha.
         """
         if self.busy:
             raise RuntimeError("A backfill is already running.")
@@ -111,16 +106,68 @@ class Backfill:
                 include_returns=include_returns,
                 limit=limit,
                 since=since,
-                resolve_checks=resolve_checks,
             ),
             name="vault-backfill",
         )
         return task.id
 
+    async def start_submitted(self) -> str:
+        """Refresh the submitted Alphas and download each one's PnL and turnover. Returns the
+        task id. Only submitted Alphas: the Portfolio needs nothing else."""
+        if self.busy:
+            raise RuntimeError("A sync is already running.")
+        task = await self.tasks.start("portfolio-sync", "Syncing submitted Alphas")
+        self._running = asyncio.create_task(self._sync_submitted(task), name="portfolio-sync")
+        return task.id
+
+    async def _sync_submitted(self, task: Any) -> None:
+        try:
+            await self.tasks.update(task, detail="Listing SUBMITTED Alphas", progress=None)
+            ids: list[str] = []
+            offset = 0
+            while True:
+                page = await self.endpoints.list_alphas(
+                    AlphaQuery(
+                        limit=PAGE,
+                        offset=offset,
+                        order="-dateSubmitted",
+                        filters=[Filter("status", "!=", "UNSUBMITTED")],
+                    )
+                )
+                results = page.get("results") or []
+                alphas = [Alpha.model_validate(raw) for raw in results]
+                await self.vault.save_alphas(alphas)
+                ids.extend(a.id for a in alphas)
+                await self.tasks.update(task, detail=f"Listed {len(ids)} SUBMITTED Alphas")
+                if len(results) < PAGE:
+                    break
+                offset += PAGE
+
+            # A simulated series never changes, so one already stored is not fetched again.
+            missing = await self.vault.lacking_series(ids)
+            for done, alpha_id in enumerate(missing, start=1):
+                try:
+                    await self.fetch_returns(alpha_id)
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("vault.returns_failed", alpha_id=alpha_id, error=str(exc)[:160])
+                await self.tasks.update(
+                    task,
+                    progress=done / len(missing),
+                    detail=f"Downloading PnL and turnover: {done} of {len(missing)}",
+                )
+            await self.tasks.finish(task)
+            log.info("vault.submitted_synced", alphas=len(ids), fetched=len(missing))
+        except asyncio.CancelledError:
+            await self.tasks.finish(task, state="cancelled")
+            raise
+        except Exception as exc:
+            log.exception("vault.submitted_sync_failed")
+            await self.tasks.finish(task, state="failed", error=str(exc)[:300])
+
     async def stop(self) -> None:
-        # Awaited, not just cancelled: a check mid-``save_checks`` would otherwise still be
-        # writing when shutdown closes the catalog under it.
-        tasks = [*self._check_tasks, *(t for t in (self._drainer, self._running) if t)]
+        # Awaited, not just cancelled: a download mid-save would otherwise still be writing
+        # when shutdown closes the catalog under it.
+        tasks = [*self._background, *(t for t in (self._drainer, self._running) if t)]
         for task in tasks:
             task.cancel()
         for future in self._landed.values():
@@ -135,17 +182,15 @@ class Backfill:
         include_returns: bool,
         limit: int,
         since: datetime | None = None,
-        resolve_checks: bool = True,
     ) -> None:
         imported = 0
         try:
             imported = await self._import_alphas(task, limit, since=since)
             if include_returns:
                 await self._import_returns(task)
-            resolved = await self.resolve_pending(task=task) if resolve_checks else 0
             await self.tasks.finish(task)
             self.last = {"state": "done", "imported": imported, "finishedAt": _now()}
-            log.info("vault.backfill_done", alphas=imported, checked=resolved)
+            log.info("vault.backfill_done", alphas=imported)
         except asyncio.CancelledError:
             await self.tasks.finish(task, state="cancelled")
             self.last = {"state": "cancelled", "imported": imported, "finishedAt": _now()}
@@ -240,12 +285,19 @@ class Backfill:
         return done
 
     async def fetch_returns(self, alpha_id: str) -> int:
-        """Fetch and store one alpha's daily series."""
-        recordset = await self.endpoints.get_recordset(alpha_id, "daily-pnl")
-        stored = await self.vault.save_pnl(alpha_id, recordset.rows())
-        if recordset.records and not stored:
+        """Fetch and store one alpha's daily PnL and turnover.
+
+        From the cumulative ``pnl`` recordset rather than ``daily-pnl``, which is rounded
+        separately and drifts from the platform's own figures, with turnover scaled to
+        ``yearly-stats`` (see :mod:`.metrics`).
+        """
+        pnl = await self.endpoints.get_recordset(alpha_id, "pnl")
+        turnover = await self.endpoints.get_recordset(alpha_id, "turnover")
+        yearly = await self.endpoints.get_recordset(alpha_id, "yearly-stats")
+        stored = await self.vault.save_pnl(alpha_id, pnl.rows(), turnover.rows(), yearly.rows())
+        if pnl.records and not stored:
             # Days came back but none had a date and a PnL: the columns were renamed.
-            columns = [p.name for p in recordset.schema_.properties]
+            columns = [p.name for p in pnl.schema_.properties]
             log.warning("vault.pnl_unreadable", alpha_id=alpha_id, columns=columns)
         return stored
 
@@ -260,8 +312,8 @@ class Backfill:
             return
         self._returns_asked.update(fresh)
         task = asyncio.create_task(self._fetch_each(fresh), name="vault-returns")
-        self._check_tasks.add(task)
-        task.add_done_callback(self._check_tasks.discard)
+        self._background.add(task)
+        task.add_done_callback(self._background.discard)
 
     async def _fetch_each(self, alpha_ids: list[str]) -> None:
         for alpha_id in alpha_ids:
@@ -306,8 +358,13 @@ class Backfill:
             # No await between the loop's last check and here, so nothing lands unseen.
             self._drainer = None
 
-    async def _capture_batch(self, alpha_ids: list[str]) -> None:
-        """Store what the newest list page holds; read the rest one by one."""
+    async def _capture_batch(self, alpha_ids: list[str], *, follow: bool = True) -> None:
+        """Store what the newest list page holds; read the rest one by one.
+
+        ``follow`` chases the per-region children of a region-agnostic parent, which the
+        simulation never names — it answers with the parent alone. Children have no children
+        of their own, so the chase is one deep.
+        """
         missing = set(alpha_ids)
         found: dict[str, Alpha] = {}
         complete: list[Alpha] = []
@@ -340,90 +397,40 @@ class Backfill:
         self.capture_counts["listed"] += len(complete)
         self.capture_counts["fetched"] += len(fetch)
         log.info("vault.captured", listed=len(complete), fetched=len(fetch))
-        for alpha_id in fetch:
-            await self._capture_one(alpha_id)
+        gate = asyncio.Semaphore(CAPTURE_CONCURRENCY)
 
-    async def _capture_one(self, alpha_id: str) -> None:
+        async def read(alpha_id: str) -> Alpha | None:
+            async with gate:
+                return await self._capture_one(alpha_id)
+
+        # In order, so what is stored does not depend on which request answered first.
+        for one in await asyncio.gather(*(read(a) for a in fetch)):
+            if one is not None:
+                complete.append(one)
+
+        asked = set(alpha_ids)
+        children = list(dict.fromkeys(c for a in complete for c in a.children if c not in asked))
+        if follow and children:
+            log.info("vault.capture_children", parents=len(complete), children=len(children))
+            await self._capture_batch(children, follow=False)
+
+    async def _capture_one(self, alpha_id: str) -> Alpha | None:
         try:
             alpha = await self.endpoints.get_alpha(alpha_id)
             await self.vault.save_alpha(alpha)
         except Exception:
             log.warning("vault.capture_failed", alpha_id=alpha_id, exc_info=True)
-            return
+            return None
         await self._captured(alpha)
+        return alpha
 
     async def _captured(self, alpha: Alpha) -> None:
         alpha_id = alpha.id
         # Tell open screens it is stored. The simulation's own "finished" broadcast lands
         # before this save, so a refetch on that alone would miss the new alpha.
-        if self.on_checked is not None:
+        if self.on_stored is not None:
             # One failed notice must not cost the rest of its batch their capture.
             try:
-                await self.on_checked({"alphaId": alpha_id, "stored": True})
+                await self.on_stored({"alphaId": alpha_id, "stored": True})
             except Exception:
                 log.warning("vault.capture_notify_failed", alpha_id=alpha_id, exc_info=True)
-
-        # A finished simulation leaves the submission checks PENDING, so nothing is
-        # submittable until the platform is asked to finish them.
-        if is_promising(checks_json(alpha)):
-            self.schedule_check(alpha_id)
-
-    # -- submission checks -----------------------------------------------
-
-    def schedule_check(self, alpha_id: str) -> None:
-        """Finish this alpha's submission checks in the background.
-
-        Deliberately not awaited. The tracker calls :meth:`capture` from inside its poll
-        loop, and ``GET /alphas/{id}/check`` is a ``Retry-After`` job that can take a
-        minute; blocking there would stall every other simulation's progress behind it.
-        """
-        if alpha_id in self._checking:
-            return
-        self._checking.add(alpha_id)
-        task = asyncio.create_task(self._check(alpha_id), name=f"vault-check-{alpha_id}")
-        self._check_tasks.add(task)
-        task.add_done_callback(self._check_tasks.discard)
-
-    async def _check(self, alpha_id: str) -> bool:
-        """Ask the platform to resolve one alpha's checks, and store the answer."""
-        try:
-            async with self._check_slots:
-                body = await self.endpoints.check_alpha(alpha_id)
-            checks = ((body.get("is") or {}).get("checks")) or []
-            if not checks:
-                return False
-            await self.vault.save_checks(alpha_id, checks)
-            submittable = is_submittable(json.dumps(checks))
-            log.info("vault.check_resolved", alpha_id=alpha_id, submittable=submittable)
-            if self.on_checked is not None:
-                await self.on_checked({"alphaId": alpha_id, "submittable": submittable})
-            return submittable
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            # An unresolved check is a gap in a convenience: the alpha is still stored,
-            # still visible, and the next backfill will try again.
-            log.warning("vault.check_failed", alpha_id=alpha_id, exc_info=True)
-            return False
-        finally:
-            self._checking.discard(alpha_id)
-
-    async def resolve_pending(self, *, limit: int = 200, task: Any = None) -> int:
-        """Finish the checks on stored alphas the platform never resolved.
-
-        Covers the two cases :meth:`capture` cannot: alphas that finished before this
-        application started resolving checks, and alphas simulated on the BRAIN website
-        rather than through here. Both should appear on the submit screen.
-        """
-        pending = await self.vault.awaiting_checks(limit=limit)
-        if not pending:
-            return 0
-
-        done = 0
-        for alpha_id in pending:
-            await self._check(alpha_id)
-            done += 1
-            if task is not None:
-                await self.tasks.update(task, detail=f"Submission checks: {done} of {len(pending)}")
-        log.info("vault.checks_resolved", checked=done)
-        return done

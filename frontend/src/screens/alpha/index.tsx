@@ -7,13 +7,17 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from '@tanstack/react-router'
 import { ArrowLeftIcon, RefreshCwIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { toast } from 'sonner'
+import { errorMessage } from '@/api/http'
 import { cn } from '@/lib/cn'
 import { DASH, fmt, isNum } from '@/lib/format'
+import { useDebounced } from '@/lib/use-debounced'
 import { AlphaActionsMenu, AstInspector, OpenInBrain, RecheckButton } from '@/screens/pool/shared'
 import {
   Badge,
   Button,
   ErrorNotice,
+  Input,
   Metric,
   Notice,
   Page,
@@ -26,10 +30,11 @@ import {
   daily,
   drawdowns,
   hitRate,
-  kRatio,
+  isQuickMode,
   rollingSharpe,
   underwater,
   verdictOf,
+  YEAR,
 } from './analysis'
 import { type AlphaInfo, type AlphaView, alpha as api } from './api'
 import { AlphaChart, type ChartView } from './chart'
@@ -56,7 +61,8 @@ export function AlphaScreen() {
     setRefreshing(true)
     try {
       queryClient.setQueryData(key, await api.page(alphaId, true))
-    } catch {
+    } catch (error) {
+      toast.error(errorMessage(error))
       await page.refetch()
     } finally {
       setRefreshing(false)
@@ -93,6 +99,28 @@ export function AlphaScreen() {
   )
 }
 
+/**
+ * What the checks on this page cannot say about a region-agnostic alpha: it is one of a
+ * family of four, and the rules that decide its fate are applied across the family.
+ */
+function RegionAgnosticNote({ type }: { type: string | null }) {
+  if (type === 'RA_CHILD')
+    return (
+      <Notice tone="info" title="One region of an alpha that ran in four">
+        It can be submitted once a second region also passes its tests. Production Correlation is
+        judged across the whole family: it only blocks when every passing region fails it.
+      </Notice>
+    )
+  if (type === 'RA_PARENT')
+    return (
+      <Notice tone="info" title="This alpha holds four, one per region">
+        It carries no performance of its own — USA, Europe, Asia and Global each have their own
+        alpha, and submitting it submits every region that passed, at the cost of one submission.
+      </Notice>
+    )
+  return null
+}
+
 function Body({ view, refresh }: { view: AlphaView; refresh: React.ReactNode }) {
   const a = view.alpha
   const verdict = verdictOf(a)
@@ -106,12 +134,15 @@ function Body({ view, refresh }: { view: AlphaView; refresh: React.ReactNode }) 
           {p}
         </Notice>
       ))}
+      <RegionAgnosticNote type={a.type} />
       <VerdictPanel
         verdict={verdict}
         alpha={a}
         actions={
           <>
-            <RecheckButton alphaId={a.alphaId} />
+            {/* BRAIN refuses the submission check on a Quick mode alpha outright, so the
+                button could only ever report its own refusal. */}
+            {!isQuickMode(a) && <RecheckButton alphaId={a.alphaId} />}
             <OpenInBrain url={a.brainUrl} />
             <AlphaActionsMenu alphaId={a.alphaId} />
           </>
@@ -129,7 +160,10 @@ function Body({ view, refresh }: { view: AlphaView; refresh: React.ReactNode }) 
           <ChecksPanel groups={verdict.groups} />
           <EligibilityPanel alpha={a} />
           <CorrelationsPanel alphaId={a.alphaId} />
-          <PropertiesPanel key={a.dateModified ?? a.alphaId} alpha={a} />
+          {/* Both, so the draft resets on a save *and* on a sibling: batch children share a
+              dateModified to the second, and a stale draft would save one Alpha's name onto
+              another. */}
+          <PropertiesPanel key={`${a.alphaId}:${a.dateModified ?? ''}`} alpha={a} />
           <LineagePanel lineage={view.lineage} />
         </div>
       </div>
@@ -177,6 +211,7 @@ const SETTING_LABELS: [string, string][] = [
   ['unitHandling', 'Unit handling'],
   ['maxTrade', 'Max trade'],
   ['maxPosition', 'Max position'],
+  ['simulationMode', 'Simulation mode'],
   ['testPeriod', 'Test period'],
   ['language', 'Language'],
   ['startDate', 'Start'],
@@ -223,6 +258,22 @@ function PerformancePanel({
 }) {
   const [shown, setShown] = useState<ChartView>('pnl')
   const book = view.alpha.inSample?.bookSize ?? 20_000_000
+  const alphaId = view.alpha.alphaId
+
+  // Cost is opt-in: at 0 bps the page is exactly what BRAIN reports, and nothing is fetched.
+  const [costText, setCostText] = useState('5')
+  const costBps = useDebounced(Math.min(100, Math.max(0, Number(costText) || 0)), 400)
+  const cost = useQuery({
+    queryKey: ['alpha', alphaId, 'after-cost', costBps],
+    queryFn: () => api.afterCost(alphaId, costBps),
+    enabled: costBps > 0 && shown === 'pnl',
+    staleTime: 10 * 60 * 1000,
+  })
+  const netCurve = useMemo(() => {
+    const d = costBps > 0 ? cost.data : undefined
+    return d ? cumulative(d.dates, d.afterCostCurve) : []
+  }, [cost.data, costBps])
+  const netStats = costBps > 0 ? (cost.data?.afterCost?.inSample ?? null) : null
 
   const series = useMemo(() => {
     const pnl = cumulative(view.dates, view.pnl)
@@ -235,7 +286,6 @@ function PerformancePanel({
       underwater: underwater(pnl, book),
       sharpe: rollingSharpe(days),
       episodes: drawdowns(pnl, book),
-      kRatio: kRatio(pnl),
       hitRate: hitRate(days),
     }
   }, [view.dates, view.pnl, view.investabilityPnl, book])
@@ -263,6 +313,22 @@ function PerformancePanel({
       description={`${fmt.int(series.pnl.length)} trading days, ${fmt.date(series.pnl[0]?.date)} to ${fmt.date(series.pnl.at(-1)?.date)}`}
       actions={
         <>
+          {shown === 'pnl' && (
+            <label className="flex items-center gap-2 text-body text-ink-muted">
+              Cost
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                step={0.5}
+                aria-label="Trading cost in basis points"
+                value={costText}
+                onChange={(e) => setCostText(e.target.value)}
+                className="w-20"
+              />
+              bps
+            </label>
+          )}
           <Segmented label="Chart" items={VIEWS} value={shown} onChange={setShown} />
           {refresh}
         </>
@@ -270,7 +336,6 @@ function PerformancePanel({
       bodyClassName="flex flex-col gap-4"
     >
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Metric size="sm" label="K-Ratio" value={fmt.ratio(series.kRatio)} />
         <Metric size="sm" label="Profitable days" value={fmt.pct(series.hitRate, 1)} />
         <Metric
           size="sm"
@@ -284,26 +349,63 @@ function PerformancePanel({
           value={below === null ? DASH : fmt.pct(below, 0)}
         />
       </div>
+      {costBps > 0 && (cost.isPending || cost.isError || cost.data?.problem) && (
+        <Notice tone={cost.isError || cost.data?.problem ? 'warn' : 'info'}>
+          {cost.isError
+            ? errorMessage(cost.error)
+            : (cost.data?.problem ??
+              `Working out the after-cost PnL of ${alphaId}. Its daily turnover downloads the first time.`)}
+        </Notice>
+      )}
       <AlphaChart
         view={shown}
         pnl={series.pnl}
         constrained={series.constrained}
+        net={netCurve}
         underwater={series.underwater}
         sharpe={series.sharpe}
         cutoff={cutoff}
+        testStart={view.testStart}
         label={`${VIEWS.find((v) => v.value === shown)?.label} of ${view.alpha.alphaId}`}
       />
-      {shown === 'pnl' && series.constrained.length > 1 && (
-        <p className="flex items-center gap-4 text-body-compact text-ink-subtle">
-          <span className="flex items-center gap-1.5">
-            <span className="h-0.5 w-4 bg-ink" aria-hidden /> PnL
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-4 border-t border-dashed border-ink-tertiary" aria-hidden />{' '}
-            Investability constrained
-          </span>
-        </p>
-      )}
+      {shown === 'pnl' &&
+        (series.constrained.length > 1 || view.testStart !== null || netCurve.length > 1) && (
+          <p className="flex flex-wrap items-center gap-4 text-body-compact text-ink-subtle">
+            {view.testStart === null ? (
+              <span className="flex items-center gap-1.5">
+                <span className="h-0.5 w-4 bg-ink" aria-hidden /> PnL
+              </span>
+            ) : (
+              <>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-0.5 w-4 bg-ink-subtle" aria-hidden /> Train
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-0.5 w-4 bg-ink" aria-hidden /> Test, from{' '}
+                  <span className="num">{fmt.date(view.testStart)}</span>
+                </span>
+              </>
+            )}
+            {series.constrained.length > 1 && (
+              <span className="flex items-center gap-1.5">
+                <span className="w-4 border-t border-dashed border-ink-tertiary" aria-hidden />{' '}
+                Investability constrained
+              </span>
+            )}
+            {netCurve.length > 1 && (
+              <span className="flex items-center gap-1.5">
+                <span className="h-0.5 w-4 bg-status-warning" aria-hidden /> After {costBps} bps
+                {netStats?.sharpe != null && (
+                  <>
+                    {' '}
+                    · Sharpe <span className="num">{fmt.ratio(netStats.sharpe)}</span> from{' '}
+                    <span className="num">{fmt.ratio(view.alpha.inSample?.sharpe)}</span>
+                  </>
+                )}
+              </span>
+            )}
+          </p>
+        )}
       {shown === 'underwater' && series.episodes.length > 0 && (
         <table className="w-full text-body">
           <thead>
@@ -337,7 +439,7 @@ function PerformancePanel({
       )}
       {shown === 'sharpe' && (
         <p className="text-body-compact text-ink-subtle">
-          Sharpe over each trailing 252 trading days, against the{' '}
+          Sharpe over each trailing {YEAR} trading days, against the{' '}
           <span className="num">{fmt.ratio(cutoff)}</span> a submission needs. BRAIN's IS ladder
           test weighs the latest years most.
         </p>

@@ -1,8 +1,8 @@
 /** Stored alphas: the local vault, sorted and filtered in DuckDB, served a page at a time. */
 
-import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { GaugeIcon, SearchIcon } from 'lucide-react'
+import { CopyIcon, SearchIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { errorMessage } from '@/api/http'
@@ -35,6 +35,7 @@ import {
   TEXT_TONE,
 } from '@/ui/kit'
 import { type Column, DataTable, Pager, type Sort } from '@/ui/table'
+import { alphasMarkdown } from './copy'
 import { AlphaActionsMenu } from './shared'
 
 /** Bounds as the user types them; `div` converts the display unit to the wire fraction. */
@@ -45,7 +46,6 @@ const BOUNDS: { key: AlphaMetricKey; label: string; div: number }[] = [
   { key: 'returns', label: 'Returns %', div: 100 },
   { key: 'drawdown', label: 'Drawdown %', div: 100 },
   { key: 'margin', label: 'Margin bps', div: 10_000 },
-  { key: 'k_ratio', label: 'K-Ratio', div: 1 },
   { key: 'operator_count', label: 'Operators', div: 1 },
 ]
 
@@ -136,14 +136,6 @@ const COLUMNS: Column<AlphaRow>[] = [
     cell: (r) => fmt.bps(r.margin),
   },
   {
-    key: 'k_ratio',
-    header: 'K-Ratio',
-    width: '80px',
-    align: 'right',
-    sortable: true,
-    cell: (r) => fmt.ratio(r.kRatio),
-  },
-  {
     key: 'operator_count',
     header: 'Operators',
     width: '88px',
@@ -186,6 +178,7 @@ export function Stored({ onOpen }: { onOpen: (alphaId: string) => void }) {
     queryFn: pool.overview,
   })
   const [submitted, setSubmitted] = useState<'no' | 'yes'>('no')
+  const [copying, setCopying] = useState(false)
   const [search, setSearch] = useState('')
   const [regions, setRegions] = useState<string[]>([])
   const [delays, setDelays] = useState<string[]>([])
@@ -213,6 +206,10 @@ export function Stored({ onOpen }: { onOpen: (alphaId: string) => void }) {
 
   const body: AlphaPageRequest = {
     submitted: market ? false : submitted === 'yes',
+    // While picking seeds, hide what the lab would refuse. A SuperAlpha's expression is a
+    // combo, not a regular expression, so it can never be bred from — offering it here and
+    // rejecting it on submit is the table misleading the user.
+    evolvable: Boolean(market),
     sort_by: sort.key as AlphaSortKey,
     sort_desc: sort.desc,
     regions: market ? [market.region] : regions.length ? regions : null,
@@ -256,14 +253,6 @@ export function Stored({ onOpen }: { onOpen: (alphaId: string) => void }) {
     value: v,
     label: v,
   }))
-
-  const kRatio = useMutation({
-    mutationFn: (ids: string[]) => pool.kRatio(ids),
-    onSuccess: (r) =>
-      toast.success(`Computing K-Ratio for ${fmt.int(r.alphas)} Alphas in the background`),
-    onError: (e) => toast.error(errorMessage(e)),
-  })
-  const kRatioIds = (selected.size ? [...selected] : rows.map((r) => r.alphaId)).slice(0, 100)
 
   const chosen = market ? picked : selected
   const toggle = (ids: string[], on: boolean) => {
@@ -312,6 +301,28 @@ export function Stored({ onOpen }: { onOpen: (alphaId: string) => void }) {
                 { value: 'yes', label: 'Submitted' },
               ]}
             />
+          )}
+          {!market && submitted === 'yes' && (
+            <Button
+              size="sm"
+              variant="ghost"
+              loading={copying}
+              disabled={!page.data?.total}
+              onClick={() => {
+                setCopying(true)
+                alphasMarkdown(body, 'Submitted Alphas')
+                  .then((text) => navigator.clipboard.writeText(text))
+                  .then(
+                    () =>
+                      toast.success(`Copied ${fmt.int(page.data?.total ?? 0)} Submitted Alphas`),
+                    (e: unknown) => toast.error(errorMessage(e)),
+                  )
+                  .finally(() => setCopying(false))
+              }}
+            >
+              {!copying && <CopyIcon />}
+              Copy Alphas
+            </Button>
           )}
         </div>
 
@@ -407,35 +418,7 @@ export function Stored({ onOpen }: { onOpen: (alphaId: string) => void }) {
               Clear
             </Button>
           )}
-          {!market && (
-            <>
-              <span className="flex-1" />
-              <Button
-                size="sm"
-                loading={kRatio.isPending}
-                disabled={kRatioIds.length === 0}
-                onClick={() => kRatio.mutate(kRatioIds)}
-              >
-                {!kRatio.isPending && <GaugeIcon />}
-                Compute K-Ratio for{' '}
-                {selected.size ? (
-                  <>
-                    <span className="num">{fmt.int(kRatioIds.length)}</span> selected
-                  </>
-                ) : (
-                  <>
-                    Top <span className="num">{fmt.int(kRatioIds.length)}</span>
-                  </>
-                )}
-              </Button>
-            </>
-          )}
         </div>
-        {!market && selected.size > 100 && (
-          <p className="text-body-compact text-status-warning">
-            K-Ratio runs on the first 100 selected Alphas.
-          </p>
-        )}
         {page.isError && rows.length > 0 && (
           <ErrorNotice error={page.error} title="Could not read stored Alphas" />
         )}

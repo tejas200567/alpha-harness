@@ -11,7 +11,6 @@ from pydantic import BaseModel, Field
 
 from ..brain.filters import AlphaQuery
 from ..schemas import Out
-from ..tasks import spawn
 from ..vault.yields import PLATFORM_ALPHA_URL
 from .deps import State, refuse
 
@@ -77,7 +76,6 @@ class SubmittableAlpha(Out):
     #: Sharpe over the train years and over the held-out test years, when there was a test.
     train_sharpe: float | None
     test_sharpe: float | None
-    k_ratio: float | None
     #: BRAIN's own check results, as stored.
     checks: list[dict[str, Any]]
     #: At most 120 points.
@@ -119,11 +117,19 @@ class AlphaRow(Out):
     drawdown: float | None
     margin: float | None
     operator_count: int | None
-    k_ratio: float | None
     calmar: float | None
     date_created: str | None
     date_submitted: str | None
     has_pnl: bool
+    long_count: int | None = None
+    short_count: int | None = None
+    max_trade: str | None = None
+    max_position: str | None = None
+    #: BRAIN's names, e.g. "Power Pool Alpha", and pyramids such as "USA/D1/PV".
+    classifications: list[str] = Field(default_factory=list)
+    pyramids: list[str] = Field(default_factory=list)
+    train_sharpe: float | None = None
+    test_sharpe: float | None = None
 
 
 class AlphaPage(Out):
@@ -146,14 +152,8 @@ class AlphaDetail(Out):
     #: ``YYYY-MM-DD`` for each value in ``pnl``.
     dates: list[str]
     days: int
-    k_ratio: float | None
     problem: str | None
     brain_url: str
-
-
-class KRatioStarted(Out):
-    task_id: str
-    alphas: int
 
 
 @router.get("")
@@ -190,7 +190,7 @@ async def submittable(
         instrument_type=instrument_type,
         limit=limit,
     )
-    # Without a series a candidate can be neither de-correlated nor given a K-Ratio.
+    # Without a series a candidate cannot be de-correlated against the others.
     state.backfill.schedule_returns(found.pop("pnlMissing"))
     return SubmittableResponse.model_validate(found)
 
@@ -208,6 +208,8 @@ class AlphaPageRequest(BaseModel):
     minimum: dict[str, float] = Field(default_factory=dict)
     maximum: dict[str, float] = Field(default_factory=dict)
     search: str | None = None
+    #: Only Alphas the Evolution Lab can breed from, for when this table is a seed picker.
+    evolvable: bool = False
     limit: int = Field(default=100, ge=1, le=500)
     offset: int = Field(default=0, ge=0)
 
@@ -233,9 +235,7 @@ async def sync_alphas(state: State) -> SyncStarted:
     complete = latest is not None and stored >= int(remote["count"])
     since = latest - timedelta(days=1) if complete and latest else None
     try:
-        task_id = await state.backfill.start(
-            include_returns=False, limit=100_000, since=since, resolve_checks=False
-        )
+        task_id = await state.backfill.start(include_returns=False, limit=100_000, since=since)
     except RuntimeError as exc:
         raise refuse(409, "already_running", str(exc)) from exc
     return SyncStarted(task_id=task_id, since=since.isoformat() if since else None)
@@ -276,45 +276,7 @@ async def alpha_detail(alpha_id: str, state: State) -> AlphaDetail:
             "pnl": values,
             "dates": dates,
             "days": len(values),
-            "kRatio": await state.alphas.k_ratio(alpha_id) if values else None,
             "problem": problem,
             "brainUrl": f"{PLATFORM_ALPHA_URL}{alpha_id}",
         }
     )
-
-
-class KRatioRequest(BaseModel):
-    alpha_ids: list[str] = Field(min_length=1, max_length=100)
-
-
-@router.post("/alphas/k-ratio")
-async def k_ratios(body: KRatioRequest, state: State) -> KRatioStarted:
-    """Download daily PnL where missing and compute K-Ratio, in the background.
-
-    One Retry-After request per alpha without a stored series, which is why it is
-    capped at 100 at a time.
-    """
-    ids = list(dict.fromkeys(body.alpha_ids))
-    task = await state.tasks.start("k-ratio", f"K-Ratio for {len(ids)} Alphas")
-
-    async def run() -> None:
-        failed = 0
-        for done, alpha_id in enumerate(ids, start=1):
-            try:
-                if await state.alphas.series_length(alpha_id) == 0:
-                    await state.backfill.fetch_returns(alpha_id)
-                if await state.alphas.k_ratio(alpha_id) is None:
-                    failed += 1
-            # One alpha failing is counted, never allowed to stop the batch.
-            except Exception:  # noqa: BLE001
-                failed += 1
-            await state.tasks.update(
-                task,
-                progress=done / len(ids),
-                detail=f"K-Ratio: {done} of {len(ids)}"
-                + (f", {failed} without a usable daily PnL" if failed else ""),
-            )
-        await state.tasks.finish(task)
-
-    spawn(run(), name="k-ratio")
-    return KRatioStarted(task_id=task.id, alphas=len(ids))

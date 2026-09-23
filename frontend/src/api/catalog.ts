@@ -35,6 +35,10 @@ export type FieldSortKey =
   | 'alpha_count'
   | 'pyramid_multiplier'
   | 'field_type'
+  | 'date_coverage'
+  | 'date_created'
+  /** Not a column: how well the row answers the search. */
+  | 'relevance'
 
 /** The backend's own filter, every field optional, with the sort key narrowed to the columns
  * it will actually sort on. */
@@ -48,6 +52,8 @@ export const catalog = {
   scopes: () => http.get<CatalogScopeRow[]>(`${B}/scopes`),
   size: () => http.get<CatalogSize>(`${B}/size`),
   syncAll: () => http.post<Schemas['SyncAllRun']>(`${B}/sync-all`),
+  /** Region ALL only: its own download, because BRAIN pages it fifty fields at a time. */
+  syncRegionAgnostic: () => http.post<Schemas['SyncAllRun']>(`${B}/sync-region-agnostic`),
   markets: () => http.get<Market[]>(`${B}/markets`),
   cancel: (id: number) => http.post<Schemas['Cancelled']>(`${B}/sync/runs/${id}/cancel`),
 

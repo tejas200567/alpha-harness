@@ -9,12 +9,12 @@ over time and unknown ones should survive into the UI rather than be silently dr
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Any, Self
 
 import msgspec
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 
 
@@ -32,8 +32,52 @@ class BrainModel(BaseModel):
 
 
 class SimulationType(StrEnum):
+    """What a simulation is, and what the Alphas it makes are.
+
+    ``REGION_AGNOSTIC`` is a request type only; it produces one ``RA_PARENT`` Alpha holding
+    up to four ``RA_CHILD`` Alphas, one per region (``docs/learn/advanced-topics/
+    region-agnostic-alpha.json``). Measured live: the simulation answers with the parent's
+    id, and the parent carries ``children``.
+    """
+
     REGULAR = "REGULAR"
     SUPER = "SUPER"
+    REGION_AGNOSTIC = "REGION_AGNOSTIC"
+    RA_PARENT = "RA_PARENT"
+    RA_CHILD = "RA_CHILD"
+
+
+#: The region that means "all of them at once". BRAIN offers it only under the
+#: ``REGION_AGNOSTIC`` simulation type, so choosing it *is* choosing that type.
+REGION_AGNOSTIC_REGION = "ALL"
+
+
+#: The simulation mode whose Alphas BRAIN refuses to submit — and refuses even to check:
+#: ``GET /alphas/{id}/check`` answers ``400 Cannot check submission for QUICK mode alphas``.
+#:
+#: Measured against the same expression run both ways: every figure is identical to the last
+#: decimal, daily PnL series included. What a quick Alpha does *not* get is the
+#: investability-constrained and risk-neutralized blocks, the yearly-stats recordset, and
+#: every submission check. It costs one simulation and one concurrent core, exactly like a
+#: full one, and finishes in the same time — so there is nothing to spend it on.
+QUICK_MODE = "QUICK"
+
+
+#: The Alpha a request of each type comes back as. Only region-agnostic differs: it is asked
+#: for as ``REGION_AGNOSTIC`` and returns an ``RA_PARENT`` carrying its children, so the two
+#: never compare equal by name and anything matching a request against its result has to
+#: translate first.
+PRODUCES: dict[str, str] = {SimulationType.REGION_AGNOSTIC: SimulationType.RA_PARENT}
+
+
+def produced_type(requested: str) -> str:
+    """The Alpha type a request of ``requested`` produces."""
+    return PRODUCES.get(requested, requested)
+
+
+def region_label(region: str) -> str:
+    """A region as a sentence says it. ``ALL`` on its own reads as a placeholder."""
+    return "all regions" if region == REGION_AGNOSTIC_REGION else region
 
 
 class SimulationStatus(StrEnum):
@@ -119,6 +163,9 @@ class SimulationSettings(BrainModel):
     test_period: str | None = None
     max_trade: str | None = None
     max_position: str | None = None
+    #: ``FULL`` or ``QUICK``; BRAIN defaults it to ``FULL`` and this application never sends
+    #: ``QUICK`` (see :data:`QUICK_MODE`). Read back off an Alpha, where it matters.
+    simulation_mode: str | None = None
 
     @property
     def batch_key(self) -> tuple[str, str, int, str]:
@@ -149,22 +196,36 @@ class SimulationRequest(BrainModel):
     selection: str | None = None
 
     @model_validator(mode="after")
-    def _handle_nans(self) -> Self:
-        """Force NaN Handling on, and hold out a test period unless one was named.
+    def _hold_out_test_period(self) -> Self:
+        """Hold out a test period unless one was named.
 
         Enforced here because every request — from a lab, a template or the simulations
         API — becomes this model before it is hashed or sent. The held-out years let the
         Pool hide Alphas that collapse out of sample; BRAIN still runs the submission
         checks on the whole period.
+
+        NaN handling is a plain default on :class:`SimulationSettings` rather than an
+        override here: the Settings Sampler re-runs a source Alpha's own settings, and
+        forcing it made the sweep disagree with the value its own screen showed.
         """
-        update: dict[str, Any] = {}
-        if self.settings.nan_handling != "ON":
-            update["nan_handling"] = "ON"
         if self.settings.test_period is None:
-            update["test_period"] = TEST_PERIOD
-        if update:
-            self.settings = self.settings.model_copy(update=update)
+            self.settings = self.settings.model_copy(update={"test_period": TEST_PERIOD})
         return self
+
+    @model_validator(mode="after")
+    def _region_carries_the_type(self) -> Self:
+        """Region ``ALL`` means a region-agnostic simulation; BRAIN offers it nowhere else.
+
+        Deriving the type from the region rather than asking every lab to set it keeps one
+        place to be wrong, and makes a market chosen in a form arrive here already correct.
+        """
+        if self.settings.region == REGION_AGNOSTIC_REGION:
+            self.type = SimulationType.REGION_AGNOSTIC
+        return self
+
+    @property
+    def is_region_agnostic(self) -> bool:
+        return self.type is SimulationType.REGION_AGNOSTIC
 
     def to_wire(self) -> dict[str, Any]:
         return self.model_dump(by_alias=True, exclude_none=True)
@@ -180,15 +241,30 @@ class SimulationRequest(BrainModel):
 
 
 class Check(BrainModel):
-    """One entry of the submission-check array."""
+    """One entry of the submission-check array.
+
+    ``limit`` and ``value`` are usually a threshold and the figure measured against it, but
+    that is a convention, not a contract. ``HT_ORTHOGONAL_RAM_NEUTRALIZATION`` puts
+    *neutralization names* in both; ``HT_INVESTABLE_...`` puts a *list* of pool names in
+    ``value``. Each new shape aborted the whole listing page it arrived on — the alphas are
+    validated a page at a time, so one unknown check costs every alpha beside it. Untyped is
+    the only width that cannot be outgrown again; readers test before they compute.
+    """
 
     name: str
     result: CheckResult | None = None
-    limit: float | None = None
-    value: float | None = None
+    limit: Any = None
+    value: Any = None
     # MATCHES_COMPETITION carries arrays instead of a numeric value.
     matched: list[Any] | None = None
     unmatched: list[Any] | None = None
+
+    @property
+    def numbers(self) -> tuple[float, float] | None:
+        """``(value, limit)`` when both are real numbers, else ``None``."""
+        if isinstance(self.value, float | int) and isinstance(self.limit, float | int):
+            return float(self.value), float(self.limit)
+        return None
 
 
 class SampleStats(BrainModel):
@@ -230,14 +306,19 @@ class Alpha(BrainModel):
     date_submitted: datetime | None = None
     date_modified: datetime | None = None
     name: str | None = None
-    favorite: bool = False
-    hidden: bool = False
+    #: Nullable on the wire (``docs/api/schemas/alpha.md``), so a null must not fail the page.
+    favorite: bool | None = None
+    hidden: bool | None = None
     color: str | None = None
     category: str | None = None
     tags: list[str] = Field(default_factory=list)
     grade: str | None = None
     stage: str | None = None
     status: str | None = None
+    #: Region-agnostic only: an ``RA_PARENT`` lists its per-region children here, and each
+    #: ``RA_CHILD`` names the parent. Measured; the parent carries no statistics of its own.
+    children: list[str] = Field(default_factory=list)
+    parent: str | None = None
     # `is` is a Python keyword; the wire name is restored on serialisation.
     in_sample: SampleStats | None = Field(default=None, alias="is")
     os: SampleStats | None = None
@@ -245,6 +326,17 @@ class Alpha(BrainModel):
     train: SampleStats | None = None
     test: SampleStats | None = None
     prod: SampleStats | None = None
+
+    @field_validator("tags", "children", mode="before")
+    @classmethod
+    def _drop_nulls(cls, value: Any) -> Any:
+        """The codec allows a null tag, and a null ``children`` on anything not RA.
+
+        Normalising both here keeps every reader on ``list[str]``.
+        """
+        if value is None:
+            return []
+        return [t for t in value if t is not None] if isinstance(value, list) else value
 
     @property
     def expression(self) -> str | None:
@@ -344,10 +436,18 @@ class BulkField(msgspec.Struct, rename="camel"):
     description: str | None = None
     type: str | None = None
     coverage: float | None = None
+    #: The share of the history that is actually populated, as against ``coverage``, which is
+    #: the share of the instruments. A field can be complete on one and threadbare on the other.
+    date_coverage: float | None = None
     user_count: int | None = None
     alpha_count: int | None = None
     pyramid_multiplier: float | None = None
     themes: list[str] | None = None
+    #: When BRAIN first offered the field here. New fields are uncrowded by construction.
+    date_created: date | None = None
+    #: How many regions hold this field. Only region ``ALL`` sends it, and it is the one
+    #: local signal of whether a field can survive a region-agnostic intersection.
+    region_coverage: int | None = None
     dataset: FieldRef | None = None
     category: FieldRef | None = None
     subcategory: FieldRef | None = None

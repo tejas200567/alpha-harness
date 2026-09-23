@@ -4,24 +4,18 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
 import { AwardIcon, CpuIcon, LayersIcon, SendIcon } from 'lucide-react'
 import { type ReactNode, useEffect, useState } from 'react'
 import { today } from '@/api/core'
+import type { components } from '@/api/generated'
 import { http } from '@/api/http'
 import { cn } from '@/lib/cn'
 import { fmt } from '@/lib/format'
+
+type QuarterStanding = components['schemas']['QuarterStanding']
+
 import { useRefetchOn } from '@/lib/ws'
-import {
-  ErrorNotice,
-  LINK,
-  Page,
-  Panel,
-  QuotaGauge,
-  Skeleton,
-  TEXT_TONE,
-  type Tone,
-} from '@/ui/kit'
+import { ErrorNotice, Page, Panel, QuotaGauge, Skeleton, TEXT_TONE, type Tone } from '@/ui/kit'
 import { GettingStarted } from './getting-started'
 import { WorkInFlight } from './work'
 
@@ -30,12 +24,13 @@ export function DashboardScreen() {
   useRefetchOn('simulations', ['today'], 10_000)
   const sims = day.data?.simulations
 
-  const submittable = useQuery({
-    queryKey: ['pool', 'submittable-count'],
-    queryFn: () => http.get<{ total: number }>('/api/vault/submittable?limit=1'),
+  // The quarter BRAIN judges on: submitted Alphas and the pyramids they formed. It moves
+  // only when something is submitted, which is rare, so it is not worth polling hard.
+  const quarter = useQuery({
+    queryKey: ['quarter'],
+    queryFn: () => http.get<QuarterStanding>('/api/quarter'),
+    staleTime: 10 * 60 * 1000,
   })
-  useRefetchOn('simulations', ['pool', 'submittable-count'], 5000)
-  const total = submittable.data?.total
 
   return (
     <Page>
@@ -54,20 +49,15 @@ export function DashboardScreen() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
           icon={<AwardIcon />}
-          label="Submittable Alphas"
-          action={
-            <Link
-              to="/pool/$tab"
-              params={{ tab: 'submittable' }}
-              className={cn(LINK, 'text-body-compact')}
-            >
-              Open
-            </Link>
+          label="Submitted Alphas"
+          loading={quarter.isPending}
+          value={quarter.isError ? '—' : fmt.int(quarter.data?.submitted)}
+          tone={quarter.data?.submitted ? 'profit' : 'neutral'}
+          hint={
+            quarter.isError
+              ? 'The count could not load.'
+              : `Submitted in ${quarter.data?.label ?? 'this quarter'}`
           }
-          loading={submittable.isPending}
-          value={submittable.isError ? '—' : fmt.int(total)}
-          tone={total ? 'profit' : 'neutral'}
-          hint={submittable.isError ? 'The count could not load.' : 'Submittable on BRAIN'}
         />
         <StatTile
           icon={<CpuIcon />}
@@ -115,16 +105,22 @@ export function DashboardScreen() {
         />
         <StatTile
           icon={<LayersIcon />}
-          label="Queued"
-          loading={!sims}
-          value={sims && fmt.int(sims.queued)}
+          label="Pyramids Completed"
+          loading={quarter.isPending}
+          value={quarter.isError ? '—' : fmt.int(quarter.data?.pyramidsFormulated)}
           hint={
-            sims && (
+            quarter.isError ? (
+              'The count could not load.'
+            ) : (
               <>
-                <span className="num">
-                  {fmt.int(sims.engine.slotsUsed)}/{fmt.int(sims.engine.slots)}
-                </span>{' '}
-                cores busy
+                <span className="num">{fmt.int(quarter.data?.alphasPerPyramid)}</span> submitted
+                Alphas complete one
+                {quarter.data?.pyramidsStarted ? (
+                  <>
+                    {' · '}
+                    <span className="num">{fmt.int(quarter.data.pyramidsStarted)}</span> started
+                  </>
+                ) : null}
               </>
             )
           }

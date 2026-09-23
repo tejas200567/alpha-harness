@@ -1,6 +1,8 @@
 """Tools: helpers that act on an Alpha the consultant already has.
 
 The Settings Sampler re-runs one proven expression everywhere BRAIN will accept it. The
+Correlation Breaker does the opposite — it holds the settings still and re-shapes the
+expression, for an Alpha the platform says is already in the production pool. The
 Submission Planner then decides which of the results are worth submitting, and in what order.
 Neither simulates on its own: previews only read, and queueing hands work to the scheduler
 like any lab.
@@ -20,9 +22,9 @@ from ..db.models import Submission, Trial, TrialState, utcnow
 from ..engine.packer import MAX_BATCH
 from ..engine.slots import DEFAULT_SLOTS
 from ..labs.launch import AddedTask, add_study
-from ..labs.params import SETTINGS_SAMPLER, SettingsParams
+from ..labs.params import CORRELATION_BREAKER, SETTINGS_SAMPLER, BreakerParams, SettingsParams
 from ..schemas import Out
-from ..tools import settings_sampler, submission_planner
+from ..tools import correlation_breaker, settings_sampler, submission_planner
 from ..vault.yields import is_promising, is_submittable
 from .alphas import page as alpha_page
 from .deps import State, refuse
@@ -70,6 +72,8 @@ class SourceSettings(Out):
     neutralization: str | None
     decay: int | None
     truncation: float | None
+    nan_handling: str
+    test_period: str
     max_trade: str
     max_position: str
 
@@ -78,6 +82,8 @@ class SettingsPlan(Out):
     alpha_id: str
     expression: str
     data_fields: list[str]
+    #: Read by the expression but not counted as data by BRAIN, e.g. ``industry``.
+    grouping_fields: list[str]
     settings: SourceSettings
     regions: list[RegionPlan]
     totals: PlanTotals
@@ -88,9 +94,39 @@ class SettingsPlan(Out):
 
 
 class PreviewRequest(BaseModel):
-    alpha_id: str = Field(min_length=1, max_length=64, alias="alphaId")
+    """An Alpha to read, or a bare expression with the decay and truncation to hold it at."""
+
+    alpha_id: str = Field(default="", max_length=64, alias="alphaId")
+    expression: str | None = Field(default=None, max_length=20_000)
+    #: Each one left out keeps the source Alpha's own value, or the platform default when
+    #: there is no Alpha.
+    decay: int | None = Field(default=None, ge=0, le=512)
+    truncation: float | None = Field(default=None, ge=0, le=1)
+    nan_handling: Literal["ON", "OFF"] | None = Field(default=None, alias="nanHandling")
+    #: ``P{years}Y{months}M0D``, the shape BRAIN's own field takes; its bounds are
+    #: ``P0Y0M0D`` to ``P6Y0M0D``.
+    test_period: str | None = Field(
+        default=None, alias="testPeriod", pattern=r"^P[0-6]Y(?:[0-9]|1[01])M0D$"
+    )
 
     model_config = {"populate_by_name": True}
+
+    @model_validator(mode="after")
+    def _one_source(self) -> Self:
+        if bool(self.alpha_id.strip()) == bool((self.expression or "").strip()):
+            raise ValueError("Give either an Alpha ID or an expression.")
+        return self
+
+    async def plan(self, state: Any) -> dict[str, Any]:
+        return await settings_sampler.plan(
+            state,
+            self.alpha_id.strip(),
+            expression=self.expression.strip() if self.expression else None,
+            decay=self.decay,
+            truncation=self.truncation,
+            nan_handling=self.nan_handling,
+            test_period=self.test_period,
+        )
 
 
 class MarketPick(BaseModel):
@@ -119,8 +155,7 @@ class SampleRequest(PreviewRequest):
     markets: list[MarketPick] = Field(default_factory=list, max_length=500)
     neutralizations: list[str] = Field(default_factory=list, max_length=50)
     pairs: list[PairPick] = Field(default_factory=list, max_length=4)
-    #: Bounded by the engine rather than by ``search.MAX_CORES``: that caps a lab to half the
-    #: engine so a manual experiment can still get cores, and this sweep *is* the day's work.
+    #: Bounded by the engine rather than by ``search.MAX_CORES``, which is the labs' own cap.
     #: The real ceiling is the engine's slot count, checked in the route where it is known.
     cores: int = Field(default=DEFAULT_SLOTS, ge=1)
 
@@ -132,7 +167,7 @@ async def preview(body: PreviewRequest, state: State) -> SettingsPlan:
     Reads the Alpha from BRAIN rather than the vault, because the vault stores no
     maxTrade/maxPosition and may not hold the Alpha at all.
     """
-    found = await settings_sampler.plan(state, body.alpha_id)
+    found = await body.plan(state)
     return SettingsPlan.model_validate({**found, "maxCores": state.engine.slots})
 
 
@@ -145,7 +180,7 @@ async def add_task(body: SampleRequest, state: State) -> AddedTask:
             "too_many_cores",
             f"The engine has {state.engine.slots} slots, so a task cannot hold {body.cores}.",
         )
-    found = await settings_sampler.plan(state, body.alpha_id)
+    found = await body.plan(state)
     if found["problems"]:
         raise refuse(422, "settings_sampler_blocked", found["problems"][0])
 
@@ -190,8 +225,8 @@ async def add_task(body: SampleRequest, state: State) -> AddedTask:
         # Measured: without the spare, 29% of this task's slot-time sat idle.
         batch_size=(body.cores + 1) * MAX_BATCH,
         template_source=found["expression"],
-        template_name=f"Settings Sampler · {body.alpha_id}",
-        seeds=settings_sampler.seed_trials(requests),
+        template_name=f"Settings Sampler · {body.alpha_id or 'Expression'}",
+        seeds=settings_sampler.seed_trials(requests, has_source=bool(body.alpha_id)),
     )
     return AddedTask(id=row.id, name=row.name)
 
@@ -276,6 +311,10 @@ async def _candidates(state: State, task_ids: list[int]) -> tuple[list[str], set
         ).all()
         marked = {str(a) for a in (await session.scalars(select(Submission.alpha_id))).all()}
 
+    # The vault holds the checks BRAIN has since finished; a trial's copy is frozen at
+    # simulation time, still PENDING on the correlation checks, and only stands in for an
+    # Alpha the vault does not hold.
+    stored = await state.alphas.by_ids(list({str(a) for a, _ in rows}))
     found: list[str] = []
     seen: set[str] = set()
     pending = 0
@@ -284,10 +323,12 @@ async def _candidates(state: State, task_ids: list[int]) -> tuple[list[str], set
         if found_id in seen:
             continue
         seen.add(found_id)
-        checks = json.dumps((result or {}).get("checks") or [])
-        if is_submittable(checks):
+        row = stored.get(found_id) or {}
+        checks = row.get("checks") or json.dumps((result or {}).get("checks") or [])
+        mode = row.get("simulation_mode")
+        if is_submittable(checks, mode):
             found.append(found_id)
-        elif is_promising(checks):
+        elif is_promising(checks, mode):
             pending += 1
     return found, marked, pending
 
@@ -437,3 +478,118 @@ async def mark_submitted(body: SubmittedRequest, state: State) -> None:
         else:
             await session.execute(delete(Submission).where(Submission.alpha_id == body.alpha_id))
         await session.commit()
+
+
+# --- Correlation Breaker ----------------------------------------------------
+
+
+class BreakerSettings(Out):
+    """What every simulation runs at: the source Alpha's own, never varied."""
+
+    region: str | None
+    delay: int | None
+    universe: str | None
+    neutralization: str | None
+    decay: int | None
+    truncation: float | None
+
+
+class BreakerRecipe(Out):
+    id: str
+    name: str
+    why: str
+    #: What it costs, when it costs something worth knowing before running it.
+    caution: str
+    #: Only the re-shape, written against ``alpha``; the binding is shown once, above.
+    transform: str
+    #: Why it cannot run here, empty when it can.
+    blocked: str
+
+
+class BreakerPlan(Out):
+    alpha_id: str
+    expression: str
+    #: The source Alpha reduced to ``alpha``, shown once above the re-shapes.
+    bound: str
+    settings: BreakerSettings
+    #: BRAIN's own production-correlation check, as it last reported it.
+    correlation: dict[str, Any] | None
+    recipes: list[BreakerRecipe]
+    problems: list[str]
+
+
+class BreakerRequest(BaseModel):
+    alpha_id: str = Field(min_length=1, max_length=64, alias="alphaId")
+    #: Which recipes to run; empty means every one the plan offers.
+    recipes: list[str] = Field(default_factory=list, max_length=50)
+    cores: int = Field(default=DEFAULT_SLOTS, ge=1)
+
+    model_config = {"populate_by_name": True}
+
+
+@router.post("/correlation-breaker/preview")
+async def breaker_preview(body: BreakerRequest, state: State) -> BreakerPlan:
+    """The Alpha, the settings its re-shapes will hold, and every recipe's expression.
+
+    Free: reads the Alpha and the catalog, simulates nothing.
+    """
+    return BreakerPlan.model_validate(await correlation_breaker.plan(state, body.alpha_id.strip()))
+
+
+@router.post("/correlation-breaker/tasks")
+async def breaker_task(body: BreakerRequest, state: State) -> AddedTask:
+    """Queue one simulation per chosen recipe, every one at the Alpha's own settings."""
+    if body.cores > state.engine.slots:
+        raise refuse(
+            422,
+            "too_many_cores",
+            f"The engine has {state.engine.slots} slots, so a task cannot hold {body.cores}.",
+        )
+    found = await correlation_breaker.plan(state, body.alpha_id.strip())
+    if found["problems"]:
+        raise refuse(422, "correlation_breaker_blocked", found["problems"][0])
+
+    wanted = set(body.recipes)
+    # A recipe the plan marked blocked is never queued, whether or not it was asked for.
+    runnable = {r["id"] for r in found["recipes"] if not r["blocked"]}
+    chosen = [
+        r
+        for r in correlation_breaker.RECIPES
+        if r.id in runnable and (not wanted or r.id in wanted)
+    ]
+    if not chosen:
+        raise refuse(
+            422,
+            "no_simulations",
+            "Nothing to run: every chosen re-shape needs an operator or a field this market "
+            "does not have.",
+        )
+
+    compressed = correlation_breaker.compress(found["expression"])
+    requests = correlation_breaker.requests(compressed, chosen, found["rawSettings"])
+    settings = found["settings"]
+    row = await add_study(
+        state,
+        now=utcnow(),
+        lab="Correlation Breaker",
+        prefix="correlation-breaker",
+        sampler=CORRELATION_BREAKER,
+        params=BreakerParams(
+            region=str(settings["region"] or ""),
+            delay=int(settings["delay"] or 0),
+            alpha_id=body.alpha_id,
+            universe=str(settings["universe"] or ""),
+            neutralization=str(settings["neutralization"] or ""),
+            decay=int(settings["decay"] or 0),
+            truncation=float(settings["truncation"] or 0.08),
+            recipes=[r.id for r in chosen],
+            cores=body.cores,
+        ),
+        objective="sharpe",
+        simulations=len(requests),
+        batch_size=(body.cores + 1) * MAX_BATCH,
+        template_source=found["expression"],
+        template_name=f"Correlation Breaker · {body.alpha_id}",
+        seeds=settings_sampler.seed_trials(requests, has_source=False),
+    )
+    return AddedTask(id=row.id, name=row.name)

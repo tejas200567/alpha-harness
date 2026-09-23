@@ -3,6 +3,8 @@
 import { DatabaseIcon, XIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { DASH, fmt } from '@/lib/format'
+import { isRegionAgnostic, regionLabel, useScopeOptions } from '@/lib/scope'
+import { NeutralizationPicker } from '@/screens/research-labs/neutralization'
 import {
   Button,
   Chips,
@@ -16,9 +18,8 @@ import {
   Panel,
   Segmented,
 } from '@/ui/kit'
-import type { LabDraft } from './lab-task'
+import { CORES, type LabDraft } from './lab-task'
 
-const CORES = [1, 2, 3, 4]
 const DECAYS = [0, 3, 5, 7, 10]
 
 /** What either lab's preview says about a task. */
@@ -108,6 +109,14 @@ export function SettingsPanel({
 }) {
   const simulations = draft.simulations
   const showVector = (plan?.fields.vector ?? 0) > 0 || (plan?.leftOut.vector ?? 0) > 0
+  // BRAIN's own legal list for this market, which is wider than the four a lab searches by
+  // default — picking any of them is what tells the lab to search those instead.
+  const { neutralizations } = useScopeOptions({
+    instrumentType: 'EQUITY',
+    region: draft.region,
+    delay: draft.delay,
+    universe: draft.universe,
+  })
 
   return (
     <Panel title="Settings">
@@ -160,11 +169,26 @@ export function SettingsPanel({
             </Setting>
           )}
         </div>
+        {neutralizations.length > 0 && (
+          <NeutralizationPicker
+            available={neutralizations}
+            value={draft.neutralizations}
+            onChange={(next) => set({ neutralizations: next })}
+            hint="None chosen searches Market, Sector, Industry and Subindustry."
+          />
+        )}
         <div className="grid gap-3 sm:grid-cols-3">
-          <Metric boxed label="Market" value={`${draft.region} · D${draft.delay}`} />
+          <Metric boxed label="Market" value={`${regionLabel(draft.region)} · D${draft.delay}`} />
           <Metric boxed label="Fields" value={fmt.int(plan?.fields.total)} />
           <Metric boxed label="Universes" value={fmt.int(plan?.universes.length)} />
         </div>
+        {isRegionAgnostic(draft) && (
+          <Notice tone="info" title="Every alpha here runs in four regions at once">
+            One simulation covers USA, Europe, Asia and Global, and spends four of today's
+            allowance. The alphas it makes can be submitted where two or more of those regions hold
+            up.
+          </Notice>
+        )}
         {simulations !== null && simulations > maxSimulations && (
           <Notice
             tone="error"

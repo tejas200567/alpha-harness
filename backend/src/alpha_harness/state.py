@@ -19,6 +19,7 @@ from .account import AuthService, PlatformMetadata
 from .brain.client import BrainClient
 from .brain.endpoints import BrainEndpoints
 from .brain.errors import BrainTransportError
+from .catalog import search
 from .catalog.queries import CatalogQueries
 from .catalog.sync import CatalogSync, serialise_run
 from .config import BRAIN_API_BASE, Settings, get_settings
@@ -108,9 +109,7 @@ class AppState:
             self.alphas,
             self.endpoints,
             self.tasks,
-            # A resolved check can turn an alpha submittable minutes after its
-            # simulation finished, so the screen listing them has to hear about it.
-            on_checked=lambda payload: self.hub.broadcast(TOPIC_SIMULATIONS, payload, replay=False),
+            on_stored=lambda payload: self.hub.broadcast(TOPIC_SIMULATIONS, payload, replay=False),
         )
         self.tracker.on_alpha = self.backfill.capture
 
@@ -133,11 +132,24 @@ class AppState:
         self._last_session_check = float("-inf")
         self._last_login_attempt = float("-inf")
 
+    #: Held so the event loop keeps a strong reference while it runs.
+    _indexing: asyncio.Task[None] | None = None
+
+    async def _index_search(self) -> None:
+        try:
+            await search.rebuild(self.catalog)
+        except Exception:
+            log.warning("startup.search_index_failed", exc_info=True)
+
     # -- lifecycle -------------------------------------------------------
 
     async def startup(self) -> None:
         await self.db.create_all()
         await self.catalog.open()
+        # A catalog downloaded before the search index existed still has none; building it
+        # costs a couple of seconds and nothing else depends on it, so it must not block.
+        if not await search.ready(self.catalog):
+            self._indexing = asyncio.create_task(self._index_search(), name="catalog-fts-index")
 
         # Reuse a cached session before anything else; a restart should not cost a
         # proof-of-work solve or count against the sign-in lockout budget.
@@ -251,6 +263,8 @@ class AppState:
             try:
                 info = await self.auth.login()
                 if info.authenticated:
+                    # A sign-in that worked spent none of the lockout budget.
+                    self._last_login_attempt = float("-inf")
                     self.engine.configure_from_permissions(info.permissions)
                 await self.hub.broadcast(TOPIC_SESSION, info.to_dict())
                 return info.authenticated

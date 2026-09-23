@@ -16,8 +16,20 @@ export interface MarketPick {
   universe: string
 }
 
-export interface SampleRequest {
-  alphaId: string
+/** How every simulation in the sweep is held, whatever market it lands in. Each is optional:
+ * left out, an Alpha's own value stands, or the platform default when there is no Alpha. */
+export interface Holding {
+  decay?: number
+  truncation?: number
+  nanHandling?: 'ON' | 'OFF'
+  /** `P0Y0M0D` to `P6Y0M0D`, BRAIN's own bounds. */
+  testPeriod?: string
+}
+
+/** Where the sweep's expression comes from: an Alpha, or an expression typed in. */
+export type Source = ({ alphaId: string } | { expression: string }) & Holding
+
+export type SampleRequest = Source & {
   /** Empty means every market the plan offers; likewise for each filter below. */
   markets: MarketPick[]
   neutralizations: string[]
@@ -29,8 +41,8 @@ export interface SampleRequest {
 const B = '/api/tools/settings-sampler'
 
 export const settingsSampler = {
-  /** Free: reads the Alpha and the catalog, simulates nothing. */
-  preview: (alphaId: string) => http.post<SettingsPlan>(`${B}/preview`, { alphaId }),
+  /** Free: reads the Alpha (if any) and the catalog, simulates nothing. */
+  preview: (source: Source) => http.post<SettingsPlan>(`${B}/preview`, source),
   addTask: (body: SampleRequest) => http.post<Schemas['AddedTask']>(`${B}/tasks`, body),
 }
 

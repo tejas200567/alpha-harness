@@ -26,6 +26,8 @@ POWER_POOL_SAMPLER = "power-pool"
 SETTINGS_SAMPLER = "settings-sampler"
 #: Studies that run a fixed list of pre-built expressions, one per field (catalog.description_rules).
 DESC_AWARE_SAMPLER = "description-aware"
+#: Studies that re-shape one Alpha's expression at its own settings (tools.correlation_breaker).
+CORRELATION_BREAKER = "correlation-breaker"
 #: Studies that are research-lab tasks, run only from the Tasks tab, by their lab's name.
 TASK_SAMPLERS = {
     SEARCH_SAMPLER: "Search Lab",
@@ -34,6 +36,7 @@ TASK_SAMPLERS = {
     POWER_POOL_SAMPLER: "LLM Power Pool Lab",
     SETTINGS_SAMPLER: "Settings Sampler",
     DESC_AWARE_SAMPLER: "Description-Aware Sweep",
+    CORRELATION_BREAKER: "Correlation Breaker",
 }
 
 
@@ -140,6 +143,26 @@ class DescAwareParams(TaskParams):
     candidate_count: int = 0
 
 
+class BreakerParams(TaskParams):
+    """Correlation Breaker: one Alpha re-shaped, every simulation written up front.
+
+    The settings are the source Alpha's and are never varied, so they are recorded here to be
+    shown on the task card rather than to be chosen from.
+    """
+
+    alpha_id: str = Field(
+        default="",
+        validation_alias=AliasChoices("alphaId", "alpha_id"),
+        serialization_alias="alphaId",
+    )
+    universe: str = ""
+    neutralization: str = ""
+    decay: int = 0
+    truncation: float = 0.08
+    #: The recipes queued, by id, for the task's detail line.
+    recipes: list[str] = Field(default_factory=list)
+
+
 BY_SAMPLER: dict[str, type[TaskParams]] = {
     SEARCH_SAMPLER: SearchParams,
     TEMPLATE_SAMPLER: TemplateParams,
@@ -147,6 +170,7 @@ BY_SAMPLER: dict[str, type[TaskParams]] = {
     POWER_POOL_SAMPLER: PowerPoolParams,
     SETTINGS_SAMPLER: SettingsParams,
     DESC_AWARE_SAMPLER: DescAwareParams,
+    CORRELATION_BREAKER: BreakerParams,
 }
 
 
