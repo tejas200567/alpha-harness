@@ -51,6 +51,7 @@ _TASKS: dict[str, tuple[str, str]] = {
     POWER_POOL_SAMPLER: ("power-pool", "sharpe"),
     SETTINGS_SAMPLER: ("settings-sampler", "sharpe"),
     CORRELATION_BREAKER: ("correlation-breaker", "sharpe"),
+    "region-agnostic": ("region-agnostic", "sharpe"),  # RAA_SAMPLER
 }
 
 

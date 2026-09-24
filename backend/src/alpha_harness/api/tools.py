@@ -824,8 +824,6 @@ async def raa_task(body: RaaRequest, state: State) -> AddedTask:
     row = await add_study(
         state,
         now=utcnow(),
-        lab="Region-Agnostic Lab",
-        prefix="region-agnostic",
         sampler=RAA_SAMPLER,
         params=RaaParams(
             region="ALL",
@@ -836,7 +834,6 @@ async def raa_task(body: RaaRequest, state: State) -> AddedTask:
             children=found["children"],
             cores=body.cores,
         ),
-        objective="sharpe",
         # One expression is one trial; its child count (quota cost) is params.children.
         simulations=1,
         batch_size=(body.cores + 1) * MAX_BATCH,
@@ -977,8 +974,6 @@ async def raa_from_task(body: RaFromTask, state: State) -> RaFromTaskResult:
         row = await add_study(
             state,
             now=utcnow(),
-            lab="Region-Agnostic Lab",
-            prefix="region-agnostic",
             sampler=RAA_SAMPLER,
             params=RaaParams(
                 region="ALL",
@@ -989,7 +984,6 @@ async def raa_from_task(body: RaFromTask, state: State) -> RaFromTaskResult:
                 children=4,
                 cores=body.cores,
             ),
-            objective="sharpe",
             simulations=len(requests),
             batch_size=(body.cores + 1) * MAX_BATCH,
             template_source=sample[0],
