@@ -39,6 +39,7 @@ export const useTemplateLab = create<TemplateDraft & Actions>()(
       decay: 0,
       vectorOperators: null,
       neutralizations: [],
+      visualization: false,
       templateId: null,
       name: '',
       doc: null,

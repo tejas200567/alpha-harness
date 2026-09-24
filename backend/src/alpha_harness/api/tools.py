@@ -22,9 +22,24 @@ from ..db.models import Submission, Trial, TrialState, utcnow
 from ..engine.packer import MAX_BATCH
 from ..engine.slots import DEFAULT_SLOTS
 from ..labs.launch import AddedTask, add_study
-from ..labs.params import CORRELATION_BREAKER, SETTINGS_SAMPLER, BreakerParams, SettingsParams
+from ..labs.params import (
+    CORRELATION_BREAKER,
+    RAA_SAMPLER,
+    SETTINGS_SAMPLER,
+    SUPERALPHA_SAMPLER,
+    BreakerParams,
+    RaaParams,
+    SettingsParams,
+    SuperAlphaParams,
+)
 from ..schemas import Out
-from ..tools import correlation_breaker, settings_sampler, submission_planner
+from ..tools import (
+    correlation_breaker,
+    region_agnostic,
+    settings_sampler,
+    submission_planner,
+    superalpha,
+)
 from ..vault.yields import is_promising, is_submittable
 from .alphas import page as alpha_page
 from .deps import State, refuse
@@ -523,6 +538,23 @@ class BreakerRequest(BaseModel):
     #: Which recipes to run; empty means every one the plan offers.
     recipes: list[str] = Field(default_factory=list, max_length=50)
     cores: int = Field(default=DEFAULT_SLOTS, ge=1)
+    model_config = {"populate_by_name": True}
+
+
+# -- SuperAlpha -------------------------------------------------------------
+
+
+class SuperAlphaPreviewRequest(BaseModel):
+    region: str
+    delay: int = Field(ge=0, le=1)
+    universe: str
+    neutralization: str = "NONE"
+    decay: int = 0
+    truncation: float = 0.08
+    selection_name: str = Field(alias="selectionName")
+    combo_name: str = Field(alias="comboName")
+    turnover_max: float | None = Field(default=None, alias="turnoverMax")
+    sharpe_min: float | None = Field(default=None, alias="sharpeMin")
 
     model_config = {"populate_by_name": True}
 
@@ -591,5 +623,253 @@ async def breaker_task(body: BreakerRequest, state: State) -> AddedTask:
         template_source=found["expression"],
         template_name=f"Correlation Breaker · {body.alpha_id}",
         seeds=settings_sampler.seed_trials(requests, has_source=False),
+    )
+    return AddedTask(id=row.id, name=row.name)
+
+
+class SuperAlphaPreview(Out):
+    selection: str
+    combo: str
+    candidate_count: int
+    eligible_count: int = 0
+    pool_count: int = 0
+    family_count: int = 0
+    selected_count: int = 0
+    selected_family_count: int = 0
+    structural_redundancy_removed: int = 0
+    median_pair_corr: float | None = None
+    max_pair_corr: float | None = None
+    selected: list[dict[str, Any]] = Field(default_factory=list)
+    problems: list[str]
+
+
+async def _superalpha_candidates(
+    body: SuperAlphaPreviewRequest,
+    state: State,
+) -> dict[str, Any]:
+    return await superalpha.select_diverse_candidates(
+        state,
+        region=body.region,
+        delay=body.delay,
+        universe=body.universe,
+        sharpe_min=body.sharpe_min,
+        turnover_max=body.turnover_max,
+        limit=superalpha.DEFAULT_SELECTION_LIMIT,
+    )
+
+
+@router.post("/superalpha/preview")
+async def superalpha_preview(
+    body: SuperAlphaPreviewRequest,
+    state: State,
+) -> SuperAlphaPreview:
+    problems: list[str] = []
+
+    selection = superalpha.SELECTIONS.get(
+        body.selection_name
+    )
+    combo = superalpha.COMBOS.get(
+        body.combo_name
+    )
+
+    if selection is None:
+        problems.append(
+            f"Unknown selection preset: {body.selection_name}"
+        )
+
+    if combo is None:
+        problems.append(
+            f"Unknown combo preset: {body.combo_name}"
+        )
+
+    result: dict[str, Any] = {}
+
+    if not problems:
+        result = await _superalpha_candidates(
+            body,
+            state,
+        )
+
+        if result["selected_count"] < 2:
+            problems.append(
+                "Fewer than two diversified alpha "
+                "candidates are available."
+            )
+
+    return SuperAlphaPreview(
+        selection=selection or "",
+        combo=combo or "",
+        candidate_count=int(
+            result.get("eligible_count", 0)
+        ),
+        eligible_count=int(
+            result.get("eligible_count", 0)
+        ),
+        pool_count=int(
+            result.get("pool_count", 0)
+        ),
+        family_count=int(
+            result.get("family_count", 0)
+        ),
+        selected_count=int(
+            result.get("selected_count", 0)
+        ),
+        selected_family_count=int(
+            result.get("selected_family_count", 0)
+        ),
+        structural_redundancy_removed=int(
+            result.get(
+                "structural_redundancy_removed",
+                0,
+            )
+        ),
+        median_pair_corr=result.get(
+            "median_pair_corr"
+        ),
+        max_pair_corr=result.get(
+            "max_pair_corr"
+        ),
+        selected=result.get(
+            "selected",
+            [],
+        ),
+        problems=problems,
+    )
+
+
+@router.post("/superalpha/tasks", status_code=201)
+async def superalpha_add_task(body: SuperAlphaPreviewRequest, state: State) -> AddedTask:
+    preview = await superalpha_preview(body, state)
+    if preview.problems:
+        raise refuse(422, "superalpha_blocked", preview.problems[0])
+
+    request = superalpha.build_request(
+        region=body.region,
+        delay=body.delay,
+        universe=body.universe,
+        neutralization=body.neutralization,
+        decay=body.decay,
+        truncation=body.truncation,
+        selection=preview.selection,
+        combo=preview.combo,
+    )
+    row = await add_study(
+        state,
+        now=utcnow(),
+        lab="SuperAlpha",
+        prefix="superalpha",
+        sampler=SUPERALPHA_SAMPLER,
+        params=SuperAlphaParams(
+            region=body.region,
+            delay=body.delay,
+            selection_name=body.selection_name,
+            combo_name=body.combo_name,
+            candidate_count=preview.candidate_count,
+        ),
+        objective="sharpe",
+        simulations=1,
+        batch_size=1,
+        template_source=f"selection: {preview.selection}\ncombo: {preview.combo}",
+        template_name=f"SuperAlpha · {body.selection_name}/{body.combo_name}",
+        seeds=superalpha.seed_trials(request),
+    )
+    return AddedTask(id=row.id, name=row.name)
+
+
+# --- Region-Agnostic Lab ---------------------------------------------------
+
+class RaaRequest(BaseModel):
+    """One expression, one RA universe, one simulation per request."""
+
+    model_config = {"populate_by_name": True}
+
+    expression: str = Field(min_length=1)
+    universe: Literal["SMALL", "MEDIUM", "LARGE"] = "MEDIUM"
+    neutralization: str = "NONE"
+    decay: int = Field(default=0, ge=0)
+    truncation: float = Field(default=0.08, gt=0, le=0.5)
+    cores: int = Field(default=DEFAULT_SLOTS, ge=1)
+
+
+class RaaPlan(Out):
+    expression: str
+    universe: str
+    #: Per-region universes BRAIN will map the RA universe onto.
+    universes: dict[str, str]
+    delay: int
+    regions: list[str]
+    children: int
+    problems: list[str]
+
+
+@router.post("/region-agnostic/preview")
+async def raa_preview(body: RaaRequest, state: State) -> RaaPlan:
+    """Eligibility and the child count, without spending a simulation.
+
+    The child count is what quota will charge: concurrent quota counts the sum of
+    the RA Children's slots, so a four-region expression costs four, not one.
+    """
+    coverage = await state.catalog.region_coverage()
+    found = region_agnostic.plan(
+        expression=body.expression,
+        universe=body.universe,
+        coverage=coverage,
+        neutralization=body.neutralization,
+        decay=body.decay,
+        truncation=body.truncation,
+    )
+    return RaaPlan.model_validate(found)
+
+
+@router.post("/region-agnostic/tasks", status_code=201)
+async def raa_task(body: RaaRequest, state: State) -> AddedTask:
+    """Queue one REGION_AGNOSTIC simulation. Holds ``children`` slots for its round."""
+    if body.cores > state.engine.slots:
+        raise refuse(
+            422,
+            "too_many_cores",
+            f"The engine has {state.engine.slots} slots, so a task cannot hold {body.cores}.",
+        )
+    coverage = await state.catalog.region_coverage()
+    found = region_agnostic.plan(
+        expression=body.expression,
+        universe=body.universe,
+        coverage=coverage,
+        neutralization=body.neutralization,
+        decay=body.decay,
+        truncation=body.truncation,
+    )
+    if found["problems"]:
+        raise refuse(422, "region_agnostic_blocked", found["problems"][0])
+
+    request = region_agnostic.build_request(
+        expression=body.expression,
+        universe=body.universe,
+        neutralization=body.neutralization,
+        decay=body.decay,
+        truncation=body.truncation,
+    )
+    row = await add_study(
+        state,
+        now=utcnow(),
+        lab="Region-Agnostic Lab",
+        prefix="region-agnostic",
+        sampler=RAA_SAMPLER,
+        params=RaaParams(
+            region="ALL",
+            delay=region_agnostic.DELAY,
+            universe=body.universe,
+            neutralization=body.neutralization,
+            expression=body.expression,
+            children=found["children"],
+            cores=body.cores,
+        ),
+        objective="sharpe",
+        # The scheduler holds slots per child, so the round's cost is the child count.
+        simulations=found["children"],
+        batch_size=(body.cores + 1) * MAX_BATCH,
+        template_source=body.expression,
+        template_name=f"Region-Agnostic \u00b7 {body.universe}",
+        seeds=settings_sampler.seed_trials([request], has_source=False),
     )
     return AddedTask(id=row.id, name=row.name)

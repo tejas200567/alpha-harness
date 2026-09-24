@@ -17,6 +17,10 @@ export interface SearchLabDraft {
   vectorOperators: string[] | null
   /** Empty leaves the lab on its own four group neutralizations. */
   neutralizations: string[]
+  /** Whether to record visualizations for this task. Set by the lab that
+   * supports it; Search only carries the default so the shared body shape
+   * stays honest. */
+  visualization: boolean
 }
 
 export const useSearchLab = create<
@@ -33,6 +37,7 @@ export const useSearchLab = create<
       decay: 0,
       vectorOperators: null,
       neutralizations: [],
+      visualization: false,
       set: (change) => set(change),
     }),
     { name: 'alpha-harness-search-lab' },

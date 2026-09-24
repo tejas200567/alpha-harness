@@ -28,6 +28,11 @@ SETTINGS_SAMPLER = "settings-sampler"
 DESC_AWARE_SAMPLER = "description-aware"
 #: Studies that re-shape one Alpha's expression at its own settings (tools.correlation_breaker).
 CORRELATION_BREAKER = "correlation-breaker"
+#: Studies that run one expression across every region in a single request (tools.region_agnostic).
+RAA_SAMPLER = "region-agnostic"
+#: Studies that combine several of the account's own alphas via BRAIN's SUPER type
+#: (tools.superalpha).
+SUPERALPHA_SAMPLER = "superalpha"
 #: Studies that are research-lab tasks, run only from the Tasks tab, by their lab's name.
 TASK_SAMPLERS = {
     SEARCH_SAMPLER: "Search Lab",
@@ -37,6 +42,8 @@ TASK_SAMPLERS = {
     SETTINGS_SAMPLER: "Settings Sampler",
     DESC_AWARE_SAMPLER: "Description-Aware Sweep",
     CORRELATION_BREAKER: "Correlation Breaker",
+    RAA_SAMPLER: "Region-Agnostic Lab",
+    SUPERALPHA_SAMPLER: "SuperAlpha",
 }
 
 
@@ -74,6 +81,9 @@ class SearchParams(TaskParams):
     n_startup_trials: int = 20
     multivariate: bool = True
     group: bool = True
+    #: Whether the lab records visualizations for its trials. Search carries the
+    #: default so every lab's shared body shape stays honest.
+    visualization: bool = False
 
 
 class TemplateParams(SearchParams):
@@ -143,6 +153,41 @@ class DescAwareParams(TaskParams):
     candidate_count: int = 0
 
 
+class RaaParams(TaskParams):
+    """Region-Agnostic Lab: one expression, one RA universe, four regions at once.
+
+    ``region`` is always ``ALL``; the universe is SMALL / MEDIUM / LARGE, which BRAIN
+    maps per-region. The parent comes back as the study's Alpha; the children are what
+    submission judges.
+    """
+
+    universe: str = "MEDIUM"
+    neutralization: str = "NONE"
+    expression: str = ""
+    #: How many RA Children the request will actually produce; drives quota.
+    children: int = 0
+
+
+class SuperAlphaParams(TaskParams):
+    """SuperAlpha: one SUPER simulation combining several of the account's own alphas."""
+
+    selection_name: str = Field(
+        default="",
+        validation_alias=AliasChoices("selectionName", "selection_name"),
+        serialization_alias="selectionName",
+    )
+    combo_name: str = Field(
+        default="",
+        validation_alias=AliasChoices("comboName", "combo_name"),
+        serialization_alias="comboName",
+    )
+    candidate_count: int = Field(
+        default=0,
+        validation_alias=AliasChoices("candidateCount", "candidate_count"),
+        serialization_alias="candidateCount",
+    )
+
+
 class BreakerParams(TaskParams):
     """Correlation Breaker: one Alpha re-shaped, every simulation written up front.
 
@@ -171,6 +216,8 @@ BY_SAMPLER: dict[str, type[TaskParams]] = {
     SETTINGS_SAMPLER: SettingsParams,
     DESC_AWARE_SAMPLER: DescAwareParams,
     CORRELATION_BREAKER: BreakerParams,
+    RAA_SAMPLER: RaaParams,
+    SUPERALPHA_SAMPLER: SuperAlphaParams,
 }
 
 

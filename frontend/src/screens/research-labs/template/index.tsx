@@ -80,6 +80,7 @@ export function TemplateLabScreen() {
   const [naming, setNaming] = useState<'save-as' | 'rename' | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [opening, setOpening] = useState<Openable | null>(null)
+  const [raaOpen, setRaaOpen] = useState(false)
 
   const options = useQuery({
     queryKey: ['template-lab', 'options'],
@@ -278,6 +279,9 @@ export function TemplateLabScreen() {
               <PlusIcon />
               Add Task
             </Button>
+            <Button variant="secondary" disabled={doc.root === null} onClick={() => setRaaOpen(true)}>
+              RAA Batch
+            </Button>
           </>
         }
       />
@@ -405,7 +409,131 @@ export function TemplateLabScreen() {
       >
         Tasks already added keep their own copy.
       </Confirm>
+      <RaaBatchDialog
+        open={raaOpen}
+        onOpenChange={setRaaOpen}
+        tree={doc}
+        templateId={saved}
+        templateName={taskName}
+        vectorOperators={vectorOperators}
+        decay={draft.decay}
+        neutralizations={draft.neutralizations}
+        cores={draft.cores}
+        visualization={draft.visualization}
+        datasetIds={draft.datasetIds}
+        maxSimulations={maxSimulations}
+      />
     </Page>
+  )
+}
+
+function RaaBatchDialog({
+  open,
+  onOpenChange,
+  tree,
+  templateId,
+  templateName,
+  vectorOperators,
+  decay,
+  neutralizations,
+  cores,
+  visualization,
+  datasetIds,
+  maxSimulations,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  tree: TemplateDoc
+  templateId: string | number | null
+  templateName: string
+  vectorOperators: string[]
+  decay: number
+  neutralizations: string[]
+  cores: number
+  visualization: boolean
+  datasetIds: string[]
+  maxSimulations: number
+}) {
+  const [universe, setUniverse] = useState<'LARGE' | 'MEDIUM' | 'SMALL'>('LARGE')
+  const [simulations, setSimulations] = useState(500)
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  const run = useMutation({
+    mutationFn: () =>
+      templateLab.addTask({
+        tree,
+        template_id: typeof templateId === 'number' ? templateId : null,
+        template_name: templateName,
+        region: 'ALL',
+        delay: 1,
+        universe,
+        dataset_ids: datasetIds,
+        vector_operators: vectorOperators,
+        neutralizations,
+        decay,
+        cores,
+        visualization,
+        simulations,
+      }),
+    onSuccess: () => {
+      onOpenChange(false)
+      void queryClient.invalidateQueries({ queryKey: ['lab-tasks'] })
+      toast.success('RAA Batch Added', {
+        action: { label: 'Open Tasks', onClick: () => void navigate({ to: '/tasks' }) },
+      })
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  })
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Run Region-Agnostic Batch"
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button variant="primary" loading={run.isPending} onClick={() => run.mutate()}>
+            Run RAA Batch
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <Field label="RA Universe">
+          <div className="flex gap-2">
+            {(['LARGE', 'MEDIUM', 'SMALL'] as const).map((u) => (
+              <Button
+                key={u}
+                size="sm"
+                variant={universe === u ? 'primary' : 'secondary'}
+                onClick={() => setUniverse(u)}
+              >
+                {u}
+              </Button>
+            ))}
+          </div>
+        </Field>
+        <Field label="Simulations">
+          <Input
+            type="number"
+            min={1}
+            max={maxSimulations}
+            value={simulations}
+            onChange={(e) =>
+              setSimulations(Math.max(1, Math.min(maxSimulations, Number(e.target.value) || 1)))
+            }
+          />
+        </Field>
+        <p className="text-body-compact text-ink-subtle">
+          Region is fixed to ALL and delay to D1, per BRAIN's RAA rules. Runs the currently open
+          template against the {universe} region-agnostic universe.
+        </p>
+      </div>
+    </Dialog>
   )
 }
 

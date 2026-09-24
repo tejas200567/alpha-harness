@@ -1892,6 +1892,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tools/region-agnostic/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Raa Preview
+         * @description Eligibility and the child count, without spending a simulation.
+         *
+         *     The child count is what quota will charge: concurrent quota counts the sum of
+         *     the RA Children's slots, so a four-region expression costs four, not one.
+         */
+        post: operations["raa_preview_api_tools_region_agnostic_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tools/region-agnostic/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Raa Task
+         * @description Queue one REGION_AGNOSTIC simulation. Holds ``children`` slots for its round.
+         */
+        post: operations["raa_task_api_tools_region_agnostic_tasks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tools/settings-sampler/preview": {
         parameters: {
             query?: never;
@@ -1996,6 +2039,40 @@ export interface paths {
          * @description Record that an Alpha was submitted on BRAIN, so later plans treat it as permanent.
          */
         post: operations["mark_submitted_api_tools_submission_planner_submitted_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tools/superalpha/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Superalpha Preview */
+        post: operations["superalpha_preview_api_tools_superalpha_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tools/superalpha/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Superalpha Add Task */
+        post: operations["superalpha_add_task_api_tools_superalpha_tasks_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4410,6 +4487,59 @@ export interface components {
             /** Stopping */
             stopping: boolean;
         };
+        /** RaaPlan */
+        RaaPlan: {
+            /** Children */
+            children: number;
+            /** Delay */
+            delay: number;
+            /** Expression */
+            expression: string;
+            /** Problems */
+            problems: string[];
+            /** Regions */
+            regions: string[];
+            /** Universe */
+            universe: string;
+            /** Universes */
+            universes: {
+                [key: string]: string;
+            };
+        };
+        /**
+         * RaaRequest
+         * @description One expression, one RA universe, one simulation per request.
+         */
+        RaaRequest: {
+            /**
+             * Cores
+             * @default 8
+             */
+            cores: number;
+            /**
+             * Decay
+             * @default 4
+             */
+            decay: number;
+            /** Expression */
+            expression: string;
+            /**
+             * Neutralization
+             * @default NONE
+             */
+            neutralization: string;
+            /**
+             * Truncation
+             * @default 0.08
+             */
+            truncation: number;
+            /**
+             * Universe
+             * @default MEDIUM
+             * @enum {string}
+             */
+            universe: "SMALL" | "MEDIUM" | "LARGE";
+        };
         /** RankedAlpha */
         RankedAlpha: {
             /** Alphaid */
@@ -4619,6 +4749,11 @@ export interface components {
             universe?: string | null;
             /** Vector Operators */
             vector_operators?: string[];
+            /**
+             * Visualization
+             * @default false
+             */
+            visualization: boolean;
         };
         /** SeedReason */
         SeedReason: {
@@ -4900,6 +5035,87 @@ export interface components {
             alphaId: string;
             /** Submitted */
             submitted: boolean;
+        };
+        /** SuperAlphaPreview */
+        SuperAlphaPreview: {
+            /** Candidatecount */
+            candidateCount: number;
+            /** Combo */
+            combo: string;
+            /**
+             * Eligiblecount
+             * @default 0
+             */
+            eligibleCount: number;
+            /**
+             * Familycount
+             * @default 0
+             */
+            familyCount: number;
+            /** Maxpaircorr */
+            maxPairCorr?: number | null;
+            /** Medianpaircorr */
+            medianPairCorr?: number | null;
+            /**
+             * Poolcount
+             * @default 0
+             */
+            poolCount: number;
+            /** Problems */
+            problems: string[];
+            /** Selected */
+            selected?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Selectedcount
+             * @default 0
+             */
+            selectedCount: number;
+            /**
+             * Selectedfamilycount
+             * @default 0
+             */
+            selectedFamilyCount: number;
+            /** Selection */
+            selection: string;
+            /**
+             * Structuralredundancyremoved
+             * @default 0
+             */
+            structuralRedundancyRemoved: number;
+        };
+        /** SuperAlphaPreviewRequest */
+        SuperAlphaPreviewRequest: {
+            /** Comboname */
+            comboName: string;
+            /**
+             * Decay
+             * @default 0
+             */
+            decay: number;
+            /** Delay */
+            delay: number;
+            /**
+             * Neutralization
+             * @default NONE
+             */
+            neutralization: string;
+            /** Region */
+            region: string;
+            /** Selectionname */
+            selectionName: string;
+            /** Sharpemin */
+            sharpeMin?: number | null;
+            /**
+             * Truncation
+             * @default 0.08
+             */
+            truncation: number;
+            /** Turnovermax */
+            turnoverMax?: number | null;
+            /** Universe */
+            universe: string;
         };
         /**
          * SyncAllRun
@@ -5258,6 +5474,11 @@ export interface components {
             universe?: string | null;
             /** Vector Operators */
             vector_operators?: string[];
+            /**
+             * Visualization
+             * @default false
+             */
+            visualization: boolean;
         };
         /** ThreadScope */
         ThreadScope: {
@@ -8238,6 +8459,72 @@ export interface operations {
             };
         };
     };
+    raa_preview_api_tools_region_agnostic_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RaaRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RaaPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    raa_task_api_tools_region_agnostic_tasks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RaaRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddedTask"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     preview_api_tools_settings_sampler_preview_post: {
         parameters: {
             query?: never;
@@ -8389,6 +8676,72 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    superalpha_preview_api_tools_superalpha_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuperAlphaPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuperAlphaPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    superalpha_add_task_api_tools_superalpha_tasks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuperAlphaPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddedTask"];
+                };
             };
             /** @description Validation Error */
             422: {

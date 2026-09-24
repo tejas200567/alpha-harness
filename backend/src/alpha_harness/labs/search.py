@@ -248,6 +248,7 @@ def request_for(params: dict[str, Any], run: SearchParams) -> SimulationRequest:
             neutralization=params["neutralization"],
             decay=run.decay,
             truncation=TRUNCATION,
+            visualization=run.visualization,
         ),
         regular=render(params),
     )

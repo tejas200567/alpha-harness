@@ -527,6 +527,7 @@ def request_for(params: dict[str, Any], run: TemplateParams) -> SimulationReques
             neutralization=params["neutralization"],
             decay=run.decay,
             truncation=search.TRUNCATION,
+            visualization=run.visualization,
         ),
         regular=render(run.tree, params),
     )
