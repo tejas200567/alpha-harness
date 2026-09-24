@@ -132,3 +132,13 @@ def summarise(alpha_id: str, body: dict[str, Any] | None) -> dict[str, Any]:
         "failedChecks": [d["name"] for d in detail if d["violation"] > 0],
         "regionAgnostic": {"score": score(body), "children": per_child},
     }
+
+
+def is_parent(alpha: Any) -> bool:
+    """An RA parent: it lists children and has no parent, or it ran on region ALL."""
+    if getattr(alpha, "parent", None):
+        return False
+    if getattr(alpha, "children", None):
+        return True
+    settings = getattr(alpha, "settings", None)
+    return getattr(settings, "region", None) == "ALL"

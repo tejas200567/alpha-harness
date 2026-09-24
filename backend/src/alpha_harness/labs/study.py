@@ -310,6 +310,21 @@ class Optimizer:
                 )
                 continue
 
+            from . import ra_scoring
+
+            if ra_scoring.is_parent(alpha):
+                # An RA parent has no statistics: its /check scores it from the children.
+                try:
+                    body = await self.endpoints.check_alpha(alpha_id)
+                except Exception as exc:  # noqa: BLE001
+                    error = {"error": f"Could not check the RA alpha: {exc}"}
+                    finished.append((live.get(trial.number), trial, None, error))
+                    continue
+                values = ra_scoring.values(body, objective_list)
+                summary = ra_scoring.summarise(alpha_id, body)
+                finished.append((live.get(trial.number), trial, values, summary))
+                continue
+
             extra = obj.train_extra(alpha, objective_list)
             values = obj.extract(alpha.in_sample, objective_list, extra)
             summary = obj.summarise(alpha)

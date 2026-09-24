@@ -55,3 +55,12 @@ def test_one_child_scores_below_zero():
 def test_no_children_is_failure():
     assert ra.score({}) == ra.FAILURE
     assert ra.constraints({}) == {ra.MIN_CHILDREN: 1.0}
+
+
+def test_is_parent():
+    from types import SimpleNamespace as NS
+
+    assert ra.is_parent(NS(parent=None, children=["a", "b"], settings=None))
+    assert ra.is_parent(NS(parent=None, children=[], settings=NS(region="ALL")))
+    assert not ra.is_parent(NS(parent="P", children=[], settings=NS(region="ALL")))
+    assert not ra.is_parent(NS(parent=None, children=[], settings=NS(region="USA")))
