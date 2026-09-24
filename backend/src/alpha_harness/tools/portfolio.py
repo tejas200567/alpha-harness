@@ -28,12 +28,8 @@ if TYPE_CHECKING:
     from .submission_planner import Bools
 
 
-def _plain(found: Stats | None) -> dict[str, Any] | None:
-    return asdict(found) if found is not None else None
-
-
 def _blocks(found: dict[str, Stats | None]) -> dict[str, Any]:
-    return {name: _plain(block) for name, block in found.items()}
+    return {name: None if block is None else asdict(block) for name, block in found.items()}
 
 
 def _split(meta: dict[str, dict[str, Any]], alpha_ids: list[str]) -> date | None:
@@ -69,18 +65,7 @@ def compute(
             "measured_pairs": 0,
             "highest": None,
         }
-    days = {a: alpha_days(series[a], meta.get(a, {})) for a in ids}
-    dates = sorted({d for a in ids for d, _, _ in days[a]})
-    at = {d: i for i, d in enumerate(dates)}
-    pnl = np.full((len(dates), len(ids)), np.nan)
-    turnover = np.zeros((len(dates), len(ids)))
-    closing = np.zeros((len(dates), len(ids)), dtype=bool)
-    for col, alpha_id in enumerate(ids):
-        rows = days[alpha_id]
-        for day, value, traded in rows:
-            pnl[at[day], col] = value
-            turnover[at[day], col] = traded
-            closing[at[day], col] = day not in series[alpha_id]
+    dates, pnl, turnover, closing = frame(series, meta, ids)
     filled = np.nan_to_num(pnl)
     count = len(ids)
     # BRAIN averages over the Alphas already trading that day: one that has not made its
@@ -109,12 +94,37 @@ def compute(
     }
 
 
-def alpha_days(
-    days: dict[date, tuple[float, float]], info: dict[str, Any]
-) -> list[tuple[date, float, float]]:
-    """An Alpha's stored days, oldest first, plus the final days BRAIN counts in its IS and test
-    figures but exports in no recordset (see :func:`metrics.closing_days`)."""
-    return metrics.with_closing([(d, p, t) for d, (p, t) in sorted(days.items())], info)
+def frame(
+    series: dict[str, dict[date, tuple[float, float]]],
+    meta: dict[str, dict[str, Any]],
+    ids: list[str],
+) -> tuple[list[date], Floats, Floats, Bools]:
+    """These Alphas laid out day by day: the calendar, PnL, turnover, and which cells are
+    closing days.
+
+    A cell is NaN where the Alpha has no row for that day. ``closing`` marks the final days
+    rebuilt from the Alpha's own figures rather than exported by BRAIN; correlations leave
+    them out, which is what makes them match BRAIN's to four decimals.
+    """
+    # Each Alpha's stored days, oldest first, plus the final days BRAIN counts in its IS and
+    # test figures but exports in no recordset (see :func:`metrics.closing_days`).
+    days = {
+        a: metrics.with_closing(
+            [(d, p, t) for d, (p, t) in sorted(series[a].items())], meta.get(a, {})
+        )
+        for a in ids
+    }
+    dates = sorted({d for a in ids for d, _, _ in days[a]})
+    at = {d: i for i, d in enumerate(dates)}
+    pnl = np.full((len(dates), len(ids)), np.nan)
+    turnover = np.zeros((len(dates), len(ids)))
+    closing = np.zeros((len(dates), len(ids)), dtype=bool)
+    for col, alpha_id in enumerate(ids):
+        for day, value, traded in days[alpha_id]:
+            pnl[at[day], col] = value
+            turnover[at[day], col] = traded
+            closing[at[day], col] = day not in series[alpha_id]
+    return dates, pnl, turnover, closing
 
 
 def _yearly(dates: list[date], book: Floats, traded: Floats, keep: Bools) -> list[dict[str, Any]]:

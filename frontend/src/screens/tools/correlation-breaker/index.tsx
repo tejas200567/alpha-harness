@@ -7,15 +7,14 @@
  */
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useSearch } from '@tanstack/react-router'
+import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { PlusIcon, UnlinkIcon } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { errorMessage } from '@/api/http'
 import { cn } from '@/lib/cn'
 import { DASH, fmt } from '@/lib/format'
-import { CORES } from '@/screens/research-labs/lab-task'
-import { Setting } from '@/screens/research-labs/task-settings'
+import { CoresSetting } from '@/screens/research-labs/task-settings'
 import {
   Button,
   Empty,
@@ -28,7 +27,6 @@ import {
   Page,
   PageHeader,
   Panel,
-  Segmented,
   Skeleton,
 } from '@/ui/kit'
 import { correlationBreaker } from './api'
@@ -74,9 +72,10 @@ export function CorrelationBreakerScreen() {
   const plan = query.data
   const runnable = useMemo(() => (plan?.recipes ?? []).filter((r) => !r.blocked), [plan])
 
-  // A new Alpha starts with every re-shape it can run ticked: the point is to try them.
+  // A new Alpha starts with every re-shape it can run ticked: the point is to try them. One
+  // that would cost a Power Pool Alpha its eligibility waits to be asked for.
   useEffect(() => {
-    setChosen(new Set(runnable.map((r) => r.id)))
+    setChosen(new Set(runnable.filter((r) => !r.overPowerPool).map((r) => r.id)))
   }, [runnable])
 
   const analyse = (event: React.FormEvent) => {
@@ -169,9 +168,9 @@ export function CorrelationBreakerScreen() {
                 Re-running the same expression at RAM, Statistical or Crowding neutralization often
                 breaks correlation on its own, and needs no new expression at all. That is a
                 Simulation Settings change, so it belongs to the{' '}
-                <a className={LINK} href={`/tools/settings-sampler?alpha=${alphaId}`}>
+                <Link className={LINK} to="/tools/settings-sampler" search={{ alpha: alphaId }}>
                   Settings Sampler
-                </a>
+                </Link>
                 . Worth trying first, and it costs the same quota.
               </Notice>
               {plan.correlation && (
@@ -200,18 +199,17 @@ export function CorrelationBreakerScreen() {
           <Panel
             title="Re-shapes"
             description="Each one wraps the Alpha below. Only the re-shape is shown; the binding is the same for all of them."
-            actions={
-              <Setting label="Cores">
-                <Segmented
-                  label="Cores"
-                  items={CORES.map((v) => ({ value: v, label: v }))}
-                  value={cores}
-                  onChange={setCores}
-                />
-              </Setting>
-            }
+            actions={<CoresSetting value={cores} onChange={setCores} />}
           >
-            {/* Said once, so nine cards do not repeat the same two hundred characters. */}
+            {plan.powerPool && (
+              <Notice tone="info" className="mb-4" title="A Power Pool Alpha">
+                Its expression has <span className="num">{fmt.int(plan.operators)}</span> operators
+                and <span className="num">{fmt.int(plan.dataFields)}</span> data fields; Power Pool
+                allows 8 and 3. A re-shape over either limit is left unticked, because it would no
+                longer be a Power Pool Alpha.
+              </Notice>
+            )}
+            {/* Said once, so a dozen cards do not repeat the same two hundred characters. */}
             <pre className="num mb-4 overflow-x-auto rounded-sm border border-hairline bg-canvas p-3 text-body-compact whitespace-pre text-ink-muted">
               {plan.bound}
             </pre>
@@ -244,19 +242,34 @@ export function CorrelationBreakerScreen() {
                             />
                             {recipe.name}
                           </label>
-                          <p className="max-w-3xl text-body-compact text-pretty text-ink-subtle">
-                            {recipe.why}
-                          </p>
+                          {recipe.why && (
+                            <p className="max-w-3xl text-body-compact text-pretty text-ink-subtle">
+                              {recipe.why}
+                            </p>
+                          )}
                         </div>
-                        {recipe.blocked && (
+                        {recipe.blocked ? (
                           <span className="shrink-0 text-body-compact text-status-warning">
                             {recipe.blocked}
                           </span>
+                        ) : (
+                          <span className="num shrink-0 text-caption text-ink-subtle">
+                            {fmt.int(recipe.operators)} operators · {fmt.int(recipe.dataFields)}{' '}
+                            data fields
+                          </span>
                         )}
                       </div>
-                      <pre className="num mt-2 overflow-x-auto rounded-sm border border-hairline bg-canvas p-3 text-body-compact whitespace-pre text-ink-muted">
-                        {recipe.transform}
-                      </pre>
+                      {/* Empty for a grouping this market has none of: nothing to show. */}
+                      {recipe.transform && (
+                        <pre className="num mt-2 overflow-x-auto rounded-sm border border-hairline bg-canvas p-3 text-body-compact whitespace-pre text-ink-muted">
+                          {recipe.transform}
+                        </pre>
+                      )}
+                      {recipe.overPowerPool && !recipe.blocked && (
+                        <p className="mt-2 text-body-compact text-pretty text-status-warning">
+                          No longer a Power Pool Alpha: {recipe.overPowerPool}.
+                        </p>
+                      )}
                       {recipe.caution && (
                         <p className="mt-2 text-body-compact text-pretty text-ink-subtle">
                           <UnlinkIcon className="mr-1 inline size-3.5 align-text-bottom" />

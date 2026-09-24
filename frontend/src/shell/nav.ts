@@ -44,75 +44,71 @@ export const TOOL_TABS = [
   { tab: 'superalpha', label: 'SuperAlpha', to: '/tools/superalpha' },
 ] as const
 
+/** `group` heads a run of items in the sidebar; empty sits above every heading. An item's
+ *  area is its path, `to` without the slash. */
 export const NAV = [
   {
     to: '/dashboard',
-    area: 'dashboard',
+    group: '',
     label: 'Dashboard',
     icon: LayoutGridIcon,
-    tabs: [],
   },
   {
     to: '/matrix',
-    area: 'matrix',
+    group: '',
     label: 'Simulation Matrix',
     icon: Grid3x3Icon,
-    tabs: [],
   },
   {
     to: '/data',
-    area: 'data',
+    group: 'Research',
     label: 'Data Explorer',
     icon: DatabaseIcon,
-    tabs: [],
   },
   {
     to: '/labs',
-    area: 'labs',
+    group: 'Research',
     label: 'Research Labs',
     icon: FlaskConicalIcon,
     tabs: LAB_TABS,
   },
   {
     to: '/tools',
-    area: 'tools',
+    group: 'Research',
     label: 'Tools',
     icon: WrenchIcon,
     tabs: TOOL_TABS,
   },
   {
     to: '/tasks',
-    area: 'tasks',
+    group: 'Results',
     label: 'Tasks',
     icon: ListChecksIcon,
-    tabs: [],
   },
   {
     to: '/pool',
-    area: 'pool',
+    group: 'Results',
     label: 'Alphas',
     icon: LayersIcon,
     tabs: POOL_TABS,
   },
   {
     to: '/portfolio',
-    area: 'portfolio',
+    group: 'Results',
     label: 'Portfolio',
     icon: ChartPieIcon,
-    tabs: [],
   },
   {
     to: '/ai',
-    area: 'ai',
+    group: 'Setup',
     label: 'LLM Integration',
     icon: SparklesIcon,
     tabs: AI_TABS,
   },
   {
     to: '/pyramids',
-    area: 'pyramids',
+    group: 'Setup',
     label: 'Sync with BRAIN',
     icon: RefreshCwIcon,
-    tabs: [],
   },
 ] as const

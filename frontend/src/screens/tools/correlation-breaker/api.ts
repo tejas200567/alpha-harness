@@ -6,8 +6,6 @@ import { http } from '@/api/http'
 type Schemas = components['schemas']
 
 export type BreakerPlan = Schemas['BreakerPlan']
-export type BreakerRecipe = Schemas['BreakerRecipe']
-export type BreakerSettings = Schemas['BreakerSettings']
 
 export interface BreakerRequest {
   alphaId: string

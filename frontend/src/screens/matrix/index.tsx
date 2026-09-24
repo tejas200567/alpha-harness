@@ -6,15 +6,15 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ClockIcon, EllipsisIcon } from 'lucide-react'
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { type KeyboardEvent, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { simulations } from '@/api/core'
-import { errorMessage } from '@/api/http'
 import type { SimulationRow } from '@/api/types'
 import { cn } from '@/lib/cn'
 import { DASH, fmt, secondsSince } from '@/lib/format'
 import { useCores, useLive } from '@/lib/live'
 import { blockLabel, type Cell, type CoreBlock, coreBlocks } from '@/lib/matrix'
+import { useNow } from '@/lib/now'
 import { useRefetchOn } from '@/lib/ws'
 import {
   Button,
@@ -50,12 +50,7 @@ const BATCH_KEY: { label: string; value: (row: SimulationRow) => string }[] = [
 /** How long a batch has been out. Its own component, so the second hand touches one span per
  * core rather than re-rendering all eighty cells every second. */
 function Elapsed({ since }: { since: string | null | undefined }) {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    if (!since) return
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [since])
+  const now = useNow(since ? 1000 : 0)
   return (
     <span className="num min-w-12 text-right text-body-compact font-medium text-ink">
       {fmt.duration(secondsSince(since, now))}
@@ -145,7 +140,6 @@ function SimulationMatrix() {
       for (const queryKey of [['simulations'], ['bar'], ['today']])
         void queryClient.invalidateQueries({ queryKey })
     },
-    onError: (error) => toast.error(errorMessage(error)),
     onSettled: () => setTarget(null),
   })
 

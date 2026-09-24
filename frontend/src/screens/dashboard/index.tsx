@@ -5,7 +5,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { AwardIcon, CpuIcon, LayersIcon, SendIcon } from 'lucide-react'
-import { type ReactNode, useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import { today } from '@/api/core'
 import type { components } from '@/api/generated'
 import { http } from '@/api/http'
@@ -14,8 +14,9 @@ import { fmt } from '@/lib/format'
 
 type QuarterStanding = components['schemas']['QuarterStanding']
 
+import { useNow } from '@/lib/now'
 import { useRefetchOn } from '@/lib/ws'
-import { ErrorNotice, Page, Panel, QuotaGauge, Skeleton, TEXT_TONE, type Tone } from '@/ui/kit'
+import { ErrorNotice, Page, Panel, Progress, Skeleton, TEXT_TONE, type Tone } from '@/ui/kit'
 import { GettingStarted } from './getting-started'
 import { WorkInFlight } from './work'
 
@@ -41,8 +42,6 @@ export function DashboardScreen() {
           <Skeleton className="mx-1 mt-2 h-18 w-2/3" label="Loading today's figures" />
         )
       )}
-      {/* `RunToday` (./run-today) is deliberately unmounted, not dead: dispatching from the
-          Dashboard is coming back. */}
       <GettingStarted today={day.data} />
       {day.isError && <ErrorNotice error={day.error} title="Today's figures could not load" />}
 
@@ -74,7 +73,10 @@ export function DashboardScreen() {
           }
           extra={
             sims && (
-              <QuotaGauge used={sims.used} limit={sims.limit} label="Simulation quota depletion" />
+              <Progress
+                value={sims.limit ? sims.used / sims.limit : 0}
+                label="Simulation quota depletion"
+              />
             )
           }
           hint={
@@ -157,11 +159,10 @@ function Hero({ name, text }: { name?: string | null | undefined; text: string }
   )
 }
 
-/** One layout for every tile: icon + label (and action) on top, the figure, then a hint. */
+/** One layout for every tile: icon + label on top, the figure, then a hint. */
 function StatTile({
   icon,
   label,
-  action,
   value,
   hint,
   tone = 'neutral',
@@ -170,7 +171,6 @@ function StatTile({
 }: {
   icon?: ReactNode
   label: string
-  action?: ReactNode
   value: ReactNode
   hint?: ReactNode
   tone?: Tone
@@ -179,14 +179,11 @@ function StatTile({
 }) {
   return (
     <Panel bodyClassName="flex h-full flex-col justify-between gap-3">
-      <div className="flex min-h-5 items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          {icon && <span className="text-ink-subtle [&_svg]:size-3.5">{icon}</span>}
-          <span className="text-caption font-medium uppercase tracking-wide text-ink-subtle">
-            {label}
-          </span>
-        </div>
-        {action}
+      <div className="flex min-h-5 items-center gap-2">
+        {icon && <span className="text-ink-subtle [&_svg]:size-3.5">{icon}</span>}
+        <span className="text-caption font-medium uppercase tracking-wide text-ink-subtle">
+          {label}
+        </span>
       </div>
       {loading ? (
         <div className="flex flex-col gap-2">
@@ -208,10 +205,6 @@ function StatTile({
 
 /** Ticks locally between refetches, in its own component so the page does not re-render. */
 function ResetCountdown({ seconds, since }: { seconds: number; since: number }) {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [])
+  const now = useNow(1000)
   return <span className="num">{fmt.countdown(seconds - Math.max(0, (now - since) / 1000))}</span>
 }

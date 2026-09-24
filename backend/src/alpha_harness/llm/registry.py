@@ -20,29 +20,27 @@ is a one-line edit here.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Literal
 
 import structlog
+from pydantic.dataclasses import dataclass
 
-from ..schemas import Out, camel_dict
+from ..schemas import WIRE, Out
 
 log = structlog.get_logger(__name__)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, config=WIRE)
 class ModelInfo:
-    """One model and its free-tier budget."""
+    """One model and its free-tier budget, as the screens show it."""
 
     id: str
     label: str
     #: "text" for generation, "embedding", or "open" for the Gemma family.
-    kind: str
+    kind: Literal["text", "embedding", "open"]
     rpm: int
     tpm: int
     rpd: int
-    #: Why you would pick this one. Shown where the model is chosen.
-    summary: str = ""
     #: True for a model with a daily budget large enough to work in.
     bulk: bool = False
     recommended: bool = False
@@ -52,27 +50,6 @@ class ModelInfo:
     #: Whose key answers for this model. A key only ever serves its own provider.
     provider: str = "google"
 
-    def to_dict(self) -> dict[str, Any]:
-        return camel_dict(self)
-
-
-class LLMModel(Out):
-    """:class:`ModelInfo` on the wire."""
-
-    id: str
-    label: str
-    kind: Literal["text", "embedding", "open"]
-    rpm: int
-    tpm: int
-    rpd: int
-    summary: str
-    #: Room for volume work.
-    bulk: bool
-    recommended: bool
-    #: Limits are guessed, not published.
-    discovered: bool
-    provider: str
-
 
 class ModelDefaults(Out):
     chat: str
@@ -80,7 +57,7 @@ class ModelDefaults(Out):
 
 
 class LLMModels(Out):
-    models: list[LLMModel]
+    models: list[ModelInfo]
     defaults: ModelDefaults
     note: str
 
@@ -94,10 +71,6 @@ BUILTIN: tuple[ModelInfo, ...] = (
         rpm=5,
         tpm=250_000,
         rpd=20,
-        summary=(
-            "The strongest reasoning on the free tier. Twenty requests a day — spend "
-            "them on hard questions, not on browsing."
-        ),
         recommended=True,
     ),
     ModelInfo(
@@ -107,7 +80,6 @@ BUILTIN: tuple[ModelInfo, ...] = (
         rpm=5,
         tpm=250_000,
         rpd=20,
-        summary="Previous generation, same twenty-a-day budget.",
     ),
     ModelInfo(
         "gemini-3.6-flash",
@@ -116,7 +88,6 @@ BUILTIN: tuple[ModelInfo, ...] = (
         rpm=5,
         tpm=250_000,
         rpd=20,
-        summary="Previous generation, same twenty-a-day budget.",
     ),
     ModelInfo(
         "gemini-3.5-flash",
@@ -125,7 +96,6 @@ BUILTIN: tuple[ModelInfo, ...] = (
         rpm=5,
         tpm=250_000,
         rpd=20,
-        summary="Previous generation, same twenty-a-day budget.",
     ),
     ModelInfo(
         "gemini-3.5-flash-lite",
@@ -134,10 +104,6 @@ BUILTIN: tuple[ModelInfo, ...] = (
         rpm=15,
         tpm=250_000,
         rpd=500,
-        summary=(
-            "Five hundred requests a day — twenty-five times the budget of a full Flash "
-            "model. The one to use for anything repetitive."
-        ),
         bulk=True,
         recommended=True,
     ),
@@ -148,79 +114,25 @@ BUILTIN: tuple[ModelInfo, ...] = (
         rpm=15,
         tpm=250_000,
         rpd=500,
-        summary="The same generous daily budget, one generation back.",
         bulk=True,
     ),
     ModelInfo(
-        "gemini-3-flash",
-        "Gemini 3 Flash",
-        "text",
-        rpm=5,
-        tpm=250_000,
-        rpd=20,
-        summary="Twenty requests a day.",
-    ),
-    ModelInfo(
-        "gemini-2.5-flash",
-        "Gemini 2.5 Flash",
-        "text",
-        rpm=5,
-        tpm=250_000,
-        rpd=20,
-        summary="Older generation. Twenty requests a day.",
-    ),
-    ModelInfo(
-        "gemini-2.5-flash-lite",
-        "Gemini 2.5 Flash Lite",
-        "text",
-        rpm=10,
-        tpm=250_000,
-        rpd=20,
-        summary=(
-            "Lite in speed but not in budget — still only twenty a day, unlike the 3.1 "
-            "and 3.5 Lite models."
-        ),
-    ),
-    ModelInfo(
-        "gemma-4-31b",
+        "gemma-4-31b-it",
         "Gemma 4 31B",
         "open",
         rpm=30,
         tpm=16_000,
         rpd=14_400,
-        summary=(
-            "Open-weight, and effectively unlimited by daily count. The 16K token-per-"
-            "minute ceiling is the real constraint — too small for the full dataset tree."
-        ),
         bulk=True,
     ),
     ModelInfo(
-        "gemma-4-26b",
+        "gemma-4-26b-a4b-it",
         "Gemma 4 26B",
         "open",
         rpm=30,
         tpm=16_000,
         rpd=14_400,
-        summary="As above, slightly smaller.",
         bulk=True,
-    ),
-    ModelInfo(
-        "gemini-embedding-2",
-        "Gemini Embedding 2",
-        "embedding",
-        rpm=100,
-        tpm=30_000,
-        rpd=1_000,
-        summary="For similarity search over descriptions, not for answering questions.",
-    ),
-    ModelInfo(
-        "gemini-embedding-1",
-        "Gemini Embedding 1",
-        "embedding",
-        rpm=100,
-        tpm=30_000,
-        rpd=1_000,
-        summary="Previous embedding generation.",
     ),
 )
 
@@ -247,49 +159,38 @@ class ModelRegistry:
 
     # -- reading ---------------------------------------------------------
 
-    def __contains__(self, model_id: str) -> bool:
-        return model_id in self._models
-
     def get(self, model_id: str) -> ModelInfo | None:
         return self._models.get(model_id)
 
-    def require(self, model_id: str) -> ModelInfo:
-        info = self._models.get(model_id)
-        if info is None:
-            raise KeyError(
-                f"{model_id!r} is not a known model. Choose one of: "
-                + ", ".join(sorted(self._models))
-            )
-        return info
-
-    def all(self, kind: str | None = None, provider: str | None = None) -> list[ModelInfo]:
+    def all(self, kind: str | None = None) -> list[ModelInfo]:
         """Every model, richest daily budget first — because that is what runs out."""
-        models = [
-            m
-            for m in self._models.values()
-            if (kind is None or m.kind == kind) and (provider is None or m.provider == provider)
-        ]
+        models = [m for m in self._models.values() if kind is None or m.kind == kind]
         return sorted(models, key=lambda m: (-m.rpd, -m.rpm, m.id))
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "models": [m.to_dict() for m in self.all()],
-            "defaults": {"chat": DEFAULT_MODEL, "deep": DEEP_MODEL},
-            "note": (
+    def roster(self) -> LLMModels:
+        return LLMModels(
+            models=self.all(),
+            defaults=ModelDefaults(chat=DEFAULT_MODEL, deep=DEEP_MODEL),
+            note=(
                 "Requests per day is the limit that ends a session — it does not reset "
                 "until midnight Pacific, and it varies twenty-five-fold across these "
                 "models. Adding a second API key doubles it."
             ),
-        }
+        )
 
     # -- editing ---------------------------------------------------------
 
-    def merge_discovered(self, names: list[str], provider: str = "google") -> list[str]:
-        """Add models the API reports that we have never heard of.
+    def merge_discovered(self, names: list[str], provider: str) -> list[str]:
+        """Add models the API reports that we have never heard of, for a provider with no
+        roster here: OpenAI's moves too fast to transcribe.
 
-        Their limits are unknown, so they get the most restrictive real budget and are
+        A provider with a transcribed roster keeps it. Its model list also holds speech,
+        image and video models, and ones retired for new keys, none of which can answer.
+        Discovered limits are unknown, so they get the most restrictive real budget and are
         flagged ``discovered`` rather than passing a guess off as a measurement.
         """
+        if any(m.provider == provider and not m.discovered for m in self._models.values()):
+            return []
         added: list[str] = []
         for raw in names:
             model_id = raw.removeprefix("models/")
@@ -306,8 +207,6 @@ class ModelRegistry:
                 id=model_id,
                 label=model_id.replace("-", " ").title(),
                 kind=kind,
-                summary="Reported by the API. Its free-tier limits are unknown, so a "
-                "conservative budget is assumed until you correct it.",
                 discovered=True,
                 provider=provider,
                 rpm=UNKNOWN_LIMITS["rpm"],

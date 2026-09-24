@@ -7,7 +7,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { simulations, tasks as tasksApi } from '@/api/core'
-import { errorMessage } from '@/api/http'
 import { DASH, fmt } from '@/lib/format'
 import { useLive } from '@/lib/live'
 import { useRefetchOn } from '@/lib/ws'
@@ -45,7 +44,6 @@ export function WorkInFlight() {
       for (const queryKey of [['engine'], ['simulations'], ['bar'], ['today']])
         void queryClient.invalidateQueries({ queryKey })
     },
-    onError: (error) => toast.error(errorMessage(error)),
     onSettled: () => setConfirm(null),
   })
 

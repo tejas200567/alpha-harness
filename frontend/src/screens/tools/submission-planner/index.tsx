@@ -10,6 +10,7 @@ import { useSearch } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { errorMessage } from '@/api/http'
+import { fmt } from '@/lib/format'
 import { PnlChart } from '@/screens/pool/pnl-chart'
 import { labTasks } from '@/screens/tasks/api'
 import {
@@ -26,9 +27,6 @@ import {
 import { type Column, DataTable } from '@/ui/table'
 import { type Pick, submissionPlanner } from './api'
 
-const fixed = (v: number | null | undefined, places = 2) =>
-  v == null || !Number.isFinite(v) ? '—' : v.toFixed(places)
-
 /** What the basket bought, said against whichever comparison is honest.
  *
  * A multiple of the best single Alpha is the natural reading, and the wrong one when a single
@@ -43,14 +41,14 @@ const lift = (d: {
   order: { sharpe: number }[]
 }) => {
   if (d.bestSingle > 0 && d.sharpe >= d.bestSingle)
-    return `${fixed(d.sharpe / d.bestSingle)}× the best single Alpha`
+    return `${fmt.ratio(d.sharpe / d.bestSingle)}× the best single Alpha`
   const mean = d.order.length
     ? d.order.reduce((total, row) => total + row.sharpe, 0) / d.order.length
     : 0
   if (!(mean > 0) || !(d.bestSingle > 0)) return `${d.size} Alphas that do not repeat each other`
-  return `${fixed((d.sharpe / d.bestSingle) * 100, 0)}% of the best single, spread over ${
+  return `${fmt.ratio((d.sharpe / d.bestSingle) * 100, 0)}% of the best single, spread over ${
     d.size
-  } sources (${fixed(d.sharpe / mean)}× the average member)`
+  } sources (${fmt.ratio(d.sharpe / mean)}× the average member)`
 }
 
 export function SubmissionPlannerScreen() {
@@ -109,7 +107,7 @@ export function SubmissionPlannerScreen() {
       header: 'Sharpe on its own',
       width: 'minmax(140px,1fr)',
       align: 'right',
-      cell: (r) => <span className="tabular-nums">{fixed(r.sharpe)}</span>,
+      cell: (r) => <span className="tabular-nums">{fmt.ratio(r.sharpe)}</span>,
     },
     {
       key: 'submitted',
@@ -198,26 +196,26 @@ export function SubmissionPlannerScreen() {
               <Metric
                 boxed
                 label="Combined Sharpe"
-                value={fixed(data.sharpe)}
+                value={fmt.ratio(data.sharpe)}
                 tone="profit"
                 hint={lift(data)}
               />
               <Metric
                 boxed
                 label="Size check"
-                value={fixed(data.heldOutSharpe)}
+                value={fmt.ratio(data.heldOutSharpe)}
                 hint="what picked how many, not these members"
               />
               <Metric
                 boxed
                 label="Best single Alpha"
-                value={fixed(data.bestSingle)}
+                value={fmt.ratio(data.bestSingle)}
                 hint="for comparison"
               />
               <Metric
                 boxed
                 label="Max correlation"
-                value={fixed(data.maxCorrelation, 3)}
+                value={fmt.ratio(data.maxCorrelation, 3)}
                 tone={data.escapeUsed ? 'warn' : 'neutral'}
                 hint={
                   data.maxCorrelation == null
@@ -233,8 +231,8 @@ export function SubmissionPlannerScreen() {
             {data.escapeUsed ? (
               <Notice tone="info" title="One pair is over 0.50, and BRAIN still takes it">
                 <span className="font-mono">{data.worstPair.join(' and ')}</span> correlate at{' '}
-                {fixed(data.maxCorrelation, 3)}. Past 0.50 BRAIN accepts an Alpha whose Sharpe beats
-                the one it collides with by 10%, and this one does — against an Alpha you have
+                {fmt.ratio(data.maxCorrelation, 3)}. Past 0.50 BRAIN accepts an Alpha whose Sharpe
+                beats the one it collides with by 10%, and this one does — against an Alpha you have
                 already submitted, which is not something you can undo. The rest of the book stays
                 under the limit.
               </Notice>
@@ -252,26 +250,28 @@ export function SubmissionPlannerScreen() {
               the size BRAIN gives it. Adding Alphas helps until {data.size}, after which each new
               one repeats a bet already in the book and the combined Sharpe falls — so {data.size}{' '}
               is where it stops. That number was fixed on the first four-fifths of history and
-              scored {fixed(data.heldOutSharpe)} on the last fifth, which that search never saw. The
-              members below were then chosen over the whole history, so {fixed(data.sharpe)} is a
-              fit rather than a forecast: the split vouches for how many to submit, not for which.
+              scored {fmt.ratio(data.heldOutSharpe)} on the last fifth, which that search never saw.
+              The members below were then chosen over the whole history, so {fmt.ratio(data.sharpe)}{' '}
+              is a fit rather than a forecast: the split vouches for how many to submit, not for
+              which.
             </p>
             <p className="text-body text-ink-muted">
               {best && best.sharpe >= data.sharpe ? (
                 <>
                   Submitting <span className="font-mono text-ink">{best.alphaId}</span> on its own
-                  would score {fixed(best.sharpe)}, a little above this book — but one Alpha is not
-                  a submission plan. A Power Pool Thematic leaderboard needs at least five tagged
-                  Alphas, and Osmosis needs points across at least ten in each of three scopes, so
-                  the question is never whether to submit a basket, only whether the basket repeats
-                  itself. This one does not: it reaches {fixed(data.sharpe)} from members averaging{' '}
-                  {fixed(mean)} apiece, which is what {data.size} genuinely separate bets buys you.
+                  would score {fmt.ratio(best.sharpe)}, a little above this book — but one Alpha is
+                  not a submission plan. A Power Pool Thematic leaderboard needs at least five
+                  tagged Alphas, and Osmosis needs points across at least ten in each of three
+                  scopes, so the question is never whether to submit a basket, only whether the
+                  basket repeats itself. This one does not: it reaches {fmt.ratio(data.sharpe)} from
+                  members averaging {fmt.ratio(mean)} apiece, which is what {data.size} genuinely
+                  separate bets buys you.
                 </>
               ) : (
                 <>
-                  The best Alpha here scores {fixed(data.bestSingle)} alone. Together these{' '}
-                  {data.size} reach {fixed(data.sharpe)} — more than any of them manages by itself,
-                  because each one is carrying a bet the others are not.
+                  The best Alpha here scores {fmt.ratio(data.bestSingle)} alone. Together these{' '}
+                  {data.size} reach {fmt.ratio(data.sharpe)} — more than any of them manages by
+                  itself, because each one is carrying a bet the others are not.
                 </>
               )}
             </p>

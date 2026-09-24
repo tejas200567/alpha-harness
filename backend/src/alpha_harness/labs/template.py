@@ -79,8 +79,7 @@ EXCLUDED_CATEGORIES = frozenset({"Vector", "Special", "Reduce"})
 LOOKBACK_PARAMS = frozenset({"d", "lookback"})
 GROUP_PARAMS = frozenset({"group", "g", "g1", "g2"})
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
-_OPTION = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
-#: An option *value* that names a behaviour, e.g. ``driver = cauchy``.
+#: An option's name, or an option *value* that names a behaviour, e.g. ``driver = cauchy``.
 _WORD = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 #: An option *value* that is a list of numbers, e.g. ``range = "0, 1, 0.1"`` or
 #: ``buckets = "2,5,6,7,10"``. Written as one string because that is how BRAIN takes it.
@@ -172,7 +171,7 @@ def _shape(info: OperatorInfo) -> tuple[tuple[str, ...], dict[str, float | bool 
             # publishes such a default today; one would otherwise break the whole payload.
             if isinstance(value, float) and not math.isfinite(value):
                 value = None
-            if value is not None and _OPTION.match(key):
+            if value is not None and _WORD.match(key):
                 options[key] = value
             if value is not None or key not in LOOKBACK_PARAMS:
                 continue  # ``lookback = d`` still takes a lookback
@@ -238,7 +237,7 @@ def _load(slot: Any, depth: int, count: list[int]) -> dict[str, Any] | None:
             raise ValueError(f"{ops[0]} has malformed inputs.")
         options = slot.get("options") or {}
         if not isinstance(options, dict) or not all(
-            isinstance(key, str) and _OPTION.match(key) and _is_value(value)
+            isinstance(key, str) and _WORD.match(key) and _is_value(value)
             for key, value in options.items()
         ):
             raise ValueError(f"{ops[0]} has malformed options.")

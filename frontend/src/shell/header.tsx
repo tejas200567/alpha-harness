@@ -12,17 +12,22 @@ import { cn } from '@/lib/cn'
 import { fmt } from '@/lib/format'
 import { useCores, useLive } from '@/lib/live'
 import { coreBlocks } from '@/lib/matrix'
+import { useNow } from '@/lib/now'
 import { useRefetchOn } from '@/lib/ws'
 import { Button, STATUS } from '@/ui/kit'
 import { Tooltip } from '@/ui/overlay'
 import { useCommandMenu } from './command-menu'
+import { SidebarToggle } from './sidebar'
 
 export function Header() {
   const openMenu = useCommandMenu((s) => s.setOpen)
 
   return (
     <header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-hairline bg-canvas px-4">
-      <HeaderCores />
+      <div className="flex min-w-0 items-center gap-3">
+        <SidebarToggle />
+        <HeaderCores />
+      </div>
       <div className="flex items-center gap-4">
         <Clocks />
         <ConnectionNotice />
@@ -193,16 +198,6 @@ function ConnectionNotice() {
   )
 }
 
-/** Seconds since the last fetch, so countdowns tick between polls. */
-function useElapsed(since: number): number {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [])
-  return Math.max(0, Math.floor((now - since) / 1000))
-}
-
 function Clocks() {
   const bar = useQuery({
     queryKey: ['bar'],
@@ -211,7 +206,8 @@ function Clocks() {
   })
   useRefetchOn('simulations', ['bar'], 3000)
   useRefetchOn('session', ['bar'])
-  const elapsed = useElapsed(bar.dataUpdatedAt)
+  // Seconds since the last fetch, so the countdowns tick between polls.
+  const elapsed = Math.max(0, Math.floor((useNow(1000) - bar.dataUpdatedAt) / 1000))
   if (!bar.data) return null
 
   const session =

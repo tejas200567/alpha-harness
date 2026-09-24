@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useNow } from '@/lib/now'
 import { llm } from '@/screens/ai/api'
 
 export const useKeys = (refetchInterval: number | false = false) =>
@@ -27,10 +27,6 @@ export function useProviderLabel() {
 
 /** Seconds left on a server countdown, ticking locally between refetches. */
 export function useCountdown(seconds: number | undefined, fetchedAt: number): number | undefined {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 15_000)
-    return () => clearInterval(id)
-  }, [])
+  const now = useNow(15_000)
   return seconds == null ? undefined : Math.max(0, seconds - (now - fetchedAt) / 1000)
 }

@@ -18,12 +18,18 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Query
 
 from ..brain.filters import PLATFORM_TZ
+from ..catalog.queries import scope_label
 from ..db.models import SyncStatus
 from ..llm.budget import seconds_until_reset
 from ..schemas import EngineStatus, Out, SyncRunRow
 from .deps import State
+from .llm import LLMBudget
 
 router = APIRouter(prefix="/api/today", tags=["today"])
+
+#: A consultant's daily simulation allowance, shown until the day's first simulation POST
+#: returns its x-ratelimit-* headers.
+DAILY_ALLOWANCE = 5000
 
 
 class Feature(Out):
@@ -57,21 +63,11 @@ class TodaySimulations(Out):
     headline: str
 
 
-class ModelBudget(Out):
-    model: str
-    label: str
-    provider: str
-    per_key_per_day: int
-    remaining_today: int
-    #: Enough daily requests to plan work around; only these are totalled.
-    bulk: bool
-
-
 class Assistant(Out):
     keys: int
     enabled_keys: int
     requests_remaining_today: int
-    budget: list[ModelBudget]
+    budget: list[LLMBudget]
     resets_in_seconds: int
     resets_at: str
     headline: str
@@ -241,7 +237,7 @@ async def _catalog(
     )
 
     return {
-        "scope": f"{instrument_type}/{region}/D{delay}/{universe}",
+        "scope": scope_label(instrument_type, region, delay, universe),
         "synced": match is not None,
         "fields": int(match["fields"]) if match else 0,
         "running": serialise_run(running) if running else None,
@@ -281,7 +277,7 @@ async def _you(state: State, session: Any, stored_email: str | None) -> dict[str
 
 
 async def simulations_today(state: State) -> dict[str, Any]:
-    allowance = state.settings.daily_simulation_allowance
+    allowance = DAILY_ALLOWANCE
     used = await state.tracker.used_today()
     snapshot = await state.tracker.latest_quota()
 

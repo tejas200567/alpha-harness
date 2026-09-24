@@ -22,7 +22,9 @@ if TYPE_CHECKING:
     from ..brain.endpoints import BrainEndpoints
     from ..db.duck import Catalog
 
-#: Alphas submitted in a pyramid this quarter before it counts as formulated.
+#: Alphas submitted in a pyramid this quarter before it counts as formulated: "A consultant
+#: is considered to have formulated a pyramid if they have submitted a minimum of 3 Alphas in
+#: it" — ``docs/learn/consultant-information/brain-genius``.
 LIT_AT = 3
 
 MULTIPLIERS_TTL = 6 * 3600
@@ -128,10 +130,8 @@ def assemble(
     }
 
 
-async def pyramid_grid(
-    endpoints: BrainEndpoints, catalog: Catalog, today: date | None = None
-) -> dict[str, Any]:
-    today = today or datetime.now(PLATFORM_TZ).date()
+async def pyramid_grid(endpoints: BrainEndpoints, catalog: Catalog) -> dict[str, Any]:
+    today = datetime.now(PLATFORM_TZ).date()
     start, end = quarter_start(today), next_quarter_start(today)
     multipliers = await _cached("multipliers", MULTIPLIERS_TTL, endpoints.pyramid_multipliers)
     counts = await _cached(

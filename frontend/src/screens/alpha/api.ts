@@ -5,7 +5,7 @@
  */
 
 import type { components } from '@/api/generated'
-import { http, qs } from '@/api/http'
+import { ApiError, http, qs } from '@/api/http'
 import type { AlphaCheck } from '@/api/types'
 import type { BrainCorrelation } from '@/screens/pool/api'
 
@@ -40,6 +40,10 @@ export type Performance = Kept<{
 }>
 
 const id = (alphaId: string) => encodeURIComponent(alphaId)
+
+/** BRAIN's answer, 410 or 412, when a correlation does not apply to this Alpha. */
+export const notApplicable = (error: unknown) =>
+  error instanceof ApiError && [410, 412].includes(Number(error.body['platformStatus']))
 
 export const alpha = {
   page: (alphaId: string, refresh = false) =>

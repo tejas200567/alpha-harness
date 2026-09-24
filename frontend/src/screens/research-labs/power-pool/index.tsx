@@ -1,30 +1,35 @@
 /** LLM Power Pool Lab: an LLM writes Power Pool Alphas for your datasets while the task runs in Tasks. */
 
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
 import { PlusIcon } from 'lucide-react'
-import { toast } from 'sonner'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { errorMessage } from '@/api/http'
 import { fmt } from '@/lib/format'
 import { DEFAULT_SCOPE, useScopeOptions } from '@/lib/scope'
-import { useDebounced } from '@/lib/use-debounced'
-import { CORES, MAX_SIMULATIONS, useLabMarket } from '@/screens/research-labs/lab-task'
+import {
+  MAX_SIMULATIONS,
+  simulationsValid,
+  useAddTask,
+  useLabMarket,
+  useLabPreview,
+} from '@/screens/research-labs/lab-task'
 import { NeutralizationPicker } from '@/screens/research-labs/neutralization'
 import { type PowerPoolRequest, powerPoolLab } from '@/screens/research-labs/power-pool/api'
-import { DatasetsPanel, Setting } from '@/screens/research-labs/task-settings'
+import {
+  CoresSetting,
+  DatasetsPanel,
+  SimulationsSetting,
+} from '@/screens/research-labs/task-settings'
 import {
   Button,
   Disclosure,
   ErrorNotice,
-  Input,
+  Fieldset,
   Metric,
   Notice,
   Page,
   PageHeader,
   Panel,
-  Segmented,
 } from '@/ui/kit'
 import { Select } from '@/ui/overlay'
 
@@ -40,9 +45,9 @@ interface PowerPoolDraft {
   neutralizations: string[]
 }
 
-const useDraft = create<PowerPoolDraft & { set: (change: Partial<PowerPoolDraft>) => void }>()(
+const useDraft = create<PowerPoolDraft>()(
   persist(
-    (set) => ({
+    (): PowerPoolDraft => ({
       region: DEFAULT_SCOPE.region,
       delay: DEFAULT_SCOPE.delay,
       universe: DEFAULT_SCOPE.universe,
@@ -51,7 +56,6 @@ const useDraft = create<PowerPoolDraft & { set: (change: Partial<PowerPoolDraft>
       simulations: null,
       model: null,
       neutralizations: [],
-      set: (change) => set(change),
     }),
     { name: 'alpha-harness-power-pool-lab' },
   ),
@@ -62,9 +66,8 @@ const PRE =
 
 export function PowerPoolLabScreen() {
   const draft = useDraft()
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const { names, choose } = useLabMarket(draft, draft.set, '/labs/power-pool')
+  const set = useDraft.setState
+  const { names, choose } = useLabMarket(draft, set, '/labs/power-pool')
   const options = useQuery({
     queryKey: ['power-pool-lab', 'options'],
     queryFn: powerPoolLab.options,
@@ -93,38 +96,15 @@ export function PowerPoolLabScreen() {
     cores: draft.cores,
     simulations: draft.simulations ?? 0,
   }
-  const key = JSON.stringify(body)
-  const settled = useDebounced(key, 300)
-  const preview = useQuery({
-    queryKey: ['power-pool-lab', 'preview', settled],
-    queryFn: () => powerPoolLab.preview(JSON.parse(settled) as PowerPoolRequest),
-    enabled: settled === key,
-    placeholderData: keepPreviousData,
-  })
+  const { preview, current } = useLabPreview('power-pool-lab', body, powerPoolLab.preview)
   const plan = preview.data
   const maxSimulations = options.data?.maxSimulations ?? MAX_SIMULATIONS
-  const sims = draft.simulations
-  const add = useMutation({
-    mutationFn: () => powerPoolLab.addTask(body),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['lab-tasks'] })
-      toast.success('Task Added', {
-        action: {
-          label: 'Open Tasks',
-          onClick: () => void navigate({ to: '/tasks' }),
-        },
-      })
-    },
-    onError: (error) => toast.error(errorMessage(error)),
-  })
+  const add = useAddTask(() => powerPoolLab.addTask(body))
   const ready =
     plan !== undefined &&
-    settled === key &&
-    !preview.isFetching &&
+    current &&
     plan.problems.length === 0 &&
-    sims !== null &&
-    sims >= 1 &&
-    sims <= maxSimulations
+    simulationsValid(draft.simulations, maxSimulations)
 
   return (
     <Page>
@@ -150,12 +130,12 @@ export function PowerPoolLabScreen() {
         ids={draft.datasetIds}
         names={names}
         onChoose={choose}
-        onRemove={(id) => draft.set({ datasetIds: draft.datasetIds.filter((x) => x !== id) })}
+        onRemove={(id) => set({ datasetIds: draft.datasetIds.filter((x) => x !== id) })}
       />
       <Panel title="Settings">
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-start gap-x-8 gap-y-4">
-            <Setting label="Model">
+            <Fieldset legend="Model">
               <Select
                 label="Model"
                 items={models.map((m) => ({
@@ -163,43 +143,22 @@ export function PowerPoolLabScreen() {
                   label: `${m.label} · ${fmt.int(m.remainingToday)} left today`,
                 }))}
                 value={model}
-                onChange={(v) => draft.set({ model: v })}
+                onChange={(v) => set({ model: v })}
               />
-            </Setting>
-            <Setting label="Cores">
-              <Segmented
-                label="Cores"
-                items={CORES.map((v) => ({ value: v, label: v }))}
-                value={draft.cores}
-                onChange={(cores) => draft.set({ cores })}
-              />
-            </Setting>
-            <Setting label="Simulations">
-              <Input
-                type="number"
-                min={1}
-                max={maxSimulations}
-                placeholder="500"
-                aria-label="Simulations"
-                className="w-32"
-                value={sims ?? ''}
-                onChange={(e) => {
-                  const n = Number(e.target.value)
-                  draft.set({
-                    simulations:
-                      e.target.value === '' || !Number.isFinite(n)
-                        ? null
-                        : Math.max(0, Math.floor(n)),
-                  })
-                }}
-              />
-            </Setting>
+            </Fieldset>
+            <CoresSetting value={draft.cores} onChange={(cores) => set({ cores })} />
+            <SimulationsSetting
+              value={draft.simulations}
+              max={maxSimulations}
+              placeholder="500"
+              onChange={(next) => set({ simulations: next })}
+            />
           </div>
           {scopeOptions.neutralizations.length > 0 && (
             <NeutralizationPicker
               available={scopeOptions.neutralizations}
               value={draft.neutralizations}
-              onChange={(next) => draft.set({ neutralizations: next })}
+              onChange={(next) => set({ neutralizations: next })}
               hint="None chosen draws from every one BRAIN offers here."
             />
           )}

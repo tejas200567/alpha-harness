@@ -205,7 +205,6 @@ export function UpdateBadge({ collapsed = false }: { collapsed?: boolean }) {
       setInstalling(started.version)
       void queryClient.invalidateQueries({ queryKey: ['update'] })
     },
-    onError: (error) => toast.error(errorMessage(error)),
   })
 
   const data = status.data

@@ -99,6 +99,7 @@ export function Assistant({ threadId }: { threadId: number | null }) {
     )
 
   const say = useMutation({
+    meta: { inline: true },
     mutationFn: (message: string) =>
       chat.say({
         text: message,
@@ -137,7 +138,6 @@ export function Assistant({ threadId }: { threadId: number | null }) {
       })
       void navigate({ to: '/ai/$tab', params: { tab: 'assistant' } })
     },
-    onError: (e) => toast.error(errorMessage(e)),
   })
 
   const messages = threadId !== null ? (thread.data?.messages ?? []) : []
@@ -292,7 +292,7 @@ export function Assistant({ threadId }: { threadId: number | null }) {
             <Notice tone="warn" title="Download this market first">
               <span className="num">{scopeLabel(scope)}</span> is not in the local catalogue, so the
               assistant has no fields to choose from.{' '}
-              <Link to="/data/$tab" params={{ tab: 'fields' }} className={LINK}>
+              <Link to="/data" className={LINK}>
                 Download it in Data
               </Link>
             </Notice>
@@ -445,11 +445,7 @@ function Picks({ picks }: { picks: ChatPick[] }) {
       </p>
       {picks.map((p) => (
         <div key={p.field} className="flex flex-wrap items-baseline gap-2 text-body-compact">
-          <Link
-            to="/data/$tab"
-            params={{ tab: 'fields' }}
-            className="num text-ink transition-colors hover:text-link"
-          >
+          <Link to="/data" className="num text-ink transition-colors hover:text-link">
             {p.field}
           </Link>
           <span className="text-pretty text-ink-subtle">{p.why}</span>

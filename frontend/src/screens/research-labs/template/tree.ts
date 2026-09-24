@@ -7,14 +7,16 @@
  */
 
 export type Socket = 'signal' | 'lookback' | 'group'
-export type VariableName =
-  | 'FIELD'
-  | 'LOOKBACK'
-  | 'FAST_LOOKBACK'
-  | 'SLOW_LOOKBACK'
-  | 'GROUP'
-  | 'WEIGHT'
-  | 'POWER'
+const VARIABLES = [
+  'FIELD',
+  'LOOKBACK',
+  'FAST_LOOKBACK',
+  'SLOW_LOOKBACK',
+  'GROUP',
+  'WEIGHT',
+  'POWER',
+] as const
+export type VariableName = (typeof VARIABLES)[number]
 
 export interface OperatorNode {
   kind: 'op'
@@ -199,14 +201,6 @@ export function walk(
   })
 }
 
-export function count(root: Slot): number {
-  let total = 0
-  walk(root, () => {
-    total += 1
-  })
-  return total
-}
-
 export function holes(root: Slot, path: Path = []): Path[] {
   if (root === null) return [path]
   if (root.kind !== 'op') return []
@@ -250,15 +244,6 @@ export interface PaletteOptions {
   variables: Record<string, (number | string)[]>
 }
 
-const VARIABLES: VariableName[] = [
-  'FIELD',
-  'LOOKBACK',
-  'FAST_LOOKBACK',
-  'SLOW_LOOKBACK',
-  'GROUP',
-  'WEIGHT',
-  'POWER',
-]
 const CATEGORIES = [
   'Cross Sectional',
   'Time Series',

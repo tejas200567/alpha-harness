@@ -45,7 +45,8 @@ export function DataTable<T>({
   rows: T[]
   columns: Column<T>[]
   rowKey: (row: T) => string
-  onRowClick?: (row: T) => void
+  /** The event comes too, so a table can treat a modified click as its own action. */
+  onRowClick?: (row: T, event: React.MouseEvent | React.KeyboardEvent) => void
   /** Extra classes for one row, so a table can mark rows that mean something. */
   rowClass?: (row: T) => string | undefined
   sort?: Sort
@@ -172,13 +173,13 @@ export function DataTable<T>({
                   aria-rowindex={item.index + 2}
                   aria-selected={selectable ? isSelected : undefined}
                   tabIndex={onRowClick ? 0 : undefined}
-                  onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  onClick={onRowClick ? (e) => onRowClick(row, e) : undefined}
                   onKeyDown={
                     onRowClick
                       ? (e) => {
                           if (e.key !== 'Enter' && e.key !== ' ') return
                           e.preventDefault()
-                          onRowClick(row)
+                          onRowClick(row, e)
                         }
                       : undefined
                   }

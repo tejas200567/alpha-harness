@@ -12,7 +12,7 @@ import { toast } from 'sonner'
 import { tasks } from '@/api/core'
 import { errorMessage } from '@/api/http'
 import { cn } from '@/lib/cn'
-import { DASH, fmt } from '@/lib/format'
+import { CORE_METRICS, CORE_ORDER, DASH, fmt } from '@/lib/format'
 import { useLive } from '@/lib/live'
 import { useDebounced } from '@/lib/use-debounced'
 import { useRefetchOn } from '@/lib/ws'
@@ -72,22 +72,9 @@ const FACETS: Facet[] = [
   { key: 'category', title: 'Category', values: (m) => m.categories },
 ]
 
-type MetricKey = 'sharpe' | 'turnover' | 'fitness' | 'returns' | 'drawdown' | 'margin'
+type MetricKey = (typeof CORE_ORDER)[number]
 
-/** Sharpe, Turnover, Fitness, Returns, Drawdown, Margin: the order everywhere on this page. */
-const METRICS: {
-  key: MetricKey
-  label: string
-  show: (v: number | null | undefined) => string
-  signed: boolean
-}[] = [
-  { key: 'sharpe', label: 'Sharpe', show: (v) => fmt.ratio(v), signed: true },
-  { key: 'turnover', label: 'Turnover', show: (v) => fmt.pct(v, 2), signed: false },
-  { key: 'fitness', label: 'Fitness', show: (v) => fmt.ratio(v), signed: true },
-  { key: 'returns', label: 'Returns', show: (v) => fmt.pct(v, 2), signed: true },
-  { key: 'drawdown', label: 'Drawdown', show: (v) => fmt.pct(v, 2), signed: false },
-  { key: 'margin', label: 'Margin', show: (v) => fmt.bps(v, 2), signed: true },
-]
+const METRICS = CORE_ORDER.map((key) => ({ key, ...CORE_METRICS[key] }))
 
 function metricColumns<T>(
   get: (row: T) => Partial<Record<MetricKey, number | null>> | null,
@@ -143,7 +130,6 @@ function SyncButton() {
       toast.success('Syncing your SUBMITTED Alphas from BRAIN')
       void queryClient.invalidateQueries({ queryKey: ['portfolio'] })
     },
-    onError: (e) => toast.error(errorMessage(e)),
   })
   const busy = sync.isPending || running
   return (

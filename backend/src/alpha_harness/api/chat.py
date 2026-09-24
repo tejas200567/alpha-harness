@@ -13,30 +13,12 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 from ..catalog.queries import Tuple4
-from ..llm.chat import DEFAULT_REASONING, reasoning_options
+from ..llm.chat import DEFAULT_REASONING, Reasoning, reasoning_options
 from ..llm.registry import LLMModels
 from ..schemas import Out
 from .deps import State, refuse
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
-
-
-class Scope(BaseModel):
-    instrument_type: str = "EQUITY"
-    region: str
-    delay: int
-    universe: str
-
-    def to_tuple(self) -> Tuple4:
-        return Tuple4(
-            instrument_type=self.instrument_type,
-            region=self.region,
-            delay=self.delay,
-            universe=self.universe,
-        )
-
-
-Reasoning = Literal["quick", "normal", "careful", "deep"]
 
 
 class ReasoningOption(Out):
@@ -110,7 +92,7 @@ async def options(state: State) -> ChatOptions:
     """The two choices a conversation offers: which model, and how hard to think."""
     return ChatOptions.model_validate(
         {
-            "models": state.llm.registry.to_dict(),
+            "models": state.llm.registry.roster(),
             "reasoning": reasoning_options(),
             "defaultReasoning": DEFAULT_REASONING,
             "note": (
@@ -177,10 +159,10 @@ class Say(BaseModel):
     """One message. Everything except the text has a sensible default."""
 
     text: str = Field(description="Your idea, in your own words")
-    scope: Scope
+    scope: Tuple4
     thread_id: int | None = Field(default=None, description="Omit to start a new conversation")
     model: str | None = None
-    reasoning: str = Field(default=DEFAULT_REASONING, description="quick | normal | careful | deep")
+    reasoning: Reasoning = DEFAULT_REASONING
     dataset_ids: list[str] = Field(
         default_factory=list, description="Narrow it to particular datasets"
     )
@@ -198,13 +180,13 @@ async def say(body: Say, state: State) -> ChatReply:
         answered = await state.chat.say(
             body.thread_id,
             body.text,
-            scope=body.scope.to_tuple(),
+            scope=body.scope,
             model=body.model,
             reasoning=body.reasoning,
             dataset_ids=body.dataset_ids,
         )
     except ValueError as exc:
-        # A market with nothing downloaded, an unknown conversation, a reasoning setting
-        # that does not exist: each phrases itself, so say it rather than raising a bare 500.
+        # A market with nothing downloaded or an unknown conversation: each phrases itself,
+        # so say it rather than raising a bare 500.
         raise refuse(400, "cannot_answer", str(exc)) from exc
     return ChatReply.model_validate(answered)

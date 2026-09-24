@@ -49,7 +49,6 @@ def load_or_create_key(path: Path) -> bytes:
         _tighten_permissions(path)
         return key
 
-    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     key = secrets.token_bytes(KEY_BYTES)
     tmp = path.with_name(f".{path.name}.{secrets.token_hex(8)}")
     try:
@@ -86,14 +85,8 @@ def _tighten_permissions(path: Path) -> None:
 class Sealer:
     """Seals and opens secrets with a single AES-GCM key."""
 
-    def __init__(self, key: bytes) -> None:
-        if len(key) != KEY_BYTES:
-            raise SealError(f"Key must be {KEY_BYTES} bytes, got {len(key)}")
-        self._aead = AESGCM(key)
-
-    @classmethod
-    def from_path(cls, path: Path) -> Sealer:
-        return cls(load_or_create_key(path))
+    def __init__(self, key_path: Path) -> None:
+        self._aead = AESGCM(load_or_create_key(key_path))
 
     def seal(self, plaintext: str, *, context: str) -> bytes:
         """Encrypt ``plaintext``.

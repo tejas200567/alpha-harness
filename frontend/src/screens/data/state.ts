@@ -94,7 +94,7 @@ export function useDatasetChoice(): [string[], (ids: string[]) => void] {
     return [
       picked,
       (ids) => {
-        useDatasetPick.getState().setIds(ids)
+        useDatasetPick.setState({ ids })
         useFieldFilter.getState().page(0)
       },
     ]

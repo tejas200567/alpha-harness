@@ -895,5 +895,5 @@ async def field_availability(field_id: str, state: State) -> list[FieldAvailabil
 
 
 @router.get("/datasets")
-async def datasets(scope: Scope, state: State, search: str | None = None) -> list[DatasetRow]:
-    return [DatasetRow.model_validate(r) for r in await state.queries.datasets(scope, search)]
+async def datasets(scope: Scope, state: State) -> list[DatasetRow]:
+    return [DatasetRow.model_validate(r) for r in await state.queries.datasets(scope)]

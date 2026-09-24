@@ -18,6 +18,9 @@ export type TaskAlpha = Omit<Schemas['TaskAlpha'], 'settings'> & {
   settings: RankedAlpha['settings']
 }
 
+export type PowerPoolCorrelation = Schemas['PowerPoolCorrelation']
+export type PowerPoolRow = Schemas['PowerPoolRow']
+
 const B = '/api/lab-tasks'
 
 export const labTasks = {
@@ -34,4 +37,10 @@ export const labTasks = {
   top: (id: number, limit = 50) => http.get<RankedAlpha[]>(`${B}/${id}/top${qs({ limit })}`),
   /** Every Alpha from every task that nothing refuses: each check PASS, WARNING or PENDING. */
   submittable: () => http.get<TaskAlpha[]>(`${B}/submittable`),
+  /** Measured locally against the submitted Power Pool, from the PnL already stored. */
+  powerPoolFor: (alphaIds: string[]) =>
+    http.post<PowerPoolCorrelation>(`${B}/power-pool-correlation`, { alphaIds }),
+  /** Downloads PnL, then turnover for the Alphas that satisfy Power Pool Correlation. */
+  powerPoolWorkflow: (alphaIds: string[]) =>
+    http.post<Schemas['WorkflowStarted']>(`${B}/power-pool-workflow`, { alphaIds }),
 }

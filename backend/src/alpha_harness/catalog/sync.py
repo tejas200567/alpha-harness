@@ -16,7 +16,6 @@ import asyncio
 import contextlib
 import json
 import time
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -25,11 +24,13 @@ from sqlalchemy import select, update
 
 from ..brain.errors import BrainError
 from ..brain.schemas import REGION_AGNOSTIC_REGION, BulkField, FieldRef
-from ..db.duck import CatalogUnusableError
+from ..db.duck import CATEGORY_COLUMNS, DATASET_COLUMNS, CatalogUnusableError
 from ..db.models import SyncRun, SyncStatus, utcnow
 from . import search
+from .queries import scope_label
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
     from datetime import datetime
 
     from ..brain.endpoints import BrainEndpoints
@@ -67,8 +68,6 @@ _STEPS = {"waiting": 0, "fetching": 0, "details": 1, "fields": 2, "done": 2, "fa
 
 ALL_LABEL = "All BRAIN datasets"
 
-ProgressHook = Callable[[dict[str, Any]], Awaitable[None] | None]
-
 
 class SyncCancelled(RuntimeError):
     """The user stopped a running sync."""
@@ -94,7 +93,7 @@ class SyncTarget:
 
     @property
     def label(self) -> str:
-        return f"{self.instrument_type}/{self.region}/D{self.delay}/{self.universe}"
+        return scope_label(self.instrument_type, self.region, self.delay, self.universe)
 
 
 #: The run row that stands for a whole-catalog sync rather than one scope.
@@ -111,7 +110,7 @@ class CatalogSync:
         endpoints: BrainEndpoints,
         *,
         tasks: TaskRegistry,
-        on_progress: ProgressHook | None = None,
+        on_progress: Callable[[dict[str, Any]], Awaitable[None]],
     ) -> None:
         self.db = db
         self.catalog = catalog
@@ -387,8 +386,12 @@ class CatalogSync:
                     await self.catalog.replace_fields(scope, rows)
                     # Placeholders only fill gaps: a re-sync must not blank the Value Score,
                     # Coverage and counts that an earlier details step stored.
-                    await self.catalog.upsert_datasets(datasets, overwrite=False)
-                    await self.catalog.upsert_categories(categories, overwrite=False)
+                    await self.catalog.upsert(
+                        "data_set", DATASET_COLUMNS, datasets, overwrite=False
+                    )
+                    await self.catalog.upsert(
+                        "data_category", CATEGORY_COLUMNS, categories, overwrite=False
+                    )
                     # Where a full sync's time goes: BRAIN's response, row building, or the
                     # single-writer DuckDB lock (which also waits on the other scopes' writes).
                     log.info(
@@ -440,7 +443,7 @@ class CatalogSync:
                         ),
                     )
                 ]
-                await self.catalog.upsert_categories(category_rows)
+                await self.catalog.upsert("data_category", CATEGORY_COLUMNS, category_rows)
                 datasets = await _shared_datasets(bulk_datasets, target)
                 if datasets is None:
                     # Counted per run: a market paying for its own scope means the shared
@@ -448,8 +451,10 @@ class CatalogSync:
                     log.info("sync_all.datasets_fallback", target=target.label)
                     datasets = await self.endpoints.list_data_sets_all(**target.params)
                 _check(cancel)
-                await self.catalog.upsert_datasets(
-                    [_dataset_row(dataset, target, now) for dataset in datasets]
+                await self.catalog.upsert(
+                    "data_set",
+                    DATASET_COLUMNS,
+                    [_dataset_row(dataset, target, now) for dataset in datasets],
                 )
 
             try:
@@ -564,12 +569,8 @@ class CatalogSync:
                 progress=payload.get("fraction"),
                 detail=f"{done} of {total} markets" if total else "",
             )
-        if self._on_progress is None:
-            return
         try:
-            result = self._on_progress(payload)
-            if asyncio.iscoroutine(result):
-                await result
+            await self._on_progress(payload)
         except Exception:
             log.exception("sync.progress_hook_failed", run_id=run_id)
 
@@ -790,8 +791,6 @@ def _failures(progress: dict[str, Any]) -> str | None:
 
 def serialise_run(run: SyncRun) -> dict[str, Any]:
     """Wire shape for the API and the live progress feed."""
-    expected = run.fields_expected or 0
-    fraction = (run.fields_synced / expected) if expected else None
     everything = run.region == ALL_TARGET.region
     return {
         "id": run.id,
@@ -802,17 +801,14 @@ def serialise_run(run: SyncRun) -> dict[str, Any]:
         "all": everything,
         "label": ALL_LABEL
         if everything
-        else f"{run.instrument_type}/{run.region}/D{run.delay}/{run.universe}",
+        else scope_label(run.instrument_type, run.region, run.delay, run.universe),
         "status": run.status,
         "phase": run.phase,
-        "cursorOffset": run.cursor_offset,
-        "cursorDataset": run.cursor_dataset,
         "categoriesSynced": run.categories_synced,
         "datasetsSynced": run.datasets_synced,
         "fieldsSynced": run.fields_synced,
-        "fieldsExpected": run.fields_expected,
-        "fraction": fraction,
-        "truncatedDatasets": list(run.truncated_datasets or []),
+        # A single market's field count is not known up front; the sync-all feed sets its own.
+        "fraction": None,
         "error": run.error,
         "startedAt": run.started_at.isoformat() if run.started_at else None,
         "finishedAt": run.finished_at.isoformat() if run.finished_at else None,

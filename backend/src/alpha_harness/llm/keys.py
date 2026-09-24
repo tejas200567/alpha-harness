@@ -239,11 +239,13 @@ class KeyStore:
 
     # -- rotation --------------------------------------------------------
 
-    async def choose(self, model: ModelInfo, *, estimated_tokens: int = 4_000) -> int:
-        """The key with the most daily budget left for this model.
+    async def choose(self, model: ModelInfo, *, estimated_tokens: int, skip: set[int]) -> int:
+        """The key with the most daily budget left for this model, other than those in
+        ``skip``: the ones this request has already tried.
 
         Most-remaining-first rather than round-robin, with ties broken on key id so the
-        choice is reproducible.
+        choice is reproducible. A key whose last call failed goes after the rest, so a dead
+        one costs a round trip only when nothing else is left.
         """
         # Provider first, budget second. A Groq key cannot answer for a Gemini model, so
         # offering it would spend a retry to learn something already known.
@@ -258,11 +260,12 @@ class KeyStore:
             for row in rows
         ]
 
-        usable = [s for s in states if s.available]
+        usable = [s for s in states if s.available and s.key_id not in skip]
         if not usable:
             raise BudgetExhaustedError(model.id, states)
 
-        best = max(usable, key=lambda s: (s.daily_remaining, -s.key_id))
+        failing = {r.id for r in rows if r.last_error}
+        best = max(usable, key=lambda s: (s.key_id not in failing, s.daily_remaining, -s.key_id))
         return best.key_id
 
     async def status(self, registry: ModelRegistry) -> dict[str, Any]:

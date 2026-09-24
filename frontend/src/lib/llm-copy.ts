@@ -5,7 +5,7 @@
  * a value is only moved to where it is said once.
  */
 
-import { fmt } from '@/lib/format'
+import { CORE_METRICS, CORE_ORDER } from '@/lib/format'
 
 export interface CopyAlpha {
   expression: string | null
@@ -114,12 +114,7 @@ export function coreMetrics(r: {
 }): [string, string][] {
   const count = (v: number | null | undefined) => (v == null ? '—' : String(v))
   return [
-    ['Sharpe', fmt.ratio(r.sharpe)],
-    ['Turnover', fmt.pct(r.turnover, 2)],
-    ['Fitness', fmt.ratio(r.fitness)],
-    ['Returns', fmt.pct(r.returns, 2)],
-    ['Drawdown', fmt.pct(r.drawdown, 2)],
-    ['Margin', fmt.bps(r.margin, 2)],
+    ...CORE_ORDER.map((k): [string, string] => [CORE_METRICS[k].label, CORE_METRICS[k].show(r[k])]),
     ['Long Count', count(r.longCount)],
     ['Short Count', count(r.shortCount)],
   ]

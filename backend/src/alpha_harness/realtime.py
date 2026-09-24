@@ -44,7 +44,7 @@ class Hub:
                 await websocket.send_text(json.dumps(message, default=str))
         log.debug("hub.connected", clients=len(self._clients))
 
-    async def disconnect(self, websocket: WebSocket) -> None:
+    def disconnect(self, websocket: WebSocket) -> None:
         self._clients.discard(websocket)
         log.debug("hub.disconnected", clients=len(self._clients))
 

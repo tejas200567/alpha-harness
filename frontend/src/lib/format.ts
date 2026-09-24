@@ -85,6 +85,32 @@ export const fmt = {
   },
 }
 
+type Figure = (v: number | null | undefined) => string
+
+/** BRAIN's six core figures, named and written the same wherever they appear. `signed`: the
+ *  sign means gain or loss, so the figure takes profit or loss colour. */
+export const CORE_METRICS: Record<
+  'sharpe' | 'turnover' | 'fitness' | 'returns' | 'drawdown' | 'margin',
+  { label: string; show: Figure; signed: boolean }
+> = {
+  sharpe: { label: 'Sharpe', show: (v) => fmt.ratio(v), signed: true },
+  turnover: { label: 'Turnover', show: (v) => fmt.pct(v, 2), signed: false },
+  fitness: { label: 'Fitness', show: (v) => fmt.ratio(v), signed: true },
+  returns: { label: 'Returns', show: (v) => fmt.pct(v, 2), signed: true },
+  drawdown: { label: 'Drawdown', show: (v) => fmt.pct(v, 2), signed: false },
+  margin: { label: 'Margin', show: (v) => fmt.bps(v, 2), signed: true },
+}
+
+/** The order figures are read in, Sharpe first. */
+export const CORE_ORDER = [
+  'sharpe',
+  'turnover',
+  'fitness',
+  'returns',
+  'drawdown',
+  'margin',
+] as const
+
 /** Seconds elapsed since an ISO timestamp. */
 export function secondsSince(iso: string | null | undefined, now = Date.now()): number | null {
   const at = moment(iso)

@@ -63,6 +63,11 @@ export interface BrainCorrelation {
   [k: string]: unknown
 }
 
+/**
+ * Singular. `/alphas/:id` is the Alpha *list* and its `:id` is a tab — `/alphas/unsubmitted`,
+ * `/alphas/lists`. Mirrors `vault.yields.PLATFORM_ALPHA_URL`, which builds the same link
+ * server-side.
+ */
 export const BRAIN_ALPHA_URL = (alphaId: string) =>
   `https://platform.worldquantbrain.com/alpha/${alphaId}`
 
@@ -82,10 +87,5 @@ export const pool = {
   check: (alphaId: string) =>
     http.get<{ is?: { checks?: AlphaCheck[] } }>(
       `/api/alphas/${encodeURIComponent(alphaId)}/check`,
-    ),
-  /** A slow, rate-limited BRAIN job. */
-  correlations: (alphaId: string, kind: 'self' | 'prod') =>
-    http.get<BrainCorrelation & { fetchedAt: string }>(
-      `/api/alphas/${encodeURIComponent(alphaId)}/correlations/${kind}`,
     ),
 }

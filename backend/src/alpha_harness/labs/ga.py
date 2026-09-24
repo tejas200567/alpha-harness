@@ -30,8 +30,9 @@ from sqlalchemy import String, func, select, type_coerce
 
 from ..brain.schemas import TEST_PERIOD, SimulationRequest, SimulationSettings
 from ..db.models import Study, Trial, TrialState
-from ..vault.store import EVOLVABLE, EVOLVABLE_TYPES, SUBMITTED
-from ..vault.yields import IGNORED_CHECKS
+from ..vault.metrics import MIN_OVERLAP
+from ..vault.store import EVOLVABLE, EVOLVABLE_TYPES
+from ..vault.yields import IGNORED_CHECKS, SUBMITTED, checks_of, is_submitted
 from . import search, template
 from .fastexpr import (
     UNCOUNTED,
@@ -50,7 +51,7 @@ from .fastexpr import (
     validate,
     walk,
 )
-from .objectives import OBJECTIVES
+from .objectives import FAILURE
 from .params import EvolutionParams, params_of
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -70,7 +71,6 @@ MUTATION_RATE = 0.05
 PATIENCE = 1_000
 #: Candidates Auto Select examines at most, so a weak market cannot cost hundreds of downloads.
 MAX_EXAMINED = 200
-FAILURE = OBJECTIVES["train_fitness"].failure_value
 STALLED = "Stopped early: no new best Train Fitness in the last 1,000 simulations."
 
 
@@ -144,11 +144,7 @@ def seed_score(row: dict[str, Any]) -> float:
     A negative score is divided instead, so passing more checks always ranks higher.
     """
     score = utility(row)
-    try:
-        checks = json.loads(row.get("checks") or "[]")
-    except ValueError:
-        checks = []
-    rate = pass_rate(checks if isinstance(checks, list) else [])
+    rate = pass_rate(checks_of(row.get("checks")))
     if rate is None or not math.isfinite(score):
         return score
     return score * (1 + rate) if score >= 0 else score / (1 + rate)
@@ -160,16 +156,16 @@ def population_for(simulations: int, chosen: int | None = None) -> int:
     return chosen or min(100, max(20, 10 * (simulations // 200)))
 
 
-def stalled(values: list[float | None], patience: int = PATIENCE) -> bool:
-    """True when the last ``patience`` spent children found nothing better than those before.
+def stalled(values: list[float | None]) -> bool:
+    """True when the last :data:`PATIENCE` spent children found nothing better than those before.
 
     ``values`` are the spent children's scores in the order they were asked, ``None`` for one
     that failed.
     """
-    if len(values) <= patience:
+    if len(values) <= PATIENCE:
         return False
-    before = [v for v in values[:-patience] if v is not None]
-    recent = [v for v in values[-patience:] if v is not None]
+    before = [v for v in values[:-PATIENCE] if v is not None]
+    recent = [v for v in values[-PATIENCE:] if v is not None]
     return bool(before) and (not recent or max(recent) <= max(before))
 
 
@@ -414,9 +410,9 @@ def mutate(
 
 
 def child(
-    rng: random.Random, a: Parent, b: Parent, market: Market, rate: float, tries: int = 10
+    rng: random.Random, a: Parent, b: Parent, market: Market, rate: float
 ) -> tuple[Node, dict[str, Any]] | None:
-    """A valid child of ``a`` and ``b`` that is neither of them, or ``None`` after ``tries``."""
+    """A valid child of ``a`` and ``b`` that is neither of them, or ``None`` after ten tries."""
     genes = market.genes(a.tree)
     same = skeleton(a.tree, genes) == skeleton(b.tree, market.genes(b.tree))
     limit = max(operator_count(a.tree), operator_count(b.tree))
@@ -426,7 +422,7 @@ def child(
         key = (tree, settings["neutralization"], settings["decay"], settings["truncation"])
         return key in parents
 
-    for _ in range(tries):
+    for _ in range(10):
         left, right = (a, b) if rng.random() < 0.5 else (b, a)
         if same:
             tree = uniform(rng, a.tree, b.tree, genes)
@@ -473,8 +469,6 @@ def ga_key(expression: str | None, settings: dict[str, Any] | None) -> tuple[str
 
 #: Two Alphas moving together at |correlation| of this or more are one idea, not two.
 DEFAULT_MAX_CORRELATION = 0.5
-#: Days both series must share before a correlation between them means anything.
-MIN_OVERLAP = 250
 
 
 @dataclass(frozen=True, slots=True)
@@ -635,7 +629,7 @@ def seed_problem(
     """Why a stored Alpha cannot be a seed in this market, or ``None``."""
     if row is None or not row.get("expression"):
         return "Not stored here. Sync from BRAIN first."
-    if row.get("status") and str(row["status"]).upper() != "UNSUBMITTED":
+    if is_submitted(row):
         return "Already submitted."
     kind = str(row.get("sim_type") or "REGULAR").upper()
     if kind not in EVOLVABLE_TYPES:

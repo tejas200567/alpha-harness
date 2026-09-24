@@ -16,11 +16,14 @@ import {
 import { type ComponentProps, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { errorMessage } from '@/api/http'
+import { cn } from '@/lib/cn'
 import { DASH, fmt } from '@/lib/format'
+import { useNow } from '@/lib/now'
 import { useRefetchOn } from '@/lib/ws'
 import { DetailSheet } from '@/screens/pool/detail'
 import { MAX_SIMULATIONS } from '@/screens/research-labs/lab-task'
 import { type LabTask, labTasks, type RankedAlpha, type TaskStatus } from '@/screens/tasks/api'
+import { AFTER_COST_HEADER, DELAY, INVESTABILITY, SharpeCell } from '@/screens/tasks/columns'
 import { resultsMarkdown } from '@/screens/tasks/copy'
 import { SubmittableAlphas } from '@/screens/tasks/submittable'
 import {
@@ -34,7 +37,6 @@ import {
   Input,
   LINK,
   Metric,
-  MetricBadge,
   Notice,
   Page,
   PageHeader,
@@ -75,14 +77,7 @@ const TOP_COLUMNS: Column<RankedAlpha>[] = [
     header: 'Sharpe',
     width: '90px',
     align: 'right',
-    cell: (r) =>
-      r.sharpe == null ? (
-        DASH
-      ) : (
-        <MetricBadge tone={r.sharpe > 0 ? 'profit' : r.sharpe < 0 ? 'loss' : 'neutral'}>
-          {fmt.ratio(r.sharpe)}
-        </MetricBadge>
-      ),
+    cell: (r) => <SharpeCell value={r.sharpe} />,
   },
   {
     key: 'fitness',
@@ -112,6 +107,29 @@ const TOP_COLUMNS: Column<RankedAlpha>[] = [
   },
 ]
 
+/**
+ * The Alpha's Sharpe once 5 bps is charged against each day's own turnover, normalized to ten
+ * years of data. It sits beside the gross Sharpe rather than replacing it.
+ *
+ * Empty until the daily PnL and turnover are downloaded, which is a request per Alpha.
+ */
+const AFTER_COST_SHARPE: Column<RankedAlpha> = {
+  key: 'afterCostSharpe',
+  header: AFTER_COST_HEADER,
+  width: '132px',
+  align: 'right',
+  cell: (r) =>
+    r.afterCostSharpe == null ? (
+      <span className="text-ink-subtle" title="Daily PnL not downloaded yet">
+        {DASH}
+      </span>
+    ) : (
+      <span className={cn('num', TEXT_TONE[signTone(r.afterCostSharpe)])}>
+        {fmt.ratio(r.afterCostSharpe)}
+      </span>
+    ),
+}
+
 const setting = (key: string, header: string, width: string): Column<RankedAlpha> => ({
   key,
   header,
@@ -135,32 +153,22 @@ const SAMPLER_COLUMNS: Column<RankedAlpha>[] = [
       </span>
     ),
   },
+  // Region, Delay, Universe, Neutralization, Max Trade, Max Position — the order a market is
+  // named in everywhere, so a reader's eye lands in the same place on every screen.
   setting('region', 'Region', '96px'),
+  DELAY,
   setting('universe', 'Universe', '116px'),
-  {
-    key: 'delay',
-    header: 'Delay',
-    width: '72px',
-    cell: (r) => <span className="num">{`D${r.settings?.['delay'] ?? DASH}`}</span>,
-  },
   // Takes the slack, so the table fills its pane and Sharpe closes at the right edge.
   setting('neutralization', 'Neutralization', 'minmax(180px,1fr)'),
-  setting('maxTrade', 'Max Trade', '104px'),
-  setting('maxPosition', 'Max Position', '128px'),
+  INVESTABILITY,
   {
     key: 'sharpe',
     header: 'Sharpe',
     width: '100px',
     align: 'right',
-    cell: (r) =>
-      r.sharpe == null ? (
-        DASH
-      ) : (
-        <MetricBadge tone={r.sharpe > 0 ? 'profit' : r.sharpe < 0 ? 'loss' : 'neutral'}>
-          {fmt.ratio(r.sharpe)}
-        </MetricBadge>
-      ),
+    cell: (r) => <SharpeCell value={r.sharpe} />,
   },
+  AFTER_COST_SHARPE,
 ]
 
 /** What a task searches for leads the table when it is not Sharpe, which the table shows anyway. */
@@ -202,6 +210,7 @@ export function TasksScreen() {
   }, [running])
 
   const act = useMutation({
+    meta: { inline: true },
     mutationFn: async (a: Act) => {
       if (a.action === 'runAll') await labTasks.runAll()
       else await labTasks[a.action](a.task.id)
@@ -393,7 +402,7 @@ export function TasksScreen() {
         }
       >
         {view === 'submittable' ? (
-          <SubmittableAlphas onOpenAlpha={setAlphaId} />
+          <SubmittableAlphas />
         ) : list.data && all.length === 0 ? (
           <Empty title="No tasks yet">
             <Link to="/labs" className={LINK}>
@@ -627,11 +636,6 @@ function TaskDetail({
   const pending = found.filter((r) => r.pending).length
   const green = found.filter((r) => r.submittable || r.pending).length
   const red = found.length - green
-  // From when it first ran, not when it was added — a task can sit idle for days. Older rows
-  // predate that being recorded, so they fall back to when they were created.
-  const began = Date.parse(task.startedAt ?? task.createdAt ?? '')
-  const ended = task.finishedAt ? Date.parse(task.finishedAt) : Date.now()
-  const elapsed = Number.isNaN(began) ? null : Math.max(0, (ended - began) / 1000)
 
   const title = [
     task.labName,
@@ -703,12 +707,7 @@ function TaskDetail({
           ) : (
             <Metric boxed label="Failed" value={fmt.int(task.failed)} />
           )}
-          <Metric
-            boxed
-            label="Time Elapsed"
-            value={elapsed == null ? DASH : fmt.duration(elapsed)}
-            hint={done ? '' : 'still running'}
-          />
+          <Elapsed task={task} done={done} />
         </div>
         {task.message && (
           <Notice tone={task.status === 'FAILED' ? 'error' : 'info'} title={task.message} />
@@ -759,6 +758,29 @@ function TaskDetail({
   )
 }
 
+/** Its own component so the clock re-renders one box a second, not the task and its table. */
+function Elapsed({ task, done }: { task: LabTask; done: boolean }) {
+  // Ticking while there is something to tick: a finished task's elapsed time is fixed, and a
+  // timer behind it would wake the page every second to redraw the same string.
+  const now = useNow(done ? 0 : 1000)
+  // A task that has been told to run but has no cores yet is waiting, not running, and
+  // saying "0s elapsed" for twenty minutes of that is not an account of anything. From when
+  // it first ran otherwise — older rows predate that being recorded and fall back to created.
+  const waiting = task.status === 'QUEUED'
+  const from = waiting ? (task.queuedAt ?? task.createdAt) : (task.startedAt ?? task.createdAt)
+  const began = Date.parse(from ?? '')
+  const ended = task.finishedAt ? Date.parse(task.finishedAt) : now
+  const elapsed = Number.isNaN(began) ? null : Math.max(0, (ended - began) / 1000)
+  return (
+    <Metric
+      boxed
+      label={waiting ? 'Waiting' : 'Time Elapsed'}
+      value={elapsed == null ? DASH : fmt.duration(elapsed)}
+      hint={done ? '' : waiting ? 'for cores to free up' : 'still running'}
+    />
+  )
+}
+
 function EditTask({ task, slots, onClose }: { task: LabTask; slots: number; onClose: () => void }) {
   const queryClient = useQueryClient()
   const [cores, setCores] = useState(task.cores)
@@ -769,6 +791,7 @@ function EditTask({ task, slots, onClose }: { task: LabTask; slots: number; onCl
   const least = Math.max(1, task.simulated)
   const valid = Number.isInteger(count) && count >= least && count <= MAX_SIMULATIONS
   const change = useMutation({
+    meta: { inline: true },
     mutationFn: () => labTasks.change(task.id, { cores, simulations: count }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['lab-tasks'] })

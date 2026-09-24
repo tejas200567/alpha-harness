@@ -43,10 +43,6 @@ QUOTA_TZ = ZoneInfo("America/Los_Angeles")
 
 WINDOW_SECONDS = 60.0
 
-#: Assumed prompt size when a caller cannot estimate one. Enough to stop a large request
-#: slipping under a TPM check that then fails on the wire.
-DEFAULT_TOKEN_ESTIMATE = 4_000
-
 
 def quota_day(moment: datetime | None = None) -> str:
     """The quota day a moment falls in, as ``YYYY-MM-DD`` in Pacific time."""
@@ -216,7 +212,7 @@ class Ledger:
         key_id: int,
         model: ModelInfo,
         *,
-        estimated_tokens: int = DEFAULT_TOKEN_ESTIMATE,
+        estimated_tokens: int,
         cap: int | None = None,
     ) -> Headroom:
         """Headroom, also refusing a request whose *size* would breach TPM.

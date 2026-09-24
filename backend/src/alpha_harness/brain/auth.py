@@ -12,6 +12,7 @@ failures lock the account, so sign-in is never attempted speculatively.
 
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -19,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 from ..schemas import camel_dict
+from .altcha import solve
 from .errors import (
     INQUIRY_INCOMPLETE_DETAIL,
     PERSONA_PATH,
@@ -122,7 +124,7 @@ class Authenticator:
     async def login(self, email: str, password: str) -> SessionInfo:
         """Full sign-in: solve the proof-of-work, then exchange Basic auth for a cookie."""
         started = time.monotonic()
-        solution = await self.endpoints.solve_captcha()
+        solution = await asyncio.to_thread(solve, await self.endpoints.get_captcha())
         log.info(
             "brain.captcha.solved",
             number=solution.number,
@@ -214,10 +216,6 @@ class Authenticator:
         if state is None or state.user_id is None:
             return SessionInfo.anonymous()
         return SessionInfo.from_state(state)
-
-    async def logout(self) -> None:
-        await self.endpoints.logout()
-        log.info("brain.session.ended")
 
 
 def _verification_pending(inquiry: str, url: str, detail: str | None = None) -> SessionInfo:

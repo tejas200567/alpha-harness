@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
-from .altcha import Challenge, Solution, solve_async
+from .altcha import Challenge
 from .errors import BrainError, BrainServiceUnavailable, BrainVerificationRequired
 from .schemas import (
     BULK_FIELDS,
@@ -100,9 +100,6 @@ class BrainEndpoints:
             raise ValueError(f"Unexpected captcha payload: {r.body!r}")
         return Challenge.from_payload(r.body)
 
-    async def solve_captcha(self) -> Solution:
-        return await solve_async(await self.get_captcha())
-
     async def authenticate(self, email: str, password: str, *, captcha: str) -> AuthState:
         """Exchange Basic auth plus the solved captcha for a session cookie."""
         r = await self.client.request(
@@ -135,15 +132,12 @@ class BrainEndpoints:
         await self.client.request("DELETE", "/authentication", raise_for_status=False)
         self.client.clear_cookies()
 
-    async def get_user(self, user_id: str = "self") -> dict[str, Any]:
+    async def get_user(self, user_id: str) -> dict[str, Any]:
         """Fetch user profile details from /users/{user_id}."""
-        try:
-            r = await self.client.request("GET", f"/users/{user_id}", raise_for_status=False)
-            if r.status >= 400 or not isinstance(r.body, dict):
-                return {}
-            return r.body
-        except BrainError:
+        r = await self.client.request("GET", f"/users/{user_id}", raise_for_status=False)
+        if r.status >= 400 or not isinstance(r.body, dict):
             return {}
+        return r.body
 
     # -- platform metadata ----------------------------------------------
 
@@ -279,9 +273,9 @@ class BrainEndpoints:
     # There is deliberately no ``submit`` here: submission is irreversible, and the absence
     # of the method is the guarantee that no code path reaches it by mistake.
 
-    async def list_alphas(self, query: AlphaQuery, user_id: str = "self") -> dict[str, Any]:
+    async def list_alphas(self, query: AlphaQuery) -> dict[str, Any]:
         """One page of your alphas, with the total match count."""
-        r = await self.client.request("GET", query.path(user_id), version=V_ALPHA_LIST)
+        r = await self.client.request("GET", query.path(), version=V_ALPHA_LIST)
         body = r.body if isinstance(r.body, dict) else {}
         return {
             "count": int(body.get("count") or 0),

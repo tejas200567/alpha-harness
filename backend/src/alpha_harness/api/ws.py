@@ -12,6 +12,7 @@ import contextlib
 import structlog
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from ..config import ALLOWED_ORIGINS
 from ..realtime import TOPIC_SESSION
 from ..state import AppState
 
@@ -29,7 +30,7 @@ async def telemetry(websocket: WebSocket) -> None:
     state: AppState = websocket.app.state.harness
     # Browsers always send Origin on a handshake, and CORS does not cover sockets: without
     # this any page the user visits could open one. Missing and "null" fail the same test.
-    if websocket.headers.get("origin") not in state.settings.cors_origins:
+    if websocket.headers.get("origin") not in ALLOWED_ORIGINS:
         await websocket.close(code=1008)
         return
     await state.hub.connect(websocket)
@@ -49,6 +50,6 @@ async def telemetry(websocket: WebSocket) -> None:
     except Exception:
         log.debug("ws.closed_unexpectedly", exc_info=True)
     finally:
-        await state.hub.disconnect(websocket)
+        state.hub.disconnect(websocket)
         with contextlib.suppress(Exception):
             await websocket.close()

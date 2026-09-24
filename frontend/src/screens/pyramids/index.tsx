@@ -208,7 +208,7 @@ export function PyramidsScreen() {
   const [scope, update] = useScope('data')
   const open = (change: Partial<Scope>) => {
     update(change)
-    void navigate({ to: '/data/$tab', params: { tab: 'fields' } })
+    void navigate({ to: '/data' })
   }
   const universes = useSyncedUniverses()
   const [view, setView] = useState<View>('multiplier')

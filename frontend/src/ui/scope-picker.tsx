@@ -10,6 +10,8 @@ import { Select } from './overlay'
 
 type ScopePart = 'region' | 'delay' | 'universe'
 
+const PARTS: ScopePart[] = ['region', 'delay', 'universe']
+
 const LABELS: Record<ScopePart, string> = {
   region: 'Region',
   delay: 'Delay',
@@ -19,12 +21,10 @@ const LABELS: Record<ScopePart, string> = {
 export function ScopePicker({
   scope,
   onChange,
-  parts = ['region', 'delay', 'universe'],
   disabled,
 }: {
   scope: Scope
   onChange: (change: Partial<Scope>) => void
-  parts?: ScopePart[]
   disabled?: boolean
 }) {
   const options = useScopeOptions(scope)
@@ -58,7 +58,7 @@ export function ScopePicker({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {parts.map((part) => (
+      {PARTS.map((part) => (
         <label key={part} className="flex items-center gap-1.5">
           <span className="text-body-compact text-ink-subtle">{LABELS[part]}</span>
           <Select

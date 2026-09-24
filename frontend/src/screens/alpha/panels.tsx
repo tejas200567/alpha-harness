@@ -4,10 +4,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { CheckIcon, CircleDashedIcon, RefreshCwIcon, XIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { ApiError } from '@/api/http'
 import type { AlphaCheck } from '@/api/types'
 import { cn } from '@/lib/cn'
-import { DASH, fmt, isNum } from '@/lib/format'
+import { CORE_METRICS, DASH, fmt, isNum } from '@/lib/format'
 import {
   Badge,
   Button,
@@ -41,6 +40,7 @@ import {
   type AlphaYear,
   alpha as api,
   type CorrelationKind,
+  notApplicable,
   type Read,
 } from './api'
 
@@ -235,12 +235,11 @@ const ROWS: {
   label: string
   format: (v: number | null | undefined) => string
 }[] = [
-  { key: 'sharpe', label: 'Sharpe', format: (v) => fmt.ratio(v) },
-  { key: 'fitness', label: 'Fitness', format: (v) => fmt.ratio(v) },
-  { key: 'turnover', label: 'Turnover', format: (v) => fmt.pct(v, 2) },
-  { key: 'returns', label: 'Returns', format: (v) => fmt.pct(v, 2) },
-  { key: 'drawdown', label: 'Drawdown', format: (v) => fmt.pct(v, 2) },
-  { key: 'margin', label: 'Margin', format: (v) => fmt.bps(v, 2) },
+  ...(['sharpe', 'fitness', 'turnover', 'returns', 'drawdown', 'margin'] as const).map((key) => ({
+    key,
+    label: CORE_METRICS[key].label,
+    format: CORE_METRICS[key].show,
+  })),
   { key: 'pnl', label: 'PnL', format: fmt.compact },
   { key: 'longCount', label: 'Long count', format: fmt.int },
   { key: 'shortCount', label: 'Short count', format: fmt.int },
@@ -512,6 +511,7 @@ function useBudgeted<T extends { cached: boolean }>(
     staleTime: Number.POSITIVE_INFINITY,
   })
   const run = useMutation({
+    meta: { inline: true },
     mutationFn: () => fetch(kept.data?.cached ? 'refresh' : 'run'),
     onSuccess: (data) => queryClient.setQueryData(key, data),
   })
@@ -537,8 +537,6 @@ function CorrelationRow({
   const rows = data?.records ?? []
   const props = data?.schema?.properties ?? []
   const error = run.error ?? kept.error
-  const notApplicable =
-    error instanceof ApiError && [410, 412].includes(Number(error.body['platformStatus']))
 
   return (
     <li className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0">
@@ -567,7 +565,7 @@ function CorrelationRow({
         </span>
       </div>
       {error &&
-        (notApplicable ? (
+        (notApplicable(error) ? (
           <p className="text-body-compact text-ink-subtle">Not applicable to this Alpha.</p>
         ) : (
           <ErrorNotice error={error} title={`${label} did not run`} />

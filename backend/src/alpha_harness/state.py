@@ -22,7 +22,7 @@ from .brain.errors import BrainTransportError
 from .catalog import search
 from .catalog.queries import CatalogQueries
 from .catalog.sync import CatalogSync, serialise_run
-from .config import BRAIN_API_BASE, Settings, get_settings
+from .config import BRAIN_API_BASE, Settings
 from .db.duck import Catalog
 from .db.models import SimStatus, SimulationRecord, utcnow
 from .db.sqlite import Database
@@ -41,10 +41,9 @@ from .realtime import (
     Hub,
 )
 from .sealing import Sealer
-from .tasks import TaskRegistry, cancel_background
+from .tasks import TaskRegistry, cancel_background, spawn
 from .vault.backfill import Backfill
 from .vault.store import AlphaVault
-from .vault.yields import YieldBook
 
 log = structlog.get_logger(__name__)
 
@@ -61,39 +60,39 @@ LOGIN_RETRY_SECONDS = 3600.0
 class AppState:
     """Everything the application needs, constructed once."""
 
-    def __init__(self, settings: Settings | None = None) -> None:
-        self.settings = settings or get_settings()
+    def __init__(self) -> None:
+        self.settings = Settings()
         self.settings.ensure_data_dir()
 
         self.hub = Hub()
         self.tasks = TaskRegistry(
             on_change=lambda payload: self.hub.broadcast(TOPIC_TASKS, payload)
         )
-        self.sealer = Sealer.from_path(self.settings.key_path)
-        self.db = Database.for_path(self.settings.sqlite_path)
+        self.sealer = Sealer(self.settings.key_path)
+        self.db = Database(self.settings.sqlite_path)
         self.catalog = Catalog(self.settings.duckdb_path)
 
-        self.client = BrainClient(
-            BRAIN_API_BASE,
-            poll_timeout=self.settings.poll_timeout_seconds,
-            default_attempts=self.settings.request_attempts,
-        )
+        self.client = BrainClient(BRAIN_API_BASE)
         self.endpoints = BrainEndpoints(self.client)
         self.metadata = PlatformMetadata(self.db, self.endpoints)
         self.auth = AuthService(self.db, self.sealer, self.endpoints, metadata=self.metadata)
 
+        self.alphas = AlphaVault(self.catalog)
+        self.backfill = Backfill(
+            self.alphas,
+            self.endpoints,
+            self.tasks,
+            on_stored=lambda payload: self.hub.broadcast(TOPIC_SIMULATIONS, payload, replay=False),
+        )
         self.tracker = SimulationTracker(
             self.db,
             self.endpoints,
             on_change=lambda payload: self.hub.broadcast(TOPIC_SIMULATIONS, payload),
             on_unauthorized=self.renew_session,
+            on_alpha=self.backfill.capture,
         )
         self.engine = BatchEngine(
-            self.db,
-            self.endpoints,
-            self.tracker,
-            on_change=lambda payload: self.hub.broadcast(TOPIC_SIMULATIONS, payload),
-            on_unauthorized=self.renew_session,
+            self.db, self.endpoints, self.tracker, on_unauthorized=self.renew_session
         )
         self.sync = CatalogSync(
             self.db,
@@ -104,19 +103,9 @@ class AppState:
         )
         self.queries = CatalogQueries(self.catalog)
 
-        self.alphas = AlphaVault(self.catalog)
-        self.backfill = Backfill(
-            self.alphas,
-            self.endpoints,
-            self.tasks,
-            on_stored=lambda payload: self.hub.broadcast(TOPIC_SIMULATIONS, payload, replay=False),
-        )
-        self.tracker.on_alpha = self.backfill.capture
-
         self.models = ModelRegistry()
-        self.llm = LLMService(self.db, self.sealer, self.queries, self.models)
+        self.llm = LLMService(self.db, self.sealer, self.models)
         self.chat = ChatService(self.db, self.llm, self.queries)
-        self.yields = YieldBook(self.db, self.catalog)
         self.optimizer = Optimizer(
             self.db,
             self.engine,
@@ -132,15 +121,6 @@ class AppState:
         self._last_session_check = float("-inf")
         self._last_login_attempt = float("-inf")
 
-    #: Held so the event loop keeps a strong reference while it runs.
-    _indexing: asyncio.Task[None] | None = None
-
-    async def _index_search(self) -> None:
-        try:
-            await search.rebuild(self.catalog)
-        except Exception:
-            log.warning("startup.search_index_failed", exc_info=True)
-
     # -- lifecycle -------------------------------------------------------
 
     async def startup(self) -> None:
@@ -149,7 +129,10 @@ class AppState:
         # A catalog downloaded before the search index existed still has none; building it
         # costs a couple of seconds and nothing else depends on it, so it must not block.
         if not await search.ready(self.catalog):
-            self._indexing = asyncio.create_task(self._index_search(), name="catalog-fts-index")
+            spawn(search.rebuild(self.catalog), name="catalog-fts-index")
+        # Same shape: an Alpha whose series was stored before After-Cost Sharpe existed has none,
+        # and it is worked out from that series rather than downloaded again.
+        spawn(self.alphas.rebuild_after_cost_sharpe(), name="vault-after-cost-sharpe")
 
         # Reuse a cached session before anything else; a restart should not cost a
         # proof-of-work solve or count against the sign-in lockout budget.
@@ -164,9 +147,7 @@ class AppState:
 
         # Not caught: dispatching new work on top of an unreconciled queue is how orphans
         # and double sends start, so a failure here stops startup and says why.
-        result = await self.tracker.reconcile()
-        if result["orphaned"]:
-            log.warning("startup.orphaned_simulations", count=result["orphaned"])
+        await self.tracker.reconcile()
 
         # A sync killed with the process would otherwise report RUNNING forever.
         try:
@@ -248,7 +229,7 @@ class AppState:
                     return False
                 self._last_session_check = now
                 try:
-                    if (await self.auth.status(refresh=True)).authenticated:
+                    if (await self.auth.status()).authenticated:
                         return True
                 except Exception:
                     log.warning("session.check_failed", exc_info=True)
@@ -290,6 +271,7 @@ class AppState:
         await self.backfill.stop()
         await self.sync.shutdown()
         await self.client.aclose()
+        await self.llm.aclose()
         await self.catalog.close()
         await self.db.dispose()
         log.info("shutdown.complete")

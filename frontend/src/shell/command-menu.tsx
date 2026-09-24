@@ -50,14 +50,14 @@ export function CommandMenu() {
           { label: 'Browse Submittable Alphas', href: '/pool/submittable' },
           { label: 'Sync Data Fields with BRAIN', href: '/pyramids' },
           { label: 'Ask AI Assistant', href: '/ai/assistant' },
-          { label: 'Explore Data Catalog', href: '/data/fields' },
+          { label: 'Explore Data Catalog', href: '/data' },
         ],
       ],
       [
         'Screens & Labs',
         NAV.flatMap((item) => [
           { label: item.label, href: item.to },
-          ...item.tabs.map((t) => ({
+          ...('tabs' in item ? item.tabs : []).map((t) => ({
             label: `${item.label} · ${t.label}`,
             href: `${item.to}/${t.tab}`,
           })),

@@ -49,7 +49,12 @@ SCORED_SOURCE = (
 #: How ``search`` is read. ``smart`` ranks whole words against the id and the description;
 #: ``text`` is the literal substring match, which is still the only way to find a fragment
 #: like ``_eps_`` in the middle of an id.
-SMART, TEXT = "smart", "text"
+SMART = "smart"
+
+
+def scope_label(instrument_type: str, region: str, delay: int, universe: str) -> str:
+    """``EQUITY/USA/D1/TOP3000``: a catalog scope as logs and screens name it."""
+    return f"{instrument_type}/{region}/D{delay}/{universe}"
 
 
 class Tuple4(BaseModel):
@@ -69,7 +74,7 @@ class Tuple4(BaseModel):
 
     @property
     def label(self) -> str:
-        return f"{self.instrument_type}/{self.region}/D{self.delay}/{self.universe}"
+        return scope_label(self.instrument_type, self.region, self.delay, self.universe)
 
 
 class FieldFilter(BaseModel):
@@ -82,7 +87,6 @@ class FieldFilter(BaseModel):
     search: str | None = None
     dataset_ids: list[str] = Field(default_factory=list)
     category_ids: list[str] = Field(default_factory=list)
-    subcategory_ids: list[str] = Field(default_factory=list)
     field_types: list[str] = Field(default_factory=list)
 
     coverage_min: float | None = None
@@ -93,11 +97,12 @@ class FieldFilter(BaseModel):
     user_count_max: int | None = None
     pyramid_multiplier_min: float | None = None
 
-    has_theme: bool | None = None
-
     #: Only fields that also exist in region ``ALL`` — the ones an idea could be run
     #: region-agnostically on. Meaningless when the scope already is ``ALL``.
     region_agnostic: bool = False
+
+    #: Only fields found in no other synced region, region ``ALL`` included.
+    region_exclusive: bool = False
 
     #: ``smart`` (ranked words) or ``text`` (literal substring).
     search_mode: str = SMART
@@ -151,7 +156,6 @@ class FieldFilter(BaseModel):
         for column, values in (
             ("dataset_id", self.dataset_ids),
             ("category_id", self.category_ids),
-            ("subcategory_id", self.subcategory_ids),
             ("field_type", self.field_types),
         ):
             if values:
@@ -178,8 +182,9 @@ class FieldFilter(BaseModel):
             clauses.append("field_id IN (SELECT field_id FROM data_field WHERE region = ?)")
             params.append(REGION_AGNOSTIC_REGION)
 
-        if self.has_theme is not None:
-            clauses.append("themes IS NOT NULL" if self.has_theme else "themes IS NULL")
+        if self.region_exclusive:
+            clauses.append("field_id NOT IN (SELECT field_id FROM data_field WHERE region <> ?)")
+            params.append(scope.region)
 
         return " AND ".join(clauses), params
 
@@ -318,75 +323,17 @@ class CatalogQueries:
 
     # -- datasets & facets -----------------------------------------------
 
-    async def datasets(self, scope: Tuple4, search: str | None = None) -> list[dict[str, Any]]:
-        clauses = [Tuple4.WHERE]
-        params: list[Any] = list(scope.params)
-        if search:
-            needle = f"%{search.lower()}%"
-            clauses.append(
-                "(lower(dataset_id) LIKE ? OR lower(name) LIKE ? OR lower(description) LIKE ?)"
-            )
-            params.extend([needle, needle, needle])
+    async def datasets(self, scope: Tuple4) -> list[dict[str, Any]]:
         return await self.catalog.query(
             f"""
             SELECT dataset_id, name, description, category_id, category_name,
                    subcategory_id, subcategory_name, coverage, value_score,
                    user_count, alpha_count, field_count, pyramid_multiplier
-            FROM data_set WHERE {" AND ".join(clauses)}
+            FROM data_set WHERE {Tuple4.WHERE}
             ORDER BY value_score DESC NULLS LAST, dataset_id
             """,  # noqa: S608
-            params,
+            list(scope.params),
         )
-
-    async def category_tree(self, scope: Tuple4) -> list[dict[str, Any]]:
-        """Category -> subcategory -> dataset counts.
-
-        This is also the payload handed to the LLM: the full organisational hierarchy
-        with metadata but *without* individual fields, which would blow the context
-        window for no benefit.
-        """
-        rows = await self.catalog.query(
-            f"""
-            SELECT
-                f.category_id,
-                any_value(f.category_name)      AS category_name,
-                f.subcategory_id,
-                any_value(f.subcategory_name)   AS subcategory_name,
-                count(DISTINCT f.dataset_id)    AS datasets,
-                count(*)                        AS fields
-            FROM data_field f
-            WHERE {Tuple4.WHERE}
-            GROUP BY f.category_id, f.subcategory_id
-            ORDER BY f.category_id, f.subcategory_id
-            """,  # noqa: S608
-            scope.params,
-        )
-
-        tree: dict[str, dict[str, Any]] = {}
-        for row in rows:
-            cid = row["category_id"] or "uncategorised"
-            node = tree.setdefault(
-                cid,
-                {
-                    "id": cid,
-                    "name": row["category_name"] or cid,
-                    "datasets": 0,
-                    "fields": 0,
-                    "subcategories": [],
-                },
-            )
-            node["fields"] += int(row["fields"] or 0)
-            node["datasets"] += int(row["datasets"] or 0)
-            if row["subcategory_id"]:
-                node["subcategories"].append(
-                    {
-                        "id": row["subcategory_id"],
-                        "name": row["subcategory_name"] or row["subcategory_id"],
-                        "datasets": int(row["datasets"] or 0),
-                        "fields": int(row["fields"] or 0),
-                    }
-                )
-        return sorted(tree.values(), key=lambda n: -n["fields"])
 
     async def facets(
         self, scope: Tuple4, filters: FieldFilter | None = None
@@ -423,20 +370,21 @@ class CatalogQueries:
                 [*head, *params],
             )
 
-        levels = ("category_ids", "subcategory_ids", "dataset_ids")
         return {
-            "categories": await group("category_id", levels, ("category_name", "name")),
+            "categories": await group(
+                "category_id", ("category_ids", "dataset_ids"), ("category_name", "name")
+            ),
             # Each level names its parent, so the filters can be picked top-down:
             # Category → Subcategory → Dataset.
             "subcategories": await group(
                 "subcategory_id",
-                levels[1:],
+                ("dataset_ids",),
                 ("subcategory_name", "name"),
                 ("category_id", "category_id"),
             ),
             "datasets": await group(
                 "dataset_id",
-                levels[2:],
+                ("dataset_ids",),
                 ("category_id", "category_id"),
                 ("subcategory_id", "subcategory_id"),
             ),

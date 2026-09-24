@@ -42,17 +42,17 @@ export const signTone = (v: number | null | undefined): Tone =>
   v == null || v === 0 ? 'neutral' : v > 0 ? 'profit' : 'loss'
 
 /**
- * One BRAIN submission check, coloured by what it says on its own: passed, noted, or not
- * a yes. A ``PENDING`` check has not been run, so it is not green — nothing about the Alpha
- * has been established yet. Whether the Alpha as a whole can still come good is a different
- * question with a different answer; see the Tasks results pane.
+ * One BRAIN submission check, coloured by what it says on its own: passed, unsettled, or
+ * refused. ``PENDING`` is not green — nothing has been established yet — but it is not red
+ * either, because BRAIN has not refused anything. Whether the Alpha as a whole counts as
+ * submittable while a check is pending is a different question; see the Tasks results pane.
  */
 export const checkTone = (result: CheckResult | null | undefined): Tone =>
   result === 'PASS'
     ? 'profit'
-    : result === 'WARNING'
+    : result === 'WARNING' || result === 'PENDING'
       ? 'warn'
-      : result === 'FAIL' || result === 'ERROR' || result === 'PENDING'
+      : result === 'FAIL' || result === 'ERROR'
         ? 'loss'
         : 'muted'
 
@@ -253,15 +253,13 @@ export function Fieldset({
   legend,
   hint,
   children,
-  className,
 }: {
   legend: ReactNode
   hint?: ReactNode
   children: ReactNode
-  className?: string
 }) {
   return (
-    <fieldset className={cn('flex min-w-0 flex-col gap-1.5', className)}>
+    <fieldset className="flex min-w-0 flex-col gap-1.5">
       <legend className="text-caption font-medium float-left w-full text-ink-muted">
         {legend}
       </legend>
@@ -285,7 +283,6 @@ export function Checkbox({
   onChange,
   disabled,
   className,
-  hint,
   ...props
 }: {
   label: ReactNode
@@ -293,8 +290,6 @@ export function Checkbox({
   onChange: (checked: boolean) => void
   disabled?: boolean | undefined
   className?: string | undefined
-  /** A second line under the label, for what the choice costs or changes. */
-  hint?: ReactNode
   'aria-label'?: string | undefined
 }) {
   const id = useId()
@@ -318,7 +313,7 @@ export function Checkbox({
           <CheckIcon className="size-3" strokeWidth={3.5} aria-hidden />
         </BaseCheckbox.Indicator>
       </BaseCheckbox.Root>
-      {(label || hint) && (
+      {label && (
         <label
           htmlFor={id}
           className={cn(
@@ -329,7 +324,6 @@ export function Checkbox({
           )}
         >
           {label}
-          {hint && <span className="text-body-compact text-ink-subtle">{hint}</span>}
         </label>
       )}
     </span>
@@ -379,19 +373,16 @@ export function Segmented<V extends string | number>({
   value,
   onChange,
   label,
-  disabled,
 }: {
   items: { value: V; label: ReactNode }[]
   value: V
   onChange: (value: V) => void
   label: string
-  disabled?: boolean | undefined
 }) {
   return (
     <RadioGroup
       aria-label={label}
       value={String(value)}
-      disabled={disabled}
       // Base UI values are strings; map back so numeric choices stay numbers.
       onValueChange={(next) => {
         const item = items.find((i) => String(i.value) === String(next))
@@ -403,7 +394,7 @@ export function Segmented<V extends string | number>({
         <Radio.Root
           key={String(item.value)}
           value={String(item.value)}
-          className="inline-flex h-7 items-center justify-center rounded-xs border border-transparent px-3 text-body-compact leading-none font-medium text-ink-subtle transition-colors hover:text-ink data-[checked]:border-hairline-strong data-[checked]:bg-surface-3 data-[checked]:text-ink data-[disabled]:text-(--field-text-disabled)"
+          className="inline-flex h-7 items-center justify-center rounded-xs border border-transparent px-3 text-body-compact leading-none font-medium text-ink-subtle transition-colors hover:text-ink data-[checked]:border-hairline-strong data-[checked]:bg-surface-3 data-[checked]:text-ink"
         >
           {item.label}
         </Radio.Root>
@@ -492,31 +483,24 @@ export function Badge({
   )
 }
 
+const METRIC_BADGE = {
+  profit: 'bg-pnl-positive-tint text-pnl-positive border border-pnl-positive-edge',
+  loss: 'bg-pnl-negative-tint text-pnl-negative border border-pnl-negative-edge',
+  neutral: 'bg-surface-2 text-ink border border-hairline',
+}
+
 export function MetricBadge({
   tone = 'neutral',
   children,
-  className,
-  title,
 }: {
-  tone?: 'profit' | 'loss' | 'warn' | 'neutral' | 'muted'
+  tone?: keyof typeof METRIC_BADGE
   children: ReactNode
-  className?: string
-  title?: string
 }) {
-  const STYLES: Record<'profit' | 'loss' | 'warn' | 'neutral' | 'muted', string> = {
-    profit: 'bg-pnl-positive-tint text-pnl-positive border border-pnl-positive-edge',
-    loss: 'bg-pnl-negative-tint text-pnl-negative border border-pnl-negative-edge',
-    warn: 'bg-status-warning-tint text-status-warning border border-status-warning-edge',
-    neutral: 'bg-surface-2 text-ink border border-hairline',
-    muted: 'bg-surface-1 text-ink-subtle border border-hairline',
-  }
   return (
     <span
-      title={title}
       className={cn(
         'mono-metric inline-flex items-center gap-1 rounded-xs px-1.5 py-0.5 whitespace-nowrap',
-        STYLES[tone],
-        className,
+        METRIC_BADGE[tone],
       )}
     >
       {children}
@@ -565,39 +549,6 @@ export function Progress({
           clamped == null ? 'w-1/3 animate-pulse' : 'origin-left transition-transform',
         )}
         style={clamped == null ? undefined : { transform: `scaleX(${clamped})` }}
-      />
-    </div>
-  )
-}
-
-/** How much of the day's simulation quota is spent (DESIGN.md quota-gauge). */
-export function QuotaGauge({
-  used,
-  limit = 5000,
-  label = 'Simulation quota depletion',
-  className,
-}: {
-  used: number
-  limit?: number
-  label?: string
-  className?: string
-}) {
-  const fraction = limit > 0 ? Math.min(1, Math.max(0, used / limit)) : 0
-  return (
-    <div
-      role="progressbar"
-      aria-label={label}
-      aria-valuemin={0}
-      aria-valuemax={limit}
-      aria-valuenow={used}
-      className={cn(
-        'h-1.5 w-full overflow-hidden rounded-pill border border-hairline-subtle bg-surface-2',
-        className,
-      )}
-    >
-      <div
-        className="h-full origin-left rounded-pill bg-primary transition-transform duration-300"
-        style={{ transform: `scaleX(${fraction})` }}
       />
     </div>
   )
@@ -784,7 +735,7 @@ function TabAnchor({ className, ...props }: ComponentProps<'a'>) {
   )
 }
 
-/** A sub-tab that is a real link: `<TabLink to="/data/$tab" params={{ tab: 'fields' }}>`. */
+/** A sub-tab that is a real link: `<TabLink to="/pool/$tab" params={{ tab: 'stored' }}>`. */
 export const TabLink = createLink(TabAnchor)
 
 export function TabBar({ children }: { children: ReactNode }) {

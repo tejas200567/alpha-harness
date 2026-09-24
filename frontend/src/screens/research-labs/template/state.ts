@@ -2,8 +2,7 @@
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { DEFAULT_SCOPE } from '@/lib/scope'
-import type { LabDraft } from '@/screens/research-labs/lab-task'
+import { LAB_DEFAULTS, type LabDraft } from '@/screens/research-labs/lab-task'
 import type { TemplateDoc } from '@/screens/research-labs/template/tree'
 
 const UNDO_STEPS = 50
@@ -20,7 +19,6 @@ export interface TemplateDraft extends LabDraft {
 }
 
 interface Actions {
-  set: (change: Partial<LabDraft>) => void
   open: (templateId: string | number | null, name: string, doc: TemplateDoc) => void
   edit: (doc: TemplateDoc) => void
   undo: () => void
@@ -30,22 +28,12 @@ interface Actions {
 export const useTemplateLab = create<TemplateDraft & Actions>()(
   persist(
     (set, get) => ({
-      region: DEFAULT_SCOPE.region,
-      delay: DEFAULT_SCOPE.delay,
-      universe: DEFAULT_SCOPE.universe,
-      datasetIds: [],
-      cores: 4,
-      simulations: null,
-      decay: 0,
-      vectorOperators: null,
-      neutralizations: [],
-      visualization: false,
+      ...LAB_DEFAULTS,
       templateId: null,
       name: '',
       doc: null,
       dirty: false,
       past: [],
-      set: (change) => set(change),
       open: (templateId, name, doc) => set({ templateId, name, doc, dirty: false, past: [] }),
       edit: (doc) => {
         const { doc: current, past } = get()

@@ -2,7 +2,7 @@
 
 import { cn } from '@/lib/cn'
 import { fmt } from '@/lib/format'
-import { splitNeutralizations } from '@/lib/neutralization'
+import { neutralizationLabel, splitNeutralizations } from '@/lib/neutralization'
 import type { Choice } from '@/lib/scope'
 import { Button, Chips, Fieldset } from '@/ui/kit'
 
@@ -38,6 +38,9 @@ export function NeutralizationPicker({
   const order = available.map((choice) => choice.value)
   const sorted = (values: Iterable<string>) =>
     [...new Set(values)].sort((a, b) => order.indexOf(a) - order.indexOf(b))
+  // All of them on already means the job is to take them off again.
+  const toggle = (all: boolean, ids: string[]) =>
+    onChange(all ? value.filter((v) => !ids.includes(v)) : sorted([...value, ...ids]))
 
   return (
     <Fieldset legend={legend} hint={hint}>
@@ -47,41 +50,63 @@ export function NeutralizationPicker({
           const on = ids.filter((id) => chosen.has(id)).length
           const all = on === ids.length
           return (
-            <div key={group.id} className="flex flex-col gap-1.5">
-              <div className="flex flex-wrap items-center gap-2">
+            // A box each, so which family a value belongs to is read from where it sits
+            // rather than from how far it is under a heading.
+            <div
+              key={group.id}
+              className={cn(
+                'flex min-w-0 flex-col rounded-md border transition-colors',
+                on > 0 ? 'border-hairline-strong bg-surface-1' : 'border-hairline bg-surface-1',
+              )}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-hairline-subtle px-3 py-2">
+                <div className="flex min-w-0 items-baseline gap-2">
+                  {/* The title toggles the family too: a heading over a set of checkboxes is
+                      the thing people reach for, and the button beside it is what tells them
+                      the heading can be reached for at all. */}
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    aria-pressed={all}
+                    onClick={() => toggle(all, ids)}
+                    className="text-body font-medium text-ink transition-colors hover:text-link disabled:text-(--field-text-disabled)"
+                  >
+                    {group.label}
+                  </button>
+                  <span
+                    className={cn(
+                      'num text-caption',
+                      on > 0 ? 'text-ink-muted' : 'text-ink-subtle',
+                    )}
+                  >
+                    {fmt.int(on)} of {fmt.int(ids.length)}
+                  </span>
+                </div>
                 <Button
                   size="sm"
-                  variant={all ? 'primary' : 'secondary'}
+                  variant="ghost"
                   disabled={disabled}
-                  aria-pressed={all}
-                  title={group.hint}
-                  // All of them on already means the button's job is to take them off again.
-                  onClick={() =>
-                    onChange(
-                      all ? value.filter((v) => !ids.includes(v)) : sorted([...value, ...ids]),
-                    )
-                  }
+                  // Says what pressing it does, rather than lighting up to report a state the
+                  // count beside it already gives.
+                  onClick={() => toggle(all, ids)}
                 >
-                  {group.label}
+                  {all ? 'Clear' : 'Select all'}
                 </Button>
-                <span
-                  className={cn(
-                    'num text-caption',
-                    on > 0 && !all ? 'text-ink-muted' : 'text-ink-subtle',
-                  )}
-                >
-                  {fmt.int(on)} of {fmt.int(ids.length)}
-                </span>
               </div>
-              <Chips
-                label={group.label}
-                disabled={disabled}
-                value={ids.filter((id) => chosen.has(id))}
-                onChange={(next) =>
-                  onChange(sorted([...value.filter((v) => !ids.includes(v)), ...next]))
-                }
-                items={items.map((item) => ({ value: item.value, label: item.label }))}
-              />
+              <div className="p-3">
+                <Chips
+                  label={group.label}
+                  disabled={disabled}
+                  value={ids.filter((id) => chosen.has(id))}
+                  onChange={(next) =>
+                    onChange(sorted([...value.filter((v) => !ids.includes(v)), ...next]))
+                  }
+                  items={items.map((item) => ({
+                    value: item.value,
+                    label: neutralizationLabel(item.value, item.label),
+                  }))}
+                />
+              </div>
             </div>
           )
         })}

@@ -10,14 +10,17 @@ if the series are kept. The stored series rebuilds the platform's own figures (s
 
 from __future__ import annotations
 
+import itertools
 import json
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 import structlog
 
 from ..db.duck import ALPHA_COLUMNS, TRAIN_COLUMNS, Catalog
 from . import metrics
+from .yields import SUBMITTED, without_quota_checks
 
 if TYPE_CHECKING:
     from ..brain.schemas import Alpha
@@ -27,6 +30,14 @@ log = structlog.get_logger(__name__)
 #: 3: turnover calibrated to ``yearly-stats`` where it misses by more than rounding. A series
 #: stored under an older version is fetched again on the next sync.
 SERIES_VERSION = 3
+#: Alphas holding a current daily PnL, with or without its turnover. A full series written
+#: before ``pnl_version`` existed carries only ``series_version``. One ``?``: the version.
+PNL_STORED = "SELECT alpha_id FROM alpha WHERE coalesce(pnl_version, series_version) = ?"
+#: Alphas whose series :meth:`AlphaVault.rebuild_after_cost_sharpe` holds in memory at once.
+REBUILD_CHUNK = 100
+
+#: :meth:`AlphaVault.pnl_grid`: the Alphas holding a PnL, the calendar, a ``date x alpha`` matrix.
+type PnlGrid = tuple[list[str], list[date], metrics.Floats]
 
 
 def checks_json(alpha: Alpha) -> str | None:
@@ -38,7 +49,8 @@ def checks_json(alpha: Alpha) -> str | None:
     stats = alpha.in_sample
     if stats is None:
         return None
-    return json.dumps([c.model_dump(by_alias=True) for c in stats.checks])
+    kept = without_quota_checks([c.model_dump(by_alias=True) for c in stats.checks])
+    return json.dumps(kept)
 
 
 def _names(alpha: Alpha, key: str) -> list[str]:
@@ -46,6 +58,21 @@ def _names(alpha: Alpha, key: str) -> list[str]:
     classifications ("Power Pool Alpha") or pyramids ("ASI/D1/OTHER")."""
     raw = (alpha.model_extra or {}).get(key) or []
     return [str(c["name"]) for c in raw if isinstance(c, dict) and c.get("name")]
+
+
+def _after_cost_sharpe(days: list[tuple[date, float, float]], info: dict[str, Any]) -> float | None:
+    """This Alpha's After-Cost Sharpe as the tables show it (:func:`metrics.after_cost_sharpe`).
+
+    The final days BRAIN counts but exports in no recordset are added first, so this reads the
+    same series the Alpha page's after-cost chart draws. That chart's figure is the plain
+    Sharpe, not normalized to ten years, so the two differ unless the Alpha has ten years.
+    """
+    if not days:
+        return None
+    rows = metrics.with_closing(days, info)
+    pnl = np.array([p for _, p, _ in rows], dtype=float)
+    turnover = np.array([t for _, _, t in rows], dtype=float)
+    return metrics.after_cost_sharpe(pnl, turnover)
 
 
 def _end_date(alpha: Alpha) -> date | None:
@@ -112,9 +139,6 @@ ALPHA_METRICS: dict[str, str] = {
     "date_submitted": "a.date_submitted",
 }
 
-#: Anything past UNSUBMITTED (ACTIVE, DECOMMISSIONED, ...) has been submitted.
-SUBMITTED = "(a.status IS NOT NULL AND a.status <> 'UNSUBMITTED')"
-
 #: Types that can seed the Evolution Lab.
 #:
 #: An ``RA_CHILD`` is an ordinary Alpha that happens to have arrived through a
@@ -163,14 +187,14 @@ def _page_row(r: dict[str, Any]) -> dict[str, Any]:
         "shortCount": r["short_count"],
         "maxTrade": r["max_trade"],
         "maxPosition": r["max_position"],
-        "classifications": _json_list(r["classifications"]),
-        "pyramids": _json_list(r["pyramids"]),
+        "classifications": json_list(r["classifications"]),
+        "pyramids": json_list(r["pyramids"]),
         "trainSharpe": r["train_sharpe"],
         "testSharpe": r["test_sharpe"],
     }
 
 
-def _json_list(raw: Any) -> list[str]:
+def json_list(raw: Any) -> list[str]:
     return [str(v) for v in json.loads(raw)] if isinstance(raw, str) else []
 
 
@@ -190,10 +214,10 @@ class AlphaVault:
 
     # -- writing ---------------------------------------------------------
 
-    async def save_alpha(self, alpha: Alpha, *, fetched_at: datetime | None = None) -> None:
+    async def save_alpha(self, alpha: Alpha) -> None:
         from ..db.models import utcnow
 
-        await self._save([alpha], fetched_at or utcnow())
+        await self._save([alpha], utcnow())
 
     async def save_alphas(self, alphas: list[Alpha]) -> int:
         """A page of alphas in one write. Ids must be distinct within the page."""
@@ -213,8 +237,8 @@ class AlphaVault:
                 f"BRAIN returned {len(alphas)} Alpha(s) without metrics or settings, "
                 "so nothing was stored. The platform's Alpha format may have changed."
             )
-        written = await self.catalog.upsert_alphas(
-            [alpha_row(a, fetched_at) for a in alphas if a.train is None]
+        written = await self.catalog.upsert(
+            "alpha", ALPHA_COLUMNS, [alpha_row(a, fetched_at) for a in alphas if a.train is None]
         )
         return written + await self.catalog.upsert(
             "alpha",
@@ -243,7 +267,28 @@ class AlphaVault:
     ) -> int:
         """Store one alpha's daily PnL and turnover from its recordsets, the turnover scaled to
         BRAIN's yearly figures (see :func:`metrics.calibrate`)."""
-        days = metrics.daily_rows(pnl_rows, turnover_rows)
+        return await self._save_series(
+            alpha_id, metrics.daily_rows(pnl_rows, turnover_rows), yearly_rows
+        )
+
+    async def save_turnover(
+        self,
+        alpha_id: str,
+        turnover_rows: list[dict[str, Any]],
+        yearly_rows: list[dict[str, Any]],
+    ) -> int:
+        """Complete a PnL stored by :meth:`save_pnl_only` with its turnover."""
+        days = [(r["date"], float(r["pnl"] or 0.0)) for r in await self.pnl_series(alpha_id)]
+        return await self._save_series(
+            alpha_id, metrics.with_turnover(days, turnover_rows), yearly_rows
+        )
+
+    async def _save_series(
+        self,
+        alpha_id: str,
+        days: list[tuple[date, float, float]],
+        yearly_rows: list[dict[str, Any]],
+    ) -> int:
         stored = await self.by_ids([alpha_id])
         split = (stored.get(alpha_id) or {}).get("test_start")
         if yearly_rows:
@@ -252,10 +297,68 @@ class AlphaVault:
             alpha_id, [(alpha_id, day, pnl, turnover) for day, pnl, turnover in days]
         )
         if written:
+            # Worked out here, once, rather than on every table that shows it: reading a
+            # thousand Alphas' series to fill a column would cost more than the sweep did.
             await self.catalog.upsert(
-                "alpha", ("alpha_id", "series_version"), [(alpha_id, SERIES_VERSION)]
+                "alpha",
+                ("alpha_id", "series_version", "pnl_version", "after_cost_t10"),
+                [
+                    (
+                        alpha_id,
+                        SERIES_VERSION,
+                        SERIES_VERSION,
+                        _after_cost_sharpe(days, stored.get(alpha_id) or {}),
+                    )
+                ],
             )
         return written
+
+    async def save_pnl_only(self, alpha_id: str, pnl_rows: list[dict[str, Any]]) -> int:
+        """Store one alpha's daily PnL without its turnover: a third of the requests, and all
+        a correlation reads. :meth:`save_turnover` completes it."""
+        days = metrics.daily_pnl(pnl_rows)
+        written = await self.catalog.replace_pnl(
+            alpha_id, [(alpha_id, day, pnl, None) for day, pnl in days]
+        )
+        if written:
+            await self.catalog.upsert(
+                "alpha",
+                ("alpha_id", "series_version", "pnl_version", "after_cost_t10"),
+                [(alpha_id, None, SERIES_VERSION, None)],
+            )
+        return written
+
+    async def rebuild_after_cost_sharpe(self) -> int:
+        """Fill in After-Cost Sharpe for Alphas whose series was stored before it existed.
+
+        Local only -- it reads the series already kept, never BRAIN -- so this costs no
+        request and no quota. Without it the column stays empty for every Alpha downloaded
+        before this release, which reads as "no cost" rather than "not worked out yet".
+        """
+        pending = await self.catalog.query(
+            """
+            SELECT a.alpha_id, a.end_date, a.is_pnl, a.test_start, a.test_turnover
+            FROM alpha a
+            WHERE a.after_cost_t10 IS NULL
+              AND EXISTS (
+                  SELECT 1 FROM alpha_pnl p
+                  WHERE p.alpha_id = a.alpha_id AND p.turnover IS NOT NULL
+              )
+            """
+        )
+        rebuilt = 0
+        # A slice at a time: every series at once, as Python objects, peaked at 4.4 GB on a
+        # vault of 3,269 series.
+        for chunk in itertools.batched(pending, REBUILD_CHUNK, strict=False):
+            series = await self.series([str(r["alpha_id"]) for r in chunk])
+            rows = [
+                (a, _after_cost_sharpe([(d, p, t) for d, (p, t) in sorted(days.items())], info))
+                for a, info in ((str(r["alpha_id"]), r) for r in chunk)
+                if (days := series.get(a))
+            ]
+            rebuilt += await self.catalog.upsert("alpha", ("alpha_id", "after_cost_t10"), rows)
+        log.info("vault.after_cost_sharpe_rebuilt", alphas=rebuilt)
+        return rebuilt
 
     async def save_checks(self, alpha_id: str, checks: list[dict[str, Any]]) -> None:
         """Replace one alpha's check array and touch nothing else.
@@ -264,7 +367,8 @@ class AlphaVault:
         checks and no metrics, so writing a whole row from it would blank out the Sharpe
         this alpha was stored with.
         """
-        await self.catalog.upsert("alpha", ("alpha_id", "checks"), [(alpha_id, json.dumps(checks))])
+        kept = json.dumps(without_quota_checks(checks))
+        await self.catalog.upsert("alpha", ("alpha_id", "checks"), [(alpha_id, kept)])
 
     # -- reading ---------------------------------------------------------
 
@@ -326,19 +430,6 @@ class AlphaVault:
             "SELECT count(*) FROM alpha WHERE date_created IS NOT NULL"
         )
         return int(value or 0)
-
-    async def without_returns(self, limit: int = 5000) -> list[str]:
-        """Alphas whose daily series has not been fetched yet, or only in the old form."""
-        rows = await self.catalog.query(
-            """
-            SELECT a.alpha_id FROM alpha a
-            WHERE a.series_version IS DISTINCT FROM ?
-            ORDER BY a.sharpe DESC NULLS LAST
-            LIMIT ?
-            """,
-            [SERIES_VERSION, limit],
-        )
-        return [str(r["alpha_id"]) for r in rows]
 
     async def latest_created(self) -> datetime | None:
         """The newest alpha stored, which is where an incremental sync resumes."""
@@ -474,6 +565,30 @@ class AlphaVault:
             )
         return grouped
 
+    async def pnl_grid(self, alpha_ids: list[str]) -> PnlGrid:
+        """Of these Alphas, the ones holding a current daily PnL (turnover or not); every date
+        any of them traded; and their PnL on that calendar, a column each, NaN where one has
+        no row.
+
+        Arrow into numpy, never a Python object per day. As dicts a series costs 1.3 MB and
+        6 ms, so the Power Pool of a sweep of 1,500 took 1.9 GB and nine seconds a request.
+        """
+        if not alpha_ids:
+            return [], [], np.empty((0, 0))
+        placeholders = ", ".join("?" for _ in alpha_ids)
+        table = await self.catalog.arrow(
+            f"""
+            SELECT alpha_id, date, coalesce(pnl, 0) AS pnl FROM alpha_pnl
+            WHERE alpha_id IN ({placeholders}) AND alpha_id IN ({PNL_STORED})
+            """,  # noqa: S608
+            [*alpha_ids, SERIES_VERSION],
+        )
+        ids = table.column("alpha_id").combine_chunks().dictionary_encode()
+        days, row = np.unique(table.column("date").to_numpy(), return_inverse=True)
+        grid = np.full((len(days), len(ids.dictionary)), np.nan)
+        grid[row, ids.indices.to_numpy()] = table.column("pnl").to_numpy()
+        return ids.dictionary.to_pylist(), days.tolist(), grid
+
     async def submitted_members(self) -> list[dict[str, Any]]:
         """Every submitted Alpha with what the Portfolio page filters on.
 
@@ -507,6 +622,18 @@ class AlphaVault:
             WHERE alpha_id IN ({placeholders}) AND series_version = ?
             """,  # noqa: S608
             [*alpha_ids, SERIES_VERSION],
+        )
+        stored = {str(r["alpha_id"]) for r in rows}
+        return [a for a in alpha_ids if a not in stored]
+
+    async def lacking_pnl(self, alpha_ids: list[str]) -> list[str]:
+        """Those of these Alphas with no daily PnL stored, turnover or not, in the order given."""
+        if not alpha_ids:
+            return []
+        placeholders = ", ".join("?" for _ in alpha_ids)
+        rows = await self.catalog.query(
+            f"SELECT alpha_id FROM ({PNL_STORED}) WHERE alpha_id IN ({placeholders})",  # noqa: S608
+            [SERIES_VERSION, *alpha_ids],
         )
         stored = {str(r["alpha_id"]) for r in rows}
         return [a for a in alpha_ids if a not in stored]

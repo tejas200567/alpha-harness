@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Any, override
 
 import structlog
 from fastapi import BackgroundTasks, FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -50,7 +49,6 @@ from .api import (
 from .api.auth import Session
 from .api.deps import install_exception_handlers
 from .api.update import stop_server
-from .config import Settings, get_settings
 from .schemas import Out
 from .state import AppState
 
@@ -70,15 +68,14 @@ reach the browser.
 """
 
 
-def configure_logging(level: str = "INFO") -> None:
+def configure_logging() -> None:
     """Console-rendered structured logs, for a local tool a human is watching."""
-    numeric = getattr(logging, level.upper(), logging.INFO)
-    logging.basicConfig(format="%(message)s", stream=sys.stdout, level=numeric)
+    logging.basicConfig(format="%(message)s", stream=sys.stdout, level=logging.INFO)
 
     # uvicorn's access log duplicates what we already record and is noisy in a terminal
     # that is also showing simulation telemetry.
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
-    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpx2").setLevel(logging.WARNING)
 
     structlog.configure(
         processors=[
@@ -89,19 +86,18 @@ def configure_logging(level: str = "INFO") -> None:
             structlog.processors.TimeStamper(fmt="%H:%M:%S", utc=False),
             structlog.dev.ConsoleRenderer(colors=sys.stdout.isatty()),
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(numeric),
+        wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
         logger_factory=structlog.PrintLoggerFactory(),
         cache_logger_on_first_use=True,
     )
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
-    settings = settings or get_settings()
-    configure_logging(settings.log_level)
+def create_app() -> FastAPI:
+    configure_logging()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-        state = AppState(settings)
+        state = AppState()
         app.state.harness = state
         await state.startup()
         try:
@@ -116,20 +112,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # tag sets. A hardcoded string here drifts from what the updater compares against.
         version=updates.current(),
         lifespan=lifespan,
-        openapi_url="/openapi.json",
-        docs_url="/docs",
     )
 
     # DNS rebinding: a page whose hostname resolves to 127.0.0.1 is "same-origin" to the
     # browser, so the header checks below pass. Its Host header still names that hostname.
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1"])
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
 
     @app.middleware("http")
     async def require_client_header(request: Request, call_next: Any) -> Any:

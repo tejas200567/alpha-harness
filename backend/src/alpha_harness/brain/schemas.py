@@ -63,16 +63,16 @@ REGION_AGNOSTIC_REGION = "ALL"
 QUICK_MODE = "QUICK"
 
 
-#: The Alpha a request of each type comes back as. Only region-agnostic differs: it is asked
-#: for as ``REGION_AGNOSTIC`` and returns an ``RA_PARENT`` carrying its children, so the two
-#: never compare equal by name and anything matching a request against its result has to
-#: translate first.
-PRODUCES: dict[str, str] = {SimulationType.REGION_AGNOSTIC: SimulationType.RA_PARENT}
-
-
 def produced_type(requested: str) -> str:
-    """The Alpha type a request of ``requested`` produces."""
-    return PRODUCES.get(requested, requested)
+    """The Alpha type a request of ``requested`` comes back as.
+
+    Only region-agnostic differs: it is asked for as ``REGION_AGNOSTIC`` and returns an
+    ``RA_PARENT`` carrying its children, so the two never compare equal by name and anything
+    matching a request against its result has to translate first.
+    """
+    if requested == SimulationType.REGION_AGNOSTIC:
+        return SimulationType.RA_PARENT
+    return requested
 
 
 def region_label(region: str) -> str:
@@ -126,15 +126,6 @@ class AuthState(BrainModel):
     def user_id(self) -> str | None:
         return self.user.id if self.user else None
 
-    @property
-    def is_consultant(self) -> bool:
-        return "CONSULTANT" in self.permissions
-
-    @property
-    def can_multi_simulate(self) -> bool:
-        """Gates batching."""
-        return "MULTI_SIMULATION" in self.permissions
-
 
 # --- simulation -----------------------------------------------------------
 
@@ -166,16 +157,6 @@ class SimulationSettings(BrainModel):
     #: ``FULL`` or ``QUICK``; BRAIN defaults it to ``FULL`` and this application never sends
     #: ``QUICK`` (see :data:`QUICK_MODE`). Read back off an Alpha, where it matters.
     simulation_mode: str | None = None
-
-    @property
-    def batch_key(self) -> tuple[str, str, int, str]:
-        """The fields a multi-simulation's children must agree on.
-
-        ``type`` is held on the request rather than the settings, so the packer combines
-        this with it (``docs/wqb-documentation/consultant-information/
-        multi-alpha-simulation.md``).
-        """
-        return (self.instrument_type, self.region, self.delay, self.language)
 
 
 #: BRAIN's test period: the last two of the ten years are held out.
@@ -223,18 +204,8 @@ class SimulationRequest(BrainModel):
             self.type = SimulationType.REGION_AGNOSTIC
         return self
 
-    @property
-    def is_region_agnostic(self) -> bool:
-        return self.type is SimulationType.REGION_AGNOSTIC
-
     def to_wire(self) -> dict[str, Any]:
         return self.model_dump(by_alias=True, exclude_none=True)
-
-    @property
-    def batch_key(self) -> tuple[str, str, str, int, str]:
-        """5-tuple that all children of one multi-simulation must share."""
-        instrument, region, delay, language = self.settings.batch_key
-        return (str(self.type), instrument, region, delay, language)
 
 
 # --- alpha ----------------------------------------------------------------
@@ -464,25 +435,6 @@ BULK_FIELDS = msgspec.json.Decoder(list[BulkField])
 BULK_FIELDS_ENVELOPE = msgspec.json.Decoder(BulkFields)
 
 
-class DataField(BrainModel):
-    """An entry of ``GET /data-fields``."""
-
-    id: str
-    description: str | None = None
-    dataset: DataCategoryRef | None = None
-    category: DataCategoryRef | None = None
-    subcategory: DataCategoryRef | None = None
-    region: str | None = None
-    delay: int | None = None
-    universe: str | None = None
-    type: str | None = None
-    coverage: float | None = None
-    user_count: int | None = None
-    alpha_count: int | None = None
-    themes: list[Any] = Field(default_factory=list)
-    pyramid_multiplier: float | None = None
-
-
 class DataCategory(BrainModel):
     """An entry of ``GET /data-categories``. Categories nest one level."""
 
@@ -504,18 +456,3 @@ class Operator(BrainModel):
     description: str | None = None
     documentation: str | None = None
     level: str | None = None
-
-
-class Page[T](BrainModel):
-    """DRF-standard ``limit``/``offset`` envelope."""
-
-    count: int = 0
-    next: str | None = None
-    previous: str | None = None
-    results: list[T] = Field(default_factory=list)
-
-    @model_validator(mode="after")
-    def _count_defaults_to_len(self) -> Self:
-        if not self.count and self.results:
-            object.__setattr__(self, "count", len(self.results))
-        return self

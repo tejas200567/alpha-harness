@@ -27,7 +27,6 @@ export function Keys() {
       else toast.success(summary)
       invalidate()
     },
-    onError: (e) => toast.error(errorMessage(e)),
   })
 
   const remove = useMutation({
@@ -37,7 +36,6 @@ export function Keys() {
       setDeleting(null)
       invalidate()
     },
-    onError: (e) => toast.error(errorMessage(e)),
   })
 
   if (keys.isError) return <ErrorNotice title="Could not load the Keys" error={keys.error} />
@@ -162,7 +160,6 @@ function EnabledCell({ apiKey: k }: { apiKey: LLMKey }) {
       toast.success(`${nameOf(k)} ${updated.enabled ? 'enabled' : 'disabled'}`)
       invalidate()
     },
-    onError: (e) => toast.error(errorMessage(e)),
   })
   return (
     <Checkbox
@@ -257,7 +254,6 @@ function RowActions({ apiKey: k, onDelete }: { apiKey: LLMKey; onDelete: () => v
         })
       invalidate()
     },
-    onError: (e) => toast.error(errorMessage(e)),
   })
   return (
     <div className="flex w-full justify-end gap-1">

@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 from ..db.models import Template, utcnow
 from ..labs import search, template
 from ..labs.launch import (
+    NO_SIMULATIONS,
     AddedTask,
     FieldCounts,
     LeftOut,
@@ -47,7 +48,6 @@ class TemplateBody(BaseModel):
 
 class TemplateTask(SearchRequest):
     tree: dict[str, Any]
-    template_id: int | None = None
     template_name: str = Field(default="Template", max_length=128)
 
 
@@ -56,15 +56,11 @@ class TemplateLabOptions(Out):
     #: One block per operator: name, category, inputs, options, symbol, output, description.
     blocks: list[dict[str, Any]]
     variables: dict[str, list[int | float | str]]
-    tags: list[str]
     data_fields: list[str]
     group_fields: list[str]
     vector: list[str]
     decays: list[int]
-    truncation: float
-    max_cores: int
     max_simulations: int
-    max_blocks: int
 
 
 class TemplateSummary(Out):
@@ -92,11 +88,9 @@ class TemplateRemoved(Out):
 
 
 class TemplateLabPreview(Out):
-    round: int
     fields: FieldCounts
     left_out: LeftOut
     universes: list[str]
-    neutralizations: list[str]
     skeleton: str
     sample: list[SampleAlpha]
     #: Everything blocking a task; ``templateProblems`` are the ones about the blocks.
@@ -129,15 +123,11 @@ async def options(state: State, refresh: bool = False) -> TemplateLabOptions:
                 for block in template.blocks(operators).values()
             ],
             "variables": {name: list(values) for name, values in template.VARIABLES.items()},
-            "tags": list(template.TAGS),
             "dataFields": list(template.DATA_FIELDS),
             "groupFields": list(template.GROUP_FIELDS),
             "vector": list(search.catalogue(operators).vector),
             "decays": list(search.DECAYS),
-            "truncation": search.TRUNCATION,
-            "maxCores": search.MAX_CORES,
             "maxSimulations": search.MAX_SIMULATIONS,
-            "maxBlocks": template.MAX_NODES,
         }
     )
 
@@ -292,7 +282,6 @@ async def _plan(body: TemplateTask, state: Any) -> dict[str, Any]:
         "fields": field_counts(pool.fields),
         "leftOut": {"vector": pool.vector_skipped},
         "universes": list(pool.universes),
-        "neutralizations": market["neutralizations"],
         "skeleton": template.skeleton(doc) if doc is not None else "?",
         "sample": sample,
         "problems": problems,
@@ -313,22 +302,15 @@ async def preview(body: TemplateTask, state: State) -> TemplateLabPreview:
 async def add_task(body: TemplateTask, state: State) -> AddedTask:
     """Add the template's search to Tasks, not started. It spends nothing until run there."""
     if body.simulations < 1:
-        raise refuse(422, "no_simulations", "Assign the simulations for this task.")
+        raise refuse(422, "no_simulations", NO_SIMULATIONS)
     plan = await _plan(body, state)
     if plan["problems"]:
         raise refuse(422, "template_blocked", plan["problems"][0])
 
     per_round, size = plan["round"], body.simulations
-    template_id = body.template_id
-    if template_id is not None:
-        async with state.db.session() as session:
-            saved = await session.get(Template, template_id)
-            template_id = saved.id if saved is not None and saved.origin == ORIGIN else None
-    row = await add_study(
+    return await add_study(
         state,
         now=utcnow(),
-        lab="Template Lab",
-        prefix="template",
         sampler=TEMPLATE_SAMPLER,
         params=TemplateParams(
             tree=plan["tree"],
@@ -341,11 +323,8 @@ async def add_task(body: TemplateTask, state: State) -> AddedTask:
             n_startup_trials=startup_trials(len(plan["space"]["fields"]), size, per_round),
             visualization=body.visualization,
         ),
-        objective="train_sharpe",
         simulations=size,
         batch_size=per_round,
         template_source=plan["skeleton"],
         template_name=body.template_name.strip() or "Template",
-        template_id=template_id,
     )
-    return AddedTask(id=row.id, name=row.name)

@@ -1,5 +1,5 @@
 /**
- * The one way the frontend talks to the local backend. The backend answers errors in four
+ * The one way the frontend talks to the local backend. The backend answers errors in three
  * different shapes, and every one is folded into an `ApiError` carrying a stable `code` and a
  * message fit to show.
  */
@@ -10,7 +10,6 @@ export interface ApiErrorBody {
   retryable?: boolean
   retryAfter?: number
   verificationUrl?: string
-  problems?: unknown[]
   [extra: string]: unknown
 }
 
@@ -29,10 +28,6 @@ export class ApiError extends Error {
 
   get retryable(): boolean {
     return this.body.retryable ?? this.status >= 500
-  }
-
-  get isUnauthenticated(): boolean {
-    return this.status === 401 || this.code === 'not_authenticated'
   }
 }
 
@@ -63,10 +58,7 @@ function fromObject(status: number, o: Record<string, unknown>): ApiErrorBody {
 
 export function normalise(status: number, raw: unknown): ApiErrorBody {
   if (raw && typeof raw === 'object') {
-    const o = raw as Record<string, unknown>
-    if (o['error'] && typeof o['error'] === 'object')
-      return fromObject(status, o['error'] as Record<string, unknown>)
-    const detail = o['detail']
+    const detail = (raw as Record<string, unknown>)['detail']
     if (Array.isArray(detail)) {
       const message = detail
         .map((d) => {
@@ -80,7 +72,6 @@ export function normalise(status: number, raw: unknown): ApiErrorBody {
       return {
         code: 'invalid_request',
         message: message || describe(status),
-        problems: detail,
       }
     }
     if (detail && typeof detail === 'object')

@@ -12,15 +12,14 @@ dependencies = [
     "cryptography>=50.0.1",
     "duckdb>=1.5.5",
     "fastapi>=0.141.1",
-    "google-genai>=2.23.0",
-    "httpx>=0.28.1",
+    "httpx2>=2.13.1",
     "msgspec>=0.21.1",
     "numpy>=2.5.3",
+    "openai>=3.19.2",
     "optuna>=5.0.0",
     "packaging>=26.3",
     "pyarrow>=25.0.1",
     "pydantic>=2.13.5",
-    "pydantic-settings>=2.15.0",
     "sqlalchemy[asyncio]>=2.0.52",
     "structlog>=26.1.0",
     "tzdata>=2026.4",
@@ -80,14 +79,11 @@ lint.ignore = [ "ANN401", "N818", "S311" ]
 lint.per-file-ignores."src/alpha_harness/api/*" = [ "TC" ]
 # `type_annotation_map` is SQLAlchemy's documented declarative idiom.
 lint.per-file-ignores."src/alpha_harness/db/models.py" = [ "RUF012" ]
-# Self-checks run as scripts: assert and print are the point.
-lint.per-file-ignores."tests/*" = [ "INP001", "S101", "T201" ]
 # "›" is the category breadcrumb separator shown in the UI.
 lint.allowed-confusables = [ "›" ]
 # Pydantic and SQLAlchemy resolve annotations at runtime; their imports must stay real.
 lint.flake8-type-checking.runtime-evaluated-base-classes = [
     "pydantic.BaseModel",
-    "pydantic_settings.BaseSettings",
     "sqlalchemy.orm.DeclarativeBase",
 ]
 

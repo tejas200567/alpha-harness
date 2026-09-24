@@ -31,7 +31,7 @@ from sqlalchemy import (
     TypeDecorator,
     UniqueConstraint,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 def utcnow() -> datetime:
@@ -81,10 +81,6 @@ class Credential(Base):
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow, onupdate=utcnow)
     last_login_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
 
-    sessions: Mapped[list[BrainSessionRow]] = relationship(
-        back_populates="credential", cascade="all, delete-orphan"
-    )
-
 
 class BrainSessionRow(Base):
     """A cached cookie jar, so a restart does not cost another proof-of-work solve.
@@ -102,8 +98,6 @@ class BrainSessionRow(Base):
     expires_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow, onupdate=utcnow)
-
-    credential: Mapped[Credential] = relationship(back_populates="sessions")
 
 
 # --- simulations ----------------------------------------------------------
@@ -137,12 +131,13 @@ class SimStatus(StrEnum):
 
     @property
     def terminal(self) -> bool:
-        return self not in (
-            SimStatus.QUEUED,
-            SimStatus.PENDING,
-            SimStatus.RUNNING,
-            SimStatus.ORPHANED,
-        )
+        return self not in ACTIVE
+
+
+#: Not yet finished; every other status is final and no transition may leave it.
+#: ``ORPHANED`` belongs here because an identical request arriving while its outcome is
+#: reconciled must share the row rather than pay for a second run.
+ACTIVE = (SimStatus.QUEUED, SimStatus.PENDING, SimStatus.RUNNING, SimStatus.ORPHANED)
 
 
 class SimulationRecord(Base):
@@ -214,13 +209,7 @@ class SimulationRecord(Base):
         """Wall time since submission — what the matrix cell counts up."""
         if self.submitted_at is None:
             return None
-        end = self.finished_at or utcnow()
-        start = self.submitted_at
-        if start.tzinfo is None:
-            start = start.replace(tzinfo=UTC)
-        if end.tzinfo is None:
-            end = end.replace(tzinfo=UTC)
-        return (end - start).total_seconds()
+        return ((self.finished_at or utcnow()) - self.submitted_at).total_seconds()
 
 
 class DedupEntry(Base):
@@ -295,11 +284,7 @@ class SyncStatus(StrEnum):
 
 
 class SyncRun(Base):
-    """One catalog crawl of a single (instrumentType, region, delay, universe) tuple.
-
-    ``cursor_offset`` makes the crawl resumable: an interrupted sync continues from the
-    last committed page rather than restarting.
-    """
+    """One catalog crawl of a single (instrumentType, region, delay, universe) tuple."""
 
     __tablename__ = "sync_run"
 
@@ -311,18 +296,13 @@ class SyncRun(Base):
 
     status: Mapped[str] = mapped_column(String(16), default=SyncStatus.RUNNING, index=True)
     phase: Mapped[str | None] = mapped_column(String(32))
-    cursor_offset: Mapped[int] = mapped_column(Integer, default=0)
-    #: Which dataset the field crawl is inside. Fields are fetched one dataset at a
-    #: time because the platform refuses any offset at or beyond 10,000, so the whole
-    #: scope cannot be paged as one list — see :mod:`alpha_harness.catalog.sync`.
-    cursor_dataset: Mapped[str | None] = mapped_column(String(64))
-    #: Datasets whose own field count exceeds what pagination can reach. Recorded rather
-    #: than ignored, so an incomplete catalog is never silent.
-    truncated_datasets: Mapped[list[Any]] = mapped_column(JSON, default=list)
+    #: Unused. Retired once every install has run a build with these server defaults: a build
+    #: without them cannot put the columns back, so the launcher could not fall back to it.
+    cursor_offset: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    truncated_datasets: Mapped[list[Any]] = mapped_column(JSON, default=list, server_default="[]")
 
     datasets_synced: Mapped[int] = mapped_column(Integer, default=0)
     fields_synced: Mapped[int] = mapped_column(Integer, default=0)
-    fields_expected: Mapped[int | None] = mapped_column(Integer)
     categories_synced: Mapped[int] = mapped_column(Integer, default=0)
 
     error: Mapped[str | None] = mapped_column(Text)
@@ -330,10 +310,6 @@ class SyncRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
 
     __table_args__ = (Index("ix_sync_tuple", "instrument_type", "region", "delay", "universe"),)
-
-    @property
-    def tuple_key(self) -> tuple[str, str, int, str]:
-        return (self.instrument_type, self.region, self.delay, self.universe)
 
 
 # --- platform metadata cache ---------------------------------------------
@@ -441,8 +417,6 @@ class Study(Base):
     started_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
     finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
 
-    trials: Mapped[list[Trial]] = relationship(back_populates="study", cascade="all, delete-orphan")
-
 
 class Trial(Base):
     """One point in the search space, and what it turned into.
@@ -482,8 +456,6 @@ class Trial(Base):
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
 
-    study: Mapped[Study] = relationship(back_populates="trials")
-
     __table_args__ = (
         UniqueConstraint("study_id", "number", name="uq_trial_number"),
         Index("ix_trial_open", "study_id", "state"),
@@ -514,10 +486,6 @@ class ChatThread(Base):
         UtcDateTime, default=utcnow, onupdate=utcnow, index=True
     )
 
-    messages: Mapped[list[ChatMessage]] = relationship(
-        back_populates="thread", cascade="all, delete-orphan"
-    )
-
 
 class ChatMessage(Base):
     """One turn. ``meta`` carries the picks, model and cost of an assistant turn."""
@@ -532,8 +500,6 @@ class ChatMessage(Base):
     text: Mapped[str] = mapped_column(Text)
     meta: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
-
-    thread: Mapped[ChatThread] = relationship(back_populates="messages")
 
 
 class ApiKey(Base):

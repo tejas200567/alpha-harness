@@ -35,7 +35,10 @@ if TYPE_CHECKING:
 type Floats = npt.NDArray[np.float64]
 
 BOOK = 20_000_000.0
+#: BRAIN annualises over 250 trading days, measured.
 YEAR = 250
+#: Days two Alphas must share before their correlation means anything.
+MIN_OVERLAP = 250
 #: BRAIN's fitness floors turnover here so a near-idle alpha is not rewarded without bound.
 FITNESS_TURNOVER_FLOOR = 0.125
 #: Half the last decimal of BRAIN's four-decimal turnover.
@@ -71,13 +74,26 @@ def daily_rows(
     pnl_rows: Sequence[dict[str, Any]], turnover_rows: Sequence[dict[str, Any]]
 ) -> list[tuple[date, float, float]]:
     """``(date, pnl, turnover)`` per trading day, from the two recordsets' rows by column name."""
-    cumulative = [
-        (day, value)
-        for row in pnl_rows
-        if (day := _day(row.get("date"))) is not None
-        and (value := _number(row.get("pnl"))) is not None
-    ]
-    if not cumulative:
+    return with_turnover(daily_pnl(pnl_rows), turnover_rows)
+
+
+def daily_pnl(pnl_rows: Sequence[dict[str, Any]]) -> list[tuple[date, float]]:
+    """``(date, pnl)`` per trading day, from the cumulative ``pnl`` recordset."""
+    out: list[tuple[date, float]] = []
+    previous_cum = 0.0
+    for row in pnl_rows:
+        day, cum = _day(row.get("date")), _number(row.get("pnl"))
+        if day is not None and cum is not None:
+            out.append((day, cum - previous_cum))
+            previous_cum = cum
+    return out
+
+
+def with_turnover(
+    days: Sequence[tuple[date, float]], turnover_rows: Sequence[dict[str, Any]]
+) -> list[tuple[date, float, float]]:
+    """Each day of :func:`daily_pnl` with the turnover traded on it."""
+    if not days:
         return []
     recorded = {
         day: _number(row.get("turnover"))
@@ -85,26 +101,23 @@ def daily_rows(
         if (day := _day(row.get("date"))) is not None
     }
     first_value = next((v for v in recorded.values() if v is not None), None)
-    first_day = cumulative[0][0]
 
     out: list[tuple[date, float, float]] = []
-    previous_cum = 0.0
     holding = False
-    for i, (day, cum) in enumerate(cumulative):
+    for i, (day, pnl) in enumerate(days):
         if i == 0:
-            built = recorded.get(first_day) is not None and first_value != 1.0
+            built = recorded.get(day) is not None and first_value != 1.0
             turnover = 1.0 if built else 0.0
             holding = built
         else:
-            value = recorded.get(cumulative[i - 1][0])
+            value = recorded.get(days[i - 1][0])
             if value is None:
                 turnover = 1.0 if holding else 0.0
                 holding = False
             else:
                 turnover = value
                 holding = True
-        out.append((day, cum - previous_cum, turnover))
-        previous_cum = cum
+        out.append((day, pnl, turnover))
     return out
 
 
@@ -270,3 +283,32 @@ def yearly(
 def after_cost(pnl: Floats, turnover: Floats, bps: float) -> Floats:
     """Daily PnL less an estimated trading cost of ``bps`` on every dollar traded."""
     return pnl - turnover * BOOK * bps / 10_000
+
+
+#: The trading cost every after-cost figure is quoted at, in basis points of the dollars
+#: traded. The screens that let it be changed default to the same number.
+DEFAULT_COST_BPS = 5.0
+
+
+#: The history every After-Cost Sharpe is normalized to: BRAIN's ten-year simulation window.
+REFERENCE_YEARS = 10
+
+
+def after_cost_sharpe(pnl: Floats, turnover: Floats) -> float | None:
+    """The after-cost t-stat over the square root of ten: the after-cost Sharpe scaled by
+    ``sqrt(years of data / 10)``.
+
+    Sharpe alone says how good the average day is, not how many days prove it: six years at
+    1.33 and ten years at 1.33 read the same, though six prove less. The t-stat grows with the
+    square root of the days; dividing it by that of ten years keeps it on the Sharpe's scale,
+    so a full-history Alpha keeps about its after-cost Sharpe and a shorter one is lowered.
+
+    The cost is charged per day against *that day's* turnover — never an average cost off the
+    gross Sharpe, which flatters an Alpha that trades unevenly. Straight through :func:`stats`,
+    so it is the same arithmetic and the same idle-day trim as every other Sharpe here.
+    Charged at :data:`DEFAULT_COST_BPS`.
+    """
+    found = stats(after_cost(pnl, turnover, DEFAULT_COST_BPS), turnover)
+    if found is None or found.sharpe is None:
+        return None
+    return found.sharpe * math.sqrt(found.days / (YEAR * REFERENCE_YEARS))

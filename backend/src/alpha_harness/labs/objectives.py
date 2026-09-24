@@ -20,8 +20,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..brain.schemas import Alpha, Check, CheckResult, SampleStats
+from ..vault.yields import without_quota_checks
 
-Direction = str  # "maximize" | "minimize"
+#: A missing number scores this: deliberately terrible, so a broken trial is never mistaken
+#: for a good one. Every objective is maximised.
+FAILURE = -10.0
 
 
 class StudyError(ValueError):
@@ -40,43 +43,13 @@ class StudyNotFoundError(StudyError):
 class Objective:
     key: str
     label: str
-    direction: Direction
-    summary: str
-    #: Used when the alpha produced no number at all. Deliberately terrible, so a broken
-    #: trial is never mistaken for a good one.
-    failure_value: float
 
 
 OBJECTIVES: dict[str, Objective] = {
-    "sharpe": Objective(
-        "sharpe",
-        "Sharpe",
-        "maximize",
-        "Return per unit of risk. The single number BRAIN cares about most.",
-        -10.0,
-    ),
-    "fitness": Objective(
-        "fitness",
-        "Fitness",
-        "maximize",
-        "BRAIN's own composite of Sharpe, returns and turnover. A good default objective.",
-        -10.0,
-    ),
-    "train_sharpe": Objective(
-        "train_sharpe",
-        "Train Sharpe",
-        "maximize",
-        "Sharpe over the train years only, so the held-out test years stay unseen by the search.",
-        -10.0,
-    ),
-    "train_fitness": Objective(
-        "train_fitness",
-        "Train Fitness",
-        "maximize",
-        "Fitness over the train years only, for a simulation that holds its last years out "
-        "as a test.",
-        -10.0,
-    ),
+    "sharpe": Objective("sharpe", "Sharpe"),
+    # Over the train years only, so the held-out test years stay unseen by the search.
+    "train_sharpe": Objective("train_sharpe", "Train Sharpe"),
+    "train_fitness": Objective("train_fitness", "Train Fitness"),
 }
 
 
@@ -109,7 +82,7 @@ def extract(
             raw = extra[objective.key]
         else:
             raw = _value(stats, objective.key)
-        values.append(objective.failure_value if raw is None else float(raw))
+        values.append(FAILURE if raw is None else float(raw))
     return values
 
 
@@ -192,6 +165,7 @@ def summarise(alpha: Alpha) -> dict[str, Any]:
     """The per-trial result row the UI shows, with nothing dropped."""
     stats = alpha.in_sample
     violations, detail = constraints(alpha)
+    detail = without_quota_checks(detail)
     return {
         "alphaId": alpha.id,
         "grade": alpha.grade,

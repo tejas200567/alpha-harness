@@ -9,28 +9,18 @@ and is not guessed at.
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from fastapi import APIRouter
 
+from ..catalog.pyramids import LIT_AT, next_quarter_start, quarter_start
 from ..schemas import Out
 from .deps import State
 
 log = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/quarter", tags=["quarter"])
-
-#: "A consultant is considered to have formulated a pyramid if they have submitted a minimum
-#: of 3 Alphas in it" — ``docs/learn/consultant-information/brain-genius``.
-ALPHAS_PER_PYRAMID = 3
-
-
-def quarter_bounds(today: date) -> tuple[date, date]:
-    """The calendar quarter ``today`` falls in, both ends inclusive."""
-    first = date(today.year, 3 * ((today.month - 1) // 3) + 1, 1)
-    year, month = (first.year + 1, 1) if first.month == 10 else (first.year, first.month + 3)
-    return first, date(year, month, 1) - timedelta(days=1)
 
 
 class QuarterStanding(Out):
@@ -40,7 +30,7 @@ class QuarterStanding(Out):
     end: str
     #: Alphas submitted inside the quarter, summed from BRAIN's own daily counts.
     submitted: int
-    #: Pyramids with at least :data:`ALPHAS_PER_PYRAMID` submitted Alphas in them.
+    #: Pyramids with at least :data:`LIT_AT` submitted Alphas in them.
     pyramids_formulated: int
     #: Pyramids with at least one submitted Alpha but not yet enough to count.
     pyramids_started: int
@@ -56,7 +46,9 @@ async def standing(state: State) -> QuarterStanding:
     many pyramids as it has data categories, so the pyramid counts sum to more than the
     number of Alphas and cannot stand in for it.
     """
-    start, end = quarter_bounds(datetime.now(UTC).date())
+    today = datetime.now(UTC).date()
+    # Both ends inclusive.
+    start, end = quarter_start(today), next_quarter_start(today) - timedelta(days=1)
     days, pyramids = await asyncio.gather(
         state.endpoints.submission_activity(),
         state.endpoints.pyramid_alphas(start.isoformat(), end.isoformat()),
@@ -77,7 +69,7 @@ async def standing(state: State) -> QuarterStanding:
         start=first,
         end=last,
         submitted=submitted,
-        pyramids_formulated=sum(1 for n in counts if n >= ALPHAS_PER_PYRAMID),
-        pyramids_started=sum(1 for n in counts if 0 < n < ALPHAS_PER_PYRAMID),
-        alphas_per_pyramid=ALPHAS_PER_PYRAMID,
+        pyramids_formulated=sum(1 for n in counts if n >= LIT_AT),
+        pyramids_started=sum(1 for n in counts if 0 < n < LIT_AT),
+        alphas_per_pyramid=LIT_AT,
     )

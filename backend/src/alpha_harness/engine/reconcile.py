@@ -172,30 +172,25 @@ async def reconcile_orphans(
     db: Database,
     endpoints: BrainEndpoints,
     *,
-    on_alpha: Callable[[str], None] | None = None,
-    now: datetime | None = None,
+    on_alpha: Callable[[str], None],
 ) -> dict[str, int]:
     """One pass over every ``ORPHANED`` row. Returns counts of what it resolved."""
-    now = _aware(now or utcnow())
+    now = utcnow()
     async with db.session() as session:
         orphans = list(
-            (
-                await session.execute(
-                    select(SimulationRecord).where(SimulationRecord.status == SimStatus.ORPHANED)
-                )
-            ).scalars()
+            await session.scalars(
+                select(SimulationRecord).where(SimulationRecord.status == SimStatus.ORPHANED)
+            )
         )
         parents = {
             r.id: r
-            for r in (
-                await session.execute(
-                    select(SimulationRecord).where(
-                        SimulationRecord.id.in_(
-                            {o.parent_record_id for o in orphans if o.parent_record_id}
-                        )
+            for r in await session.scalars(
+                select(SimulationRecord).where(
+                    SimulationRecord.id.in_(
+                        {o.parent_record_id for o in orphans if o.parent_record_id}
                     )
                 )
-            ).scalars()
+            )
         }
 
     batches = [o for o in orphans if o.is_batch]
@@ -205,7 +200,7 @@ async def reconcile_orphans(
             continue
         parent = parents.get(row.parent_record_id or -1)
         anchor = row.sent_at or (parent.sent_at or parent.created_at if parent else None)
-        rows.append((row, _aware(anchor or row.created_at)))
+        rows.append((row, anchor or row.created_at))
 
     adopted: list[tuple[SimulationRecord, str]] = []
     requeue: list[int] = []
@@ -288,8 +283,7 @@ async def reconcile_orphans(
         )
 
     for alpha_id in landed:
-        if on_alpha is not None:
-            on_alpha(alpha_id)
+        on_alpha(alpha_id)
     if landed or requeued or abandon:
         log.warning(
             "reconcile.resolved",

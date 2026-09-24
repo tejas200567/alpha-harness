@@ -4,31 +4,36 @@
  * the best Sharpe.
  */
 
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
 import { PlayIcon } from 'lucide-react'
-import { toast } from 'sonner'
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import { today } from '@/api/core'
-import { errorMessage } from '@/api/http'
-import { useDebounced } from '@/lib/use-debounced'
 import {
+  LAB_DEFAULTS,
+  type LabDraft,
   labBody,
   MAX_SIMULATIONS,
   simulationsValid,
+  useAddTask,
   useLabMarket,
+  useLabPreview,
   vectorOperatorsOf,
 } from '@/screens/research-labs/lab-task'
 import { type SearchLabRequest, searchLab } from '@/screens/research-labs/search/api'
 import { DatasetsPanel, SettingsPanel } from '@/screens/research-labs/task-settings'
 import { Button, ErrorNotice, Page, PageHeader } from '@/ui/kit'
-import { useSearchLab } from './state'
+
+/** The Search Lab's choices, kept between visits. */
+const useSearchLab = create<LabDraft>()(
+  persist(() => LAB_DEFAULTS, { name: 'alpha-harness-search-lab' }),
+)
 
 export function SearchLabScreen() {
   const stored = useSearchLab()
+  const set = useSearchLab.setState
   const day = useQuery({ queryKey: ['today'], queryFn: () => today.get() })
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const { chosen, names, choose } = useLabMarket(stored, stored.set, '/labs/search')
+  const { chosen, names, choose } = useLabMarket(stored, set, '/labs/search')
 
   const options = useQuery({
     queryKey: ['search-lab', 'options'],
@@ -44,36 +49,20 @@ export function SearchLabScreen() {
   }
   const vectorOperators = vectorOperatorsOf(draft, options.data?.vector)
   const body: SearchLabRequest = labBody(draft, vectorOperators)
-  const key = JSON.stringify(body)
-  const settledKey = useDebounced(key, 300)
-  const preview = useQuery({
-    queryKey: ['search-lab', 'preview', settledKey],
-    queryFn: () => searchLab.preview(JSON.parse(settledKey) as SearchLabRequest),
-    enabled: chosen && options.isSuccess && settledKey === key,
-    placeholderData: keepPreviousData,
+  const { preview, current } = useLabPreview('search-lab', body, searchLab.preview, {
+    enabled: chosen && options.isSuccess,
   })
   const plan = chosen ? preview.data : undefined
 
-  const add = useMutation({
-    mutationFn: (count: number) => searchLab.runTask({ ...body, simulations: count }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['lab-tasks'] })
-      void queryClient.invalidateQueries({ queryKey: ['today'] })
-      toast.success('Task running', {
-        action: {
-          label: 'Open Tasks',
-          onClick: () => void navigate({ to: '/tasks' }),
-        },
-      })
-    },
-    onError: (error) => toast.error(errorMessage(error)),
-  })
+  const add = useAddTask(
+    (count: number) => searchLab.runTask({ ...body, simulations: count }),
+    'Task running',
+  )
   const ready =
     plan !== undefined &&
-    settledKey === key &&
-    !preview.isFetching &&
+    current &&
     plan.problems.length === 0 &&
-    simulationsValid(draft, maxSimulations)
+    simulationsValid(draft.simulations, maxSimulations)
   // What stops Run Task that no panel below already says.
   const blocked = !chosen
     ? 'Choose datasets to run.'
@@ -112,11 +101,11 @@ export function SearchLabScreen() {
         ids={draft.datasetIds}
         names={names}
         onChoose={choose}
-        onRemove={(id) => stored.set({ datasetIds: stored.datasetIds.filter((x) => x !== id) })}
+        onRemove={(id) => set({ datasetIds: stored.datasetIds.filter((x) => x !== id) })}
       />
       <SettingsPanel
         draft={draft}
-        set={stored.set}
+        set={set}
         vector={options.data?.vector ?? []}
         chosenVector={vectorOperators}
         decays={options.data?.decays}

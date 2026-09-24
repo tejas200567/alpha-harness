@@ -5,7 +5,6 @@ import { http } from '@/api/http'
 
 type Schemas = components['schemas']
 
-export type PowerPoolModel = Schemas['PowerPoolModel']
 export type PowerPoolOptions = Schemas['PowerPoolOptions']
 export type PowerPoolPreview = Schemas['PowerPoolPreview']
 

@@ -10,6 +10,7 @@ import { Tooltip as BTooltip } from '@base-ui/react/tooltip'
 import { CheckIcon, ChevronDownIcon, XIcon } from 'lucide-react'
 import type { ReactElement, ReactNode, RefObject } from 'react'
 import { cn } from '@/lib/cn'
+import type { Choice } from '@/lib/scope'
 import { Button } from './kit'
 
 interface DialogProps {
@@ -143,11 +144,6 @@ const POPUP =
   'max-w-[calc(100vw-2rem)] rounded-md border border-hairline-strong bg-surface-3 p-1 outline-none'
 const ITEM =
   'flex h-8 min-w-0 cursor-default items-center gap-2 rounded-sm px-2 text-body text-ink-muted outline-none select-none data-[disabled]:text-ink-disabled data-[highlighted]:bg-surface-4 data-[highlighted]:text-ink'
-
-export interface Choice<V extends string = string> {
-  value: V
-  label: string
-}
 
 export function Select<V extends string>({
   value,

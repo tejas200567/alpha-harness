@@ -24,21 +24,30 @@ export const RISK_NEUTRALIZATIONS: readonly string[] = [
 export interface NeutralizationGroup {
   id: 'risk' | 'other'
   label: string
-  hint: string
 }
 
 export const NEUTRALIZATION_GROUPS: readonly NeutralizationGroup[] = [
-  {
-    id: 'risk',
-    label: 'Risk Neutralization',
-    hint: 'Neutralized against a risk model: RAM, Statistical, Crowding and the factor models.',
-  },
-  {
-    id: 'other',
-    label: 'Other',
-    hint: 'Neutralized against a group of instruments, or not neutralized at all.',
-  },
+  { id: 'risk', label: 'Risk Neutralization' },
+  { id: 'other', label: 'Other' },
 ]
+
+/**
+ * What to call a neutralization: BRAIN's own label where the market gives one, otherwise its
+ * value made readable.
+ *
+ * A sweep spans regions, and a value legal in one arrives in another's list with no label of
+ * its own — `COUNTRY` among `Market` and `Subindustry`. `scope.choices` fills a missing label
+ * with the value, so a label equal to its value is the signal that none came through. Nothing
+ * is renamed here: the words are BRAIN's, only the shouting is taken off.
+ */
+export const neutralizationLabel = (value: string, label?: string): string =>
+  label && label !== value
+    ? label
+    : value
+        .split('_')
+        .filter(Boolean)
+        .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
+        .join(' ')
 
 export const groupOf = (value: string): NeutralizationGroup['id'] =>
   RISK_NEUTRALIZATIONS.includes(value) ? 'risk' : 'other'

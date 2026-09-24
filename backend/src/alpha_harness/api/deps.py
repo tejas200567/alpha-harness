@@ -57,7 +57,7 @@ def _problem(
     """
     return JSONResponse(
         status_code=status,
-        content={"error": {"code": code, "message": message, **extra}},
+        content={"detail": {"code": code, "message": message, **extra}},
     )
 
 

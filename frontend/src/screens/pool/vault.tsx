@@ -5,7 +5,6 @@ import { RefreshCwIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { tasks } from '@/api/core'
-import { errorMessage } from '@/api/http'
 import { cn } from '@/lib/cn'
 import { fmt } from '@/lib/format'
 import { useLive } from '@/lib/live'
@@ -29,7 +28,6 @@ export function SyncAlphasButton() {
       )
       void queryClient.invalidateQueries({ queryKey: ['pool'] })
     },
-    onError: (e) => toast.error(errorMessage(e)),
     onSettled: () => setOpen(false),
   })
 

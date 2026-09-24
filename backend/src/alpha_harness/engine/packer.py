@@ -13,6 +13,7 @@ perfectly. Pure by design — no database, no HTTP.
 
 from __future__ import annotations
 
+import itertools
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -93,10 +94,6 @@ class Batch:
     items: tuple[WorkItem, ...]
 
     @property
-    def size(self) -> int:
-        return len(self.items)
-
-    @property
     def record_ids(self) -> list[int]:
         return [item.record_id for item in self.items]
 
@@ -127,38 +124,53 @@ def pack(
     core is one ordinary simulation; a GLB one costs two and a region-agnostic one three, and
     the latter never shares a batch (see :attr:`BatchKey.cost` and :attr:`BatchKey.max_batch`).
 
-    ``task_capacity`` caps how many batches each named task may be given in this round;
-    a task absent from the mapping is unconstrained. Items are never mixed across tasks,
-    so a batch always belongs to exactly one task and stays attributable.
+    ``task_capacity`` caps how many batches each named task may open in this round; a task
+    absent from the mapping is unconstrained. A batch belongs to the task that opened it,
+    which holds its core. Seats it leaves empty go to other tasks' simulations that share its
+    key, oldest first: they ride in a core already held, so no task holds more cores than it
+    was given, and each keeps its own task, so its result is still scored where it belongs.
     """
     if free_slots <= 0 or not items:
         return []
 
     remaining = dict(task_capacity or {})
-    batches: list[Batch] = []
 
-    # Group by (task, key): a batch must share the 5-tuple *and* belong to one task.
+    # Group by (task, key): a batch must share the 5-tuple, and is opened by one task.
     groups: dict[tuple[str, BatchKey], list[WorkItem]] = defaultdict(list)
     for item in items:
         groups[(item.task, item.key)].append(item)
 
     # Slice each group into batch-sized chunks up front, so ordering can consider the
     # chunks themselves rather than the groups they came from.
-    chunks: list[tuple[str, BatchKey, list[WorkItem]]] = []
+    chunks: list[tuple[str, BatchKey, tuple[WorkItem, ...]]] = []
     for (task, key), members in groups.items():
         size = min(max_batch, key.max_batch)
         chunks.extend(
-            (task, key, members[start : start + size]) for start in range(0, len(members), size)
+            (task, key, chunk) for chunk in itertools.batched(members, size, strict=False)
         )
 
     # Fullest chunks first; ties broken by the earliest queued item so a small group
     # cannot be starved indefinitely behind a steadily refilled large one.
     chunks.sort(key=lambda c: (-len(c[2]), c[2][0].record_id))
 
+    opened: list[tuple[str, BatchKey, list[WorkItem]]] = []
+
+    def seat(key: BatchKey, members: list[WorkItem]) -> list[WorkItem]:
+        """Fit ``members`` into seats left in batches already opened; return the rest."""
+        for _, open_key, seats in opened:
+            if open_key == key and members:
+                room = min(max_batch, key.max_batch) - len(seats)
+                seats.extend(members[:room])
+                members = members[room:]
+        return members
+
     taken = 0
-    for task, key, members in chunks:
-        if taken >= free_slots:
-            break
+    for task, key, chunk in chunks:
+        # A partial tail first fills another batch's empty seats: tails of 7 and 3 are one
+        # core, not two.
+        members = seat(key, list(chunk))
+        if not members:
+            continue
         # A region-agnostic batch that will not fit is skipped rather than ending the round:
         # an ordinary one behind it still fits in the core it would have needed.
         if taken + key.cost > free_slots:
@@ -167,10 +179,16 @@ def pack(
             if remaining[task] <= 0:
                 continue
             remaining[task] -= 1
-        batches.append(Batch(key=key, task=task, items=tuple(members)))
+        opened.append((task, key, members))
         taken += key.cost
 
-    return batches
+    # Seats still empty take work no batch opened for: a task at its core limit, or one
+    # whose chunk came up before the batch with room was opened.
+    placed = {item.record_id for _, _, seats in opened for item in seats}
+    for key in {key for _, key, _ in opened}:
+        seat(key, [i for i in items if i.key == key and i.record_id not in placed])
+
+    return [Batch(key=key, task=task, items=tuple(seats)) for task, key, seats in opened]
 
 
 def allocate_slots(

@@ -9,11 +9,11 @@ import { RefreshCwIcon, XIcon } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { catalog } from '@/api/catalog'
-import { errorMessage } from '@/api/http'
 import type { Scope, SyncMarket, SyncRun } from '@/api/types'
 import { cn } from '@/lib/cn'
 import { DASH, fmt } from '@/lib/format'
 import { useLive } from '@/lib/live'
+import { useNow } from '@/lib/now'
 import { REGION_AGNOSTIC } from '@/lib/scope'
 import { STAT } from '@/screens/data/state'
 import { Button, Empty, ErrorNotice, Metric, Notice, Panel, Progress, Skeleton } from '@/ui/kit'
@@ -56,11 +56,7 @@ function seconds(from: string | null | undefined, to: string | null | undefined)
 
 /** Counts up in its own component, so a running sync does not re-render the whole panel. */
 function Elapsed({ since }: { since: string }) {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [])
+  const now = useNow(1000)
   return <span className="num text-ink">{fmt.duration((now - Date.parse(since)) / 1000)}</span>
 }
 
@@ -124,7 +120,6 @@ export function SyncHero({
       toast.success(result.cancelled ? 'Sync cancelled' : 'The sync had already finished')
       void queryClient.invalidateQueries({ queryKey: ['catalog'] })
     },
-    onError: (error) => toast.error(errorMessage(error)),
     onSettled: () => setCancelId(null),
   })
 
@@ -423,7 +418,6 @@ export function RegionAgnosticHero({
     mutationFn: catalog.cancel,
     onSuccess: (result) =>
       toast.success(result.cancelled ? 'Sync cancelled' : 'The sync had already finished'),
-    onError: (error) => toast.error(errorMessage(error)),
     onSettled: () => setCancelId(null),
   })
 
@@ -563,7 +557,6 @@ function useDownload(regionAgnostic: boolean) {
       )
       void queryClient.invalidateQueries({ queryKey: ['catalog'] })
     },
-    onError: (error) => toast.error(errorMessage(error)),
   })
 }
 

@@ -18,14 +18,13 @@ from ..brain.schemas import TEST_PERIOD
 from ..db.models import Trial, TrialState, utcnow
 from ..labs import ga, scheduler, search
 from ..labs.launch import (
+    NO_SIMULATIONS,
     OPERATORS_UNREAD,
     AddedTask,
-    OperatorsRead,
     SampleAlpha,
     account_operators,
     add_study,
     neutralizations_for,
-    operators_read,
     preview_samples,
 )
 from ..labs.params import GA_SAMPLER, EvolutionParams
@@ -80,20 +79,11 @@ class EvolutionMarket(Out):
     alphas: int
 
 
-class EvolutionDefaults(Out):
-    population: int | None
-    mutation_rate: float
-
-
 class EvolutionOptions(Out):
-    operators: OperatorsRead
     markets: list[EvolutionMarket]
     populations: list[int]
     mutation_rates: list[float]
-    defaults: EvolutionDefaults
-    max_cores: int
     max_simulations: int
-    max_seeds: int
 
 
 class SeedRow(Out):
@@ -120,7 +110,6 @@ class EvolutionPreview(Out):
     generations: int
     sample: list[SampleAlpha]
     problems: list[str]
-    warnings: list[str]
 
 
 class AutoSeedsStarted(Out):
@@ -166,12 +155,10 @@ async def _market(
 
 
 @router.get("/options")
-async def options(state: State, refresh: bool = False) -> EvolutionOptions:
-    operators = await account_operators(state, refresh=refresh)
+async def options(state: State) -> EvolutionOptions:
     markets = await state.alphas.evolvable_markets()
     return EvolutionOptions.model_validate(
         {
-            "operators": operators_read(operators),
             "markets": [
                 {
                     "region": m["region"],
@@ -183,10 +170,7 @@ async def options(state: State, refresh: bool = False) -> EvolutionOptions:
             ],
             "populations": list(POPULATIONS),
             "mutationRates": list(MUTATION_RATES),
-            "defaults": {"population": None, "mutationRate": ga.MUTATION_RATE},
-            "maxCores": search.MAX_CORES,
             "maxSimulations": search.MAX_SIMULATIONS,
-            "maxSeeds": MAX_SEEDS,
         }
     )
 
@@ -231,7 +215,6 @@ async def _plan(body: EvolutionRequest, state: Any) -> dict[str, Any]:
         "generations": body.simulations // population,
         "sample": sample,
         "problems": problems,
-        "warnings": [],
         "neutralizations": list(market.neutralizations) if market else [],
     }
 
@@ -272,16 +255,14 @@ async def auto_seeds(body: AutoSeedsRequest, state: State) -> AutoSeedsStarted:
         # Finished jobs are kept for a while rather than cleared: a screen still reading the
         # last run's seeds was told to start again the moment another market was chosen.
         cutoff = time.monotonic() - JOB_TTL_SECONDS
-        # A job whose task just finished may not have stamped ``finished_at`` yet; it stays.
-        ended = [i for i, j in _jobs.items() if j["finished_at"] is not None]
-        for stale in [i for i in ended if _jobs[i]["finished_at"] < cutoff]:
+        ended = {i: j["task"].finished for i, j in _jobs.items() if j["task"].finished is not None}
+        for stale in [i for i, finished in ended.items() if finished < cutoff]:
             del _jobs[stale]
         task = await state.tasks.start("evolution-seeds", "Choosing seeds")
         job: dict[str, Any] = {
             "task": task,
             "market": wanted,
             "result": None,
-            "finished_at": None,
         }
         _jobs[task.id] = job
 
@@ -306,9 +287,6 @@ async def auto_seeds(body: AutoSeedsRequest, state: State) -> AutoSeedsStarted:
         except Exception as exc:
             log.exception("evolution.auto_seeds_failed")
             await state.tasks.finish(task, state="failed", error=str(exc)[:300])
-        finally:
-            # However it ended, this is when it stops being current.
-            job["finished_at"] = time.monotonic()
 
     spawn(run(), name="evolution-seeds")
     return AutoSeedsStarted(job_id=task.id)
@@ -335,7 +313,7 @@ async def auto_seeds_job(job_id: str) -> AutoSeedsJob:
 async def add_task(body: EvolutionRequest, state: State) -> AddedTask:
     """Add the breeding to Tasks, not started. It spends nothing until it is run there."""
     if body.simulations < 1:
-        raise refuse(422, "no_simulations", "Assign the simulations for this task.")
+        raise refuse(422, "no_simulations", NO_SIMULATIONS)
     plan = await _plan(body, state)
     if plan["problems"]:
         raise refuse(422, "evolution_blocked", plan["problems"][0])
@@ -389,11 +367,9 @@ async def add_task(body: EvolutionRequest, state: State) -> AddedTask:
             )
         return trials
 
-    row = await add_study(
+    return await add_study(
         state,
         now=now,
-        lab="Evolution Lab",
-        prefix="evolution",
         sampler=GA_SAMPLER,
         params=EvolutionParams(
             region=body.region,
@@ -406,10 +382,8 @@ async def add_task(body: EvolutionRequest, state: State) -> AddedTask:
             test_period=TEST_PERIOD,
             neutralizations=plan["neutralizations"],
         ),
-        objective="train_fitness",
         simulations=body.simulations,
         batch_size=body.cores * 10,
         template_source="# Evolution Lab breeds from seed Alphas; there is no template.",
         seeds=generation_zero,
     )
-    return AddedTask(id=row.id, name=row.name)

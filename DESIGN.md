@@ -434,8 +434,8 @@ Corners never mix within one surface: a panel at `lg` holds buttons at `sm` hold
 `frontend/src/ui/` holds the primitives, and nothing outside it may define one.
 
 - **kit.tsx** — `Page`, `PageHeader`, `Panel`, `Button`, `Input`, `Textarea`, `Field`, `Fieldset`,
-  `Checkbox`, `Chips`, `Segmented`, `Metric`, `Badge`, `MetricBadge`, `KV`, `Progress`,
-  `QuotaGauge`, `Kbd`, `Spinner`, `Skeleton`, `Notice`, `ErrorNotice`, `Empty`, `Disclosure`,
+  `Checkbox`, `Chips`, `Segmented`, `Metric`, `Badge`, `MetricBadge`, `KV`, `Progress` (also the
+  quota gauge), `Kbd`, `Spinner`, `Skeleton`, `Notice`, `ErrorNotice`, `Empty`, `Disclosure`,
   `TabBar`, and the tone helpers (`signTone`, `checkTone`, `TEXT_TONE`).
 - **table.tsx** — `DataTable`, virtualised and server-sorted, and `Pager`.
 - **overlay.tsx** — `Dialog`, `Sheet`, `Confirm`, `Select`, `Menu`, `Tooltip`, on Base UI.

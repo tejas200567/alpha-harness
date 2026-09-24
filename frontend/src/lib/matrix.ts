@@ -3,7 +3,7 @@
  * its multi-simulation. QUEUED work is counted elsewhere, never drawn.
  */
 
-import type { SimulationRow } from '../api/types.ts'
+import type { SimulationRow } from '@/api/types'
 
 export type CellState = 'RUNNING' | 'PENDING' | 'EMPTY'
 
@@ -52,11 +52,6 @@ export function assignCores(
   return next
 }
 
-/**
- * Group active rows into cores, passing the previous `assignment` to keep every holder on its
- * core between snapshots. When BRAIN finishes a batch the parent leaves the active set before
- * its children are collected, so those orphans no longer hold a core and are not drawn.
- */
 /**
  * Cores one running simulation holds. BRAIN meters GLB at double rate, and a region-agnostic
  * run costs one core per region its fields intersect — so drawing a chip each would show a
@@ -107,6 +102,11 @@ export function coreBlocks(cores: Core[], slots: number): CoreBlock[] {
 export const blockLabel = (block: CoreBlock): string =>
   block.span === 1 ? `C${block.start + 1}` : `C${block.start + 1}\u2013C${block.start + block.span}`
 
+/**
+ * Group active rows into cores, passing the previous `assignment` to keep every holder on its
+ * core between snapshots. When BRAIN finishes a batch the parent leaves the active set before
+ * its children are collected, so those orphans no longer hold a core and are not drawn.
+ */
 export function buildCores(
   active: SimulationRow[],
   slots: number,
@@ -154,14 +154,13 @@ export function buildCores(
     const kids = (children.get(holder.id) ?? []).sort((a, b) => a.id - b.id)
     // A batch fills its core: the parent carries no expression of its own (the engine writes
     // ``expression=""`` on it), and how many children it holds is only known once they land.
-    const size = maxBatch
     return {
       holder,
       cells: Array.from({ length: maxBatch }, (_, j): Cell => {
         const kid = kids[j]
-        if (kid) return { row: kid, state: cellState(kid.status) }
-        if (j < size) return { row: null, state: cellState(holder.status) }
-        return EMPTY
+        return kid
+          ? { row: kid, state: cellState(kid.status) }
+          : { row: null, state: cellState(holder.status) }
       }),
     }
   })

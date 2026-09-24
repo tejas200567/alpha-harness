@@ -1,52 +1,48 @@
-"""One client for every provider that speaks chat-completions.
+"""One client for every provider: each of them, Google included, speaks chat-completions.
 
-Seven of the eight providers in :mod:`.providers` accept the same request shape, so this
-is all it takes to support them: a POST to ``/chat/completions`` and a GET of ``/models``
-for the health check.
-
-**The response is shaped like Google's on purpose**, so the rotation, budget accounting and
-error handling around it stay one code path rather than two that drift.
+Built on the OpenAI SDK, which also streams. Google's endpoint is its OpenAI-compatible
+one, which holds the answer to a JSON schema and takes a reasoning effort.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
+import asyncio
+from typing import TYPE_CHECKING, Any
 
-import httpx
 import structlog
+from openai import APIStatusError, AsyncOpenAI, omit
+
+if TYPE_CHECKING:
+    import httpx2
+    from openai.types.chat import ChatCompletionMessageParam
+    from openai.types.chat.completion_create_params import ResponseFormat
+    from openai.types.shared import ReasoningEffort
 
 log = structlog.get_logger(__name__)
 
+#: Waits before sending again after a 503: an overloaded model usually clears in seconds.
+OVERLOADED_WAITS = (2.0, 5.0)
 
-@dataclass(frozen=True, slots=True)
-class Usage:
-    """Token counts, named as the Google client names them."""
-
-    prompt_token_count: int = 0
-    candidates_token_count: int = 0
-    thoughts_token_count: int = 0
-    total_token_count: int = 0
+#: How much of a provider's error is kept. All of it that matters: whether a Google 429 is
+#: the per-minute or the per-day limit is said only in its ``details``, near the end.
+DETAIL_CHARS = 2_000
 
 
-@dataclass(frozen=True, slots=True)
-class Reply:
-    """What came back, with the same two attributes the Google path reads."""
+class ProviderError(RuntimeError):
+    """A provider's refusal: its HTTP status, and its own words about why."""
 
-    text: str
-    usage_metadata: Usage
+    def __init__(self, status: int, detail: str) -> None:
+        super().__init__(f"{status} {detail}")
+        self.status = status
 
 
 class OpenAICompatible:
-    """A minimal chat-completions client."""
+    """A chat-completions client for one key, on a connection pool it shares."""
 
-    def __init__(self, base_url: str, api_key: str, *, timeout: float = 60.0) -> None:
-        self.base_url = base_url.rstrip("/")
-        self._headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
-        self._timeout = timeout
+    def __init__(self, base_url: str, api_key: str, http: httpx2.AsyncClient) -> None:
+        # No SDK retries: a 429 means this key is spent for now, which rotation answers by
+        # moving to the next key, and sending it again only burns the day's requests.
+        self._sdk = AsyncOpenAI(api_key=api_key, base_url=base_url, http_client=http, max_retries=0)
 
     async def generate(
         self,
@@ -54,75 +50,76 @@ class OpenAICompatible:
         model: str,
         system: str,
         user: str,
-        temperature: float = 0.7,
-        json_mode: bool = False,
-    ) -> Reply:
-        """One completion.
+        temperature: float,
+        schema: dict[str, Any] | None,
+        reasoning_effort: ReasoningEffort = None,
+    ) -> tuple[str, dict[str, Any]]:
+        """One completion as JSON: its text, and the ``usage`` the provider reported.
 
-        ``json_mode`` asks for a JSON object rather than prose. Not every provider
-        honours it, which is why the callers that need structured output also say so in
-        the prompt itself and parse defensively.
+        ``schema`` holds the answer to it; without one only a JSON object is asked for. Not
+        every provider honours either, which is why the callers also ask for JSON in the
+        prompt itself and parse defensively. A 503 is sent again after a short wait.
         """
-        payload: dict[str, Any] = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            "temperature": temperature,
-        }
-        if json_mode:
-            payload["response_format"] = {"type": "json_object"}
+        for wait in OVERLOADED_WAITS:
+            try:
+                return await self._complete(
+                    model, system, user, temperature, schema, reasoning_effort
+                )
+            except ProviderError as exc:
+                if exc.status != 503:
+                    raise
+            log.info("llm.overloaded", model=model, wait=wait)
+            await asyncio.sleep(wait)
+        return await self._complete(model, system, user, temperature, schema, reasoning_effort)
 
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            response = await client.post(
-                f"{self.base_url}/chat/completions", headers=self._headers, json=payload
-            )
-
-        if response.status_code >= 400:
-            # The status code goes in the message because that is what the rate-limit
-            # detection reads; a 429 that does not say "429" looks like a permanent failure.
-            raise RuntimeError(f"{response.status_code} {_detail(response)}")
-
-        body = response.json()
-        choices = body.get("choices") or []
-        text = ""
-        if choices:
-            text = str((choices[0].get("message") or {}).get("content") or "")
-
-        raw = body.get("usage") or {}
-        usage = Usage(
-            prompt_token_count=int(raw.get("prompt_tokens") or 0),
-            candidates_token_count=int(raw.get("completion_tokens") or 0),
-            total_token_count=int(raw.get("total_tokens") or 0),
+    async def _complete(
+        self,
+        model: str,
+        system: str,
+        user: str,
+        temperature: float,
+        schema: dict[str, Any] | None,
+        reasoning_effort: ReasoningEffort,
+    ) -> tuple[str, dict[str, Any]]:
+        messages: list[ChatCompletionMessageParam] = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ]
+        response_format: ResponseFormat = (
+            {"type": "json_schema", "json_schema": {"name": "answer", "schema": schema}}
+            if schema is not None
+            else {"type": "json_object"}
         )
-        return Reply(text=text, usage_metadata=usage)
+        try:
+            completion = await self._sdk.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                response_format=response_format,
+                reasoning_effort=reasoning_effort if reasoning_effort is not None else omit,
+            )
+        except APIStatusError as exc:
+            raise ProviderError(exc.status_code, _detail(exc.response)) from exc
+        text = completion.choices[0].message.content if completion.choices else None
+        return text or "", completion.usage.model_dump() if completion.usage else {}
 
     async def models(self) -> list[str]:
         """Model ids this key can reach. Not billed against the generation quota."""
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            response = await client.get(f"{self.base_url}/models", headers=self._headers)
-
-        if response.status_code >= 400:
-            raise RuntimeError(f"{response.status_code} {_detail(response)}")
-
-        body = response.json()
-        rows = body.get("data") if isinstance(body, dict) else body
-        if not isinstance(rows, list):
-            return []
-        return [str(row.get("id")) for row in rows if isinstance(row, dict) and row.get("id")]
+        try:
+            page = await self._sdk.models.list()
+        except APIStatusError as exc:
+            raise ProviderError(exc.status_code, _detail(exc.response)) from exc
+        return [model.id for model in page.data]
 
 
-def _detail(response: httpx.Response) -> str:
-    """The provider's own words about what went wrong, kept short."""
+def _detail(response: httpx2.Response) -> str:
+    """The provider's own words about what went wrong, details included."""
     try:
         body = response.json()
     except ValueError:
-        return response.text[:200]
-    if isinstance(body, dict):
-        error = body.get("error")
-        if isinstance(error, dict):
-            return str(error.get("message") or error)[:200]
-        if error:
-            return str(error)[:200]
-    return str(body)[:200]
+        return response.text[:DETAIL_CHARS]
+    # Google's compatible endpoint answers with a list holding the one error.
+    if isinstance(body, list) and body and isinstance(body[0], dict):
+        body = body[0]
+    error = body.get("error") if isinstance(body, dict) else None
+    return str(error or body)[:DETAIL_CHARS]

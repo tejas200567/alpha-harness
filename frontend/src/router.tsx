@@ -35,17 +35,9 @@ const matrix = createRoute({
   component: lazyRouteComponent(() => import('@/screens/matrix'), 'MatrixScreen'),
 })
 
-const data = createRoute({ getParentRoute: () => root, path: '/data' })
-const dataIndex = createRoute({
-  getParentRoute: () => data,
-  path: '/',
-  beforeLoad: () => {
-    throw redirect({ to: '/data/$tab', params: { tab: 'fields' } })
-  },
-})
-const dataTab = createRoute({
-  getParentRoute: () => data,
-  path: '$tab',
+const data = createRoute({
+  getParentRoute: () => root,
+  path: '/data',
   component: lazyRouteComponent(() => import('@/screens/data'), 'DataScreen'),
 })
 
@@ -200,7 +192,7 @@ const routeTree = root.addChildren([
   index,
   dashboard,
   matrix,
-  data.addChildren([dataIndex, dataTab]),
+  data,
   labs.addChildren([labsIndex, searchLab, templateLab, evolutionLab, powerPoolLab]),
   tools.addChildren([
     toolsIndex,

@@ -55,77 +55,45 @@ export function ResizeHandle({ variant = 'gutter' }: { variant?: 'gutter' | 'edg
 export function SplitPane({
   id,
   first,
-  second,
   children,
-  className,
 }: {
   id: string
-  first?: PaneSize
-  second?: PaneSize
+  first: PaneSize
   children: ReactNode
-  className?: string
 }) {
   const wide = useMediaQuery(WIDE)
-  const [a, b] = Children.toArray(children)
-  if (!wide)
-    return (
-      <div className={cn('flex min-w-0 flex-col gap-3', className)}>
-        {a}
-        {b}
-      </div>
-    )
-  return (
-    <Split id={id} first={first} second={second} className={className}>
-      {a}
-      {b}
-    </Split>
-  )
-}
-
-function Split({
-  id,
-  first,
-  second,
-  children,
-  className,
-}: {
-  id: string
-  first?: PaneSize | undefined
-  second?: PaneSize | undefined
-  children: ReactNode
-  className?: string | undefined
-}) {
   const [a, b] = Children.toArray(children)
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: `ah-panels:${id}`,
     storage: localStorage,
     onlySaveAfterUserInteractions: true,
   })
+  if (!wide)
+    return (
+      <div className="flex min-w-0 flex-col gap-3">
+        {a}
+        {b}
+      </div>
+    )
   return (
     <Group
       id={id}
       orientation="horizontal"
       defaultLayout={defaultLayout}
       onLayoutChanged={onLayoutChanged}
-      className={cn('min-w-0', className)}
+      className="min-w-0"
     >
       <Panel
         id="first"
-        defaultSize={first?.default}
-        minSize={first?.min}
-        maxSize={first?.max}
+        defaultSize={first.default}
+        minSize={first.min}
+        maxSize={first.max}
         className="min-w-0"
       >
         {a}
       </Panel>
       <ResizeHandle />
-      <Panel
-        id="second"
-        defaultSize={second?.default}
-        minSize={second?.min}
-        maxSize={second?.max}
-        className="min-w-0"
-      >
+      <Panel id="second" className="min-w-0">
         {b}
       </Panel>
     </Group>

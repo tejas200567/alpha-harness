@@ -4,10 +4,8 @@ Every provider here has a **free tier that needs no card**. That is the whole se
 rule: the assistant is optional, so a provider that asks for payment details first turns an
 optional convenience into a purchase decision.
 
-All of them except Google speak the OpenAI chat-completions protocol, which is why one
-small client in :mod:`.openai_compat` serves seven of them. Google keeps its own path
-because ``google-genai`` gives structured output and thinking levels that the
-chat-completions shape cannot express.
+All of them speak the OpenAI chat-completions protocol, Google through its compatible
+endpoint, which is why one small client in :mod:`.openai_compat` serves every one.
 
 **A key only ever answers for its own provider**, so rotation filters on provider before it
 looks at budget.
@@ -20,8 +18,8 @@ it was wrong, and a budget guessed low only costs a rotation.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
+from ..schemas import Out
 from .registry import ModelInfo
 
 
@@ -31,35 +29,38 @@ class Provider:
 
     id: str
     label: str
-    #: Empty for Google, which speaks its own protocol rather than chat-completions.
+    #: Where its chat-completions endpoint lives.
     base_url: str
     #: Where to get a key. Shown as a link, because "search for it" loses people.
     onboarding_url: str
     #: What a key from this provider looks like, so a pasted wrong one is caught early.
     key_hint: str
-    #: What this tier actually gives you, in plain words.
-    tier_note: str
     #: True for a provider that bills the user. Kept apart everywhere it is shown, and its
     #: keys are refused without a daily cap — see :meth:`KeyStore.add`.
     paid: bool = False
+    #: What a paid tier bills, in plain words; shown above its key field.
+    tier_note: str = ""
     models: tuple[ModelInfo, ...] = ()
 
-    @property
-    def openai_compatible(self) -> bool:
-        return bool(self.base_url)
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "id": self.id,
-            "label": self.label,
-            "baseUrl": self.base_url,
-            "onboardingUrl": self.onboarding_url,
-            "keyHint": self.key_hint,
-            "tierNote": self.tier_note,
-            "paid": self.paid,
-            "openaiCompatible": self.openai_compatible,
-            "models": [m.to_dict() for m in self.models],
-        }
+class LLMProvider(Out):
+    """:class:`Provider` on the wire."""
+
+    id: str
+    label: str
+    onboarding_url: str
+    key_hint: str
+    tier_note: str
+    #: True for a provider that bills the user rather than offering a free tier.
+    paid: bool
+    #: Empty for google: its models are in the roster.
+    models: list[ModelInfo]
+
+
+class LLMProviders(Out):
+    providers: list[LLMProvider]
+    default: str
+    paid_note: str
 
 
 def _model(
@@ -70,7 +71,6 @@ def _model(
     rpm: int,
     rpd: int,
     tpm: int = 60_000,
-    summary: str = "",
     bulk: bool = False,
     recommended: bool = False,
 ) -> ModelInfo:
@@ -81,7 +81,6 @@ def _model(
         rpm=rpm,
         tpm=tpm,
         rpd=rpd,
-        summary=summary,
         bulk=bulk,
         recommended=recommended,
         provider=provider,
@@ -92,13 +91,9 @@ PROVIDERS: dict[str, Provider] = {
     "google": Provider(
         id="google",
         label="Google AI Studio",
-        base_url="",
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai",
         onboarding_url="https://aistudio.google.com/apikey",
         key_hint="AIza…",
-        tier_note=(
-            "Free with a Google account, no card. The Lite models give five hundred "
-            "requests a day; the full Flash models give twenty."
-        ),
         # Google's roster is the built-in table in `registry`, which carries transcribed
         # per-model budgets. Repeating it here would give it two sources of truth.
         models=(),
@@ -109,7 +104,6 @@ PROVIDERS: dict[str, Provider] = {
         base_url="https://api.groq.com/openai/v1",
         onboarding_url="https://console.groq.com/keys",
         key_hint="gsk_…",
-        tier_note="Free, no card. The fastest answers of anything on this list.",
         models=(
             _model(
                 "llama-3.3-70b-versatile",
@@ -117,7 +111,6 @@ PROVIDERS: dict[str, Provider] = {
                 "groq",
                 rpm=30,
                 rpd=1_000,
-                summary="Strong general model, a thousand requests a day.",
                 recommended=True,
             ),
             _model(
@@ -126,7 +119,6 @@ PROVIDERS: dict[str, Provider] = {
                 "groq",
                 rpm=30,
                 rpd=14_400,
-                summary="Small and effectively unlimited by daily count. For bulk work.",
                 bulk=True,
             ),
         ),
@@ -137,7 +129,6 @@ PROVIDERS: dict[str, Provider] = {
         base_url="https://api.cerebras.ai/v1",
         onboarding_url="https://cloud.cerebras.ai/",
         key_hint="csk-…",
-        tier_note="Free tier, no card. Very fast, with a generous daily allowance.",
         models=(
             _model(
                 "llama-3.3-70b",
@@ -145,7 +136,6 @@ PROVIDERS: dict[str, Provider] = {
                 "cerebras",
                 rpm=30,
                 rpd=14_400,
-                summary="A large model with a bulk-sized daily budget.",
                 bulk=True,
                 recommended=True,
             ),
@@ -155,7 +145,6 @@ PROVIDERS: dict[str, Provider] = {
                 "cerebras",
                 rpm=30,
                 rpd=14_400,
-                summary="Smaller and quicker, same generous budget.",
                 bulk=True,
             ),
         ),
@@ -166,10 +155,6 @@ PROVIDERS: dict[str, Provider] = {
         base_url="https://openrouter.ai/api/v1",
         onboarding_url="https://openrouter.ai/keys",
         key_hint="sk-or-…",
-        tier_note=(
-            "One key, many models. Anything whose name ends in ':free' costs nothing, "
-            "with a shared daily cap across them."
-        ),
         models=(
             _model(
                 "deepseek/deepseek-r1:free",
@@ -177,7 +162,6 @@ PROVIDERS: dict[str, Provider] = {
                 "openrouter",
                 rpm=20,
                 rpd=50,
-                summary="A reasoning model at no cost. Slow, and worth it for hard questions.",
             ),
             _model(
                 "meta-llama/llama-3.3-70b-instruct:free",
@@ -185,7 +169,6 @@ PROVIDERS: dict[str, Provider] = {
                 "openrouter",
                 rpm=20,
                 rpd=50,
-                summary="A solid general model on the free pool.",
                 recommended=True,
             ),
         ),
@@ -196,7 +179,6 @@ PROVIDERS: dict[str, Provider] = {
         base_url="https://integrate.api.nvidia.com/v1",
         onboarding_url="https://build.nvidia.com/",
         key_hint="nvapi-…",
-        tier_note="Free credits with an NVIDIA account, no card.",
         models=(
             _model(
                 "meta/llama-3.3-70b-instruct",
@@ -204,7 +186,6 @@ PROVIDERS: dict[str, Provider] = {
                 "nvidia",
                 rpm=40,
                 rpd=1_000,
-                summary="Hosted on NVIDIA's own inference stack.",
                 recommended=True,
             ),
         ),
@@ -215,7 +196,6 @@ PROVIDERS: dict[str, Provider] = {
         base_url="https://api.mistral.ai/v1",
         onboarding_url="https://console.mistral.ai/api-keys/",
         key_hint="…",
-        tier_note="Free experiment tier, no card. Rate limited rather than capped.",
         models=(
             _model(
                 "mistral-small-latest",
@@ -223,7 +203,6 @@ PROVIDERS: dict[str, Provider] = {
                 "mistral",
                 rpm=60,
                 rpd=1_000,
-                summary="Quick and capable enough for picking fields.",
                 recommended=True,
             ),
             _model(
@@ -232,7 +211,6 @@ PROVIDERS: dict[str, Provider] = {
                 "mistral",
                 rpm=60,
                 rpd=1_000,
-                summary="Open-weight, smaller, cheaper on tokens.",
                 bulk=True,
             ),
         ),
@@ -243,10 +221,6 @@ PROVIDERS: dict[str, Provider] = {
         base_url="https://models.github.ai/inference",
         onboarding_url="https://github.com/settings/tokens",
         key_hint="ghp_… or github_pat_…",
-        tier_note=(
-            "Free with any GitHub account — use a personal access token with the "
-            "models scope. Low daily limits, but nothing new to sign up for."
-        ),
         models=(
             _model(
                 "openai/gpt-4o-mini",
@@ -254,7 +228,6 @@ PROVIDERS: dict[str, Provider] = {
                 "github",
                 rpm=15,
                 rpd=150,
-                summary="A capable small model on GitHub's free allowance.",
                 recommended=True,
             ),
         ),
@@ -265,7 +238,6 @@ PROVIDERS: dict[str, Provider] = {
         base_url="https://router.huggingface.co/v1",
         onboarding_url="https://huggingface.co/settings/tokens",
         key_hint="hf_…",
-        tier_note="Free monthly credits with a Hugging Face account, no card.",
         models=(
             _model(
                 "meta-llama/Llama-3.3-70B-Instruct",
@@ -273,7 +245,6 @@ PROVIDERS: dict[str, Provider] = {
                 "huggingface",
                 rpm=10,
                 rpd=200,
-                summary="Routed to whichever provider is serving it.",
                 recommended=True,
             ),
         ),
@@ -323,7 +294,6 @@ PROVIDERS: dict[str, Provider] = {
                 "anthropic",
                 rpm=50,
                 rpd=0,
-                summary="The balanced choice. Fast enough for chat, strong on hard questions.",
                 recommended=True,
             ),
             _model(
@@ -332,7 +302,6 @@ PROVIDERS: dict[str, Provider] = {
                 "anthropic",
                 rpm=50,
                 rpd=0,
-                summary="The most capable, and the most expensive. For questions worth it.",
             ),
             _model(
                 "claude-haiku-4-5-20251001",
@@ -340,7 +309,6 @@ PROVIDERS: dict[str, Provider] = {
                 "anthropic",
                 rpm=50,
                 rpd=0,
-                summary="Small and cheap. The one to point bulk work at.",
                 bulk=True,
             ),
         ),
@@ -348,17 +316,6 @@ PROVIDERS: dict[str, Provider] = {
 }
 
 DEFAULT_PROVIDER = "google"
-
-#: ``rpd`` on a paid model. There is no daily ceiling but the user's own, so the key's cap
-#: is what a request is measured against — see :meth:`Ledger.headroom`.
-UNCAPPED = 0
-
-#: Said once, where the numbers are shown, rather than repeated per provider.
-LIMITS_NOTE = (
-    "The providers above are free and need no card. The daily limits are transcribed "
-    "from each provider's own documentation and will drift — they are kept deliberately "
-    "low, because a budget guessed high spends your day before you notice it was wrong."
-)
 
 #: Said once, under the paid heading. The cap is the whole point: a free tier stops by
 #: itself and a paid account does not, so the app will not hold one of these keys until it
@@ -380,17 +337,15 @@ def get(provider_id: str | None) -> Provider:
     return PROVIDERS.get(provider_id or DEFAULT_PROVIDER, PROVIDERS[DEFAULT_PROVIDER])
 
 
-def catalogue() -> dict[str, Any]:
+def catalogue() -> LLMProviders:
     """Every provider, Google first and the paid ones last, for the screen where a key is
     added. The order is the argument: free is the default because it is first and because
     nothing below the fold is needed to use the app."""
-    free = [PROVIDERS[DEFAULT_PROVIDER]] + [
-        p for p in PROVIDERS.values() if p.id != DEFAULT_PROVIDER and not p.paid
-    ]
-    paid = [p for p in PROVIDERS.values() if p.paid]
-    return {
-        "providers": [p.to_dict() for p in (*free, *paid)],
-        "default": DEFAULT_PROVIDER,
-        "note": LIMITS_NOTE,
-        "paidNote": PAID_NOTE,
-    }
+    return LLMProviders(
+        providers=[
+            LLMProvider.model_validate(p, from_attributes=True)
+            for p in sorted(PROVIDERS.values(), key=lambda p: p.paid)
+        ],
+        default=DEFAULT_PROVIDER,
+        paid_note=PAID_NOTE,
+    )

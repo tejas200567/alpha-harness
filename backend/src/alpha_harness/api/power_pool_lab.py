@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from ..db.models import utcnow
 from ..labs import power_pool, search
 from ..labs.launch import (
+    NO_SIMULATIONS,
     OPERATORS_UNREAD,
     AddedTask,
     account_operators,
@@ -22,8 +23,9 @@ from ..labs.launch import (
     synced_universes,
 )
 from ..labs.params import POWER_POOL_SAMPLER, PowerPoolParams
-from ..llm.prompts import PROMPTS
+from ..llm.prompts import POWER_POOL_LAB
 from ..llm.registry import DEFAULT_MODEL
+from ..llm.text import estimate_tokens
 from ..schemas import Out
 from .deps import State, refuse
 
@@ -70,7 +72,6 @@ class PowerPoolPreview(Out):
     prompt: PowerPoolPrompt | None
     problems: list[str]
     warnings: list[str]
-    model: str
 
 
 async def _models(state: Any) -> list[dict[str, Any]]:
@@ -161,9 +162,11 @@ async def _plan(body: PowerPoolRequest, state: Any) -> dict[str, Any]:
                 user, shown = power_pool.user_prompt(
                     ctx, operators, run, "None yet.", 0, power_pool.budget_for(info)
                 )
-                system = PROMPTS["power_pool_lab"].body
-                tokens = (len(system) + len(user)) // 4
-                prompt = {"system": system, "user": user, "tokens": tokens}
+                prompt = {
+                    "system": POWER_POOL_LAB,
+                    "user": user,
+                    "tokens": estimate_tokens(POWER_POOL_LAB + user),
+                }
                 if ctx.fields and shown < min(10, len(ctx.fields)):
                     problems.append(
                         f"The prompt does not fit {info.label}'s tokens per minute. "
@@ -197,15 +200,13 @@ async def preview(body: PowerPoolRequest, state: State) -> PowerPoolPreview:
 @router.post("/tasks", status_code=201)
 async def add_task(body: PowerPoolRequest, state: State) -> AddedTask:
     if body.simulations < 1:
-        raise refuse(422, "no_simulations", "Assign the simulations for this task.")
+        raise refuse(422, "no_simulations", NO_SIMULATIONS)
     plan = await _plan(body, state)
     if plan["problems"]:
         raise refuse(422, "power_pool_blocked", plan["problems"][0])
-    row = await add_study(
+    return await add_study(
         state,
         now=utcnow(),
-        lab="LLM Power Pool Lab",
-        prefix="power-pool",
         sampler=POWER_POOL_SAMPLER,
         params=PowerPoolParams(
             region=body.region,
@@ -218,11 +219,9 @@ async def add_task(body: PowerPoolRequest, state: State) -> AddedTask:
             cores=body.cores,
             llm={"calls": 0},
         ),
-        objective="sharpe",
         simulations=body.simulations,
         batch_size=body.cores * 10,
         template_source=(
             "# LLM Power Pool Lab writes its expressions with an LLM; there is no template."
         ),
     )
-    return AddedTask(id=row.id, name=row.name)

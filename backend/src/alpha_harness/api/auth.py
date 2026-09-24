@@ -8,6 +8,7 @@ import structlog
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from ..brain.auth import SessionInfo
 from ..brain.settings_schema import resolve_options, validate_settings
 from ..realtime import TOPIC_SESSION
 from ..schemas import Out
@@ -63,15 +64,8 @@ class SettingsOptions(Out):
     missing: list[str]
 
 
-@router.post("/login")
-async def login(payload: LoginRequest, state: State) -> Session:
-    """Sign in to BRAIN.
-
-    Solves the ALTCHA proof-of-work, exchanges Basic auth for a session cookie, then
-    caches the cookie jar so a restart does not repeat the work.
-    """
-    info = await state.auth.login(payload.email, payload.password)
-
+async def _answer(state: State, info: SessionInfo) -> Session:
+    """Settle what a completed sign-in changes, then tell every open tab."""
     if info.authenticated:
         # Batch size follows MULTI_SIMULATION. Startup applies it when it restores a
         # session; a fresh sign-in has to as well.
@@ -83,7 +77,6 @@ async def login(payload: LoginRequest, state: State) -> Session:
             await state.metadata.refresh_metadata()
         except Exception:
             log.warning("auth.metadata_refresh_failed", exc_info=True)
-
     await state.hub.broadcast(TOPIC_SESSION, info.to_dict())
     return Session.model_validate(info.to_dict())
 
@@ -110,6 +103,16 @@ async def login_cookie(payload: CookieLoginRequest, state: State) -> Session:
     return Session.model_validate(info.to_dict())
 
 
+@router.post("/login")
+async def login(payload: LoginRequest, state: State) -> Session:
+    """Sign in to BRAIN.
+
+    Solves the ALTCHA proof-of-work, exchanges Basic auth for a session cookie, then
+    caches the cookie jar so a restart does not repeat the work.
+    """
+    return await _answer(state, await state.auth.login(payload.email, payload.password))
+
+
 class VerifyRequest(BaseModel):
     """The Persona inquiry a sign-in was refused with."""
 
@@ -129,24 +132,13 @@ async def verify(payload: VerifyRequest, state: State) -> Session:
     back unauthenticated and still carrying the inquiry, and the caller asks again. That
     is what lets the window and this poll finish in either order.
     """
-    info = await state.auth.verify(payload.inquiry)
-    if info.authenticated:
-        # Everything a fresh sign-in settles, because this *is* the sign-in completing.
-        state.engine.configure_from_permissions(info.permissions)
-        try:
-            await state.metadata.refresh_metadata()
-        except Exception:
-            log.warning("auth.metadata_refresh_failed", exc_info=True)
-    await state.hub.broadcast(TOPIC_SESSION, info.to_dict())
-    return Session.model_validate(info.to_dict())
+    return await _answer(state, await state.auth.verify(payload.inquiry))
 
 
 @router.post("/logout")
 async def logout(state: State) -> Session:
     await state.auth.logout()
-    info = state.auth.session
-    await state.hub.broadcast(TOPIC_SESSION, info.to_dict())
-    return Session.model_validate(info.to_dict())
+    return await _answer(state, state.auth.session)
 
 
 class ResolveOptionsRequest(BaseModel):

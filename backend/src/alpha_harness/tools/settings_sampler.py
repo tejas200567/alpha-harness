@@ -13,7 +13,7 @@ import contextlib
 import math
 import random
 from datetime import timedelta
-from itertools import product
+from itertools import batched, product
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -27,14 +27,13 @@ from ..brain.schemas import (
     SimulationSettings,
 )
 from ..brain.settings_schema import valid_values
-from ..db.models import MetadataCache, SimStatus, StudyStatus, Trial, TrialState, utcnow
+from ..db.models import MetadataCache, StudyStatus, Trial, TrialState, utcnow
+from ..engine.lifecycle import extract_simulation_id
 from ..engine.packer import MAX_BATCH
 from ..labs import scheduler
 from ..labs.fastexpr import GROUPING, ParseError, data_fields, parse
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
     from ..db.models import Study
     from ..labs.study import Optimizer
 
@@ -88,7 +87,7 @@ async def _cached_regions(state: Any) -> set[str] | None:
     """The cached answer, or ``None`` when it is missing or too old to trust."""
     async with state.db.session() as session:
         row = await session.get(MetadataCache, POSITION_CACHE_KEY)
-        if row is not None and utcnow() - _aware(row.fetched_at) < POSITION_MAX_AGE:
+        if row is not None and utcnow() - row.fetched_at < POSITION_MAX_AGE:
             return {str(r) for r in (row.value or {}).get("regions", [])}
     return None
 
@@ -122,12 +121,6 @@ async def _probe_regions(state: Any) -> set[str]:
             row.value = {"regions": sorted(found)}
             row.fetched_at = utcnow()
     return found
-
-
-def _aware(moment: Any) -> Any:
-    from datetime import UTC
-
-    return moment.replace(tzinfo=UTC) if moment.tzinfo is None else moment
 
 
 async def _accepts_position(state: Any, schema: dict[str, Any], region: str) -> bool | None:
@@ -172,8 +165,7 @@ async def _accepts_position(state: Any, schema: dict[str, Any], region: str) -> 
         return None
     # Not expected — BRAIN took a pair it documents as illegal. Cancel it rather than leave
     # a simulation running that nothing is tracking.
-    location = (response.headers or {}).get("location", "")
-    if sim_id := location.rstrip("/").rsplit("/", 1)[-1]:
+    if sim_id := extract_simulation_id(response.location):
         with contextlib.suppress(BrainError):
             await state.endpoints.cancel_simulation(sim_id)
     return True
@@ -399,12 +391,29 @@ async def _unsynced(state: Any, schema: dict[str, Any]) -> int:
     return len(offered - synced)
 
 
+#: Neutralization that neutralizes against nothing.
+NO_NEUTRALIZATION = "NONE"
+
+
+def market_neutral(neutralization: str, trade: str, position: str) -> bool:
+    """Whether this combination holds the book against the market at all.
+
+    ``NONE`` with neither Max Trade nor Max Position is the one combination that does not:
+    nothing is projected out and nothing is capped, so the Alpha carries the market's own
+    direction. Either constraint on its own is enough, which is why this is not simply
+    "neutralization is not NONE".
+    """
+    return neutralization != NO_NEUTRALIZATION or trade == "ON" or position == "ON"
+
+
 def expand(
     plan_rows: list[dict[str, Any]],
     chosen: set[tuple[str, int, str]],
     neutralizations: set[str],
     pairs: set[tuple[str, str]],
     source: dict[str, Any],
+    *,
+    market_neutral_only: bool = True,
 ) -> list[SimulationRequest]:
     """Every simulation the selection asks for, ordered for both packing and watching.
 
@@ -454,6 +463,8 @@ def expand(
         for market, neutralization, (trade, position) in product(
             markets, legal_neutral, legal_pairs
         ):
+            if market_neutral_only and not market_neutral(neutralization, trade, position):
+                continue
             key = (str(market["region"]), int(market["delay"]))
             request = SimulationRequest(
                 settings=SimulationSettings(
@@ -482,11 +493,10 @@ def expand(
     # into two part-full batches. Tails therefore go last, where they cost nothing that the
     # remainder was not already going to cost.
     head: list[SimulationRequest] = []
-    full: list[list[SimulationRequest]] = []
-    tails: list[list[SimulationRequest]] = []
+    full: list[tuple[SimulationRequest, ...]] = []
+    tails: list[tuple[SimulationRequest, ...]] = []
     for members in groups.values():
-        for at in range(0, len(members), MAX_BATCH):
-            chunk = members[at : at + MAX_BATCH]
+        for chunk in batched(members, MAX_BATCH, strict=False):
             # Identity, not equality: two requests differing in nothing the key holds are
             # equal to Pydantic, and hoisting the wrong one would leave the reference buried.
             if first is not None and any(request is first for request in chunk):
@@ -546,7 +556,7 @@ async def refill(optimizer: Optimizer, row: Study, want: int, waiting: bool) -> 
             if want > 0
             else []
         )
-        sent = await _send(optimizer, row, batch) if batch else 0
+        sent = await scheduler.send_parked(optimizer, row, batch) if batch else 0
         # Counted, not loaded, and after the send so it sees what is left. A task cannot be
         # finished by ``advance`` alone: trials answered from the dedup cache are excluded
         # from its committed count, so one that never spends quota would otherwise run on.
@@ -555,27 +565,3 @@ async def refill(optimizer: Optimizer, row: Study, want: int, waiting: bool) -> 
         # No message: the status is the news, and a notice repeating it is noise.
         await scheduler.finish(optimizer, row.id, StudyStatus.COMPLETE, "")
     return sent
-
-
-async def _send(optimizer: Optimizer, row: Study, batch: Sequence[Trial]) -> int:
-    """Send one batch and record what came back.
-
-    ``batch`` must still be attached to the caller's session: the outcome is written by
-    assigning to those rows, which is what saves a round trip per trial.
-    """
-    requests = [
-        SimulationRequest(
-            settings=SimulationSettings.model_validate(t.settings), regular=t.expression
-        )
-        for t in batch
-    ]
-    outcomes = (await optimizer.engine.enqueue(requests, task=row.task, skip_duplicates=True)).get(
-        "outcomes", []
-    )
-    for index, trial in enumerate(batch):
-        outcome = outcomes[index] if index < len(outcomes) else {}
-        trial.state = TrialState.QUEUED
-        trial.simulation_record_id = outcome.get("recordId")
-        trial.alpha_id = outcome.get("alphaId")
-        trial.message = scheduler.FREE if outcome.get("status") == str(SimStatus.SKIPPED) else None
-    return len(batch)

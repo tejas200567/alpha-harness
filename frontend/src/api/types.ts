@@ -5,8 +5,8 @@
  * offset is UTC.
  */
 
-import type { components } from './generated.ts'
-import { qs } from './http.ts'
+import type { components } from './generated'
+import { qs } from './http'
 
 /** The four-part address almost every lab and catalog call takes. camelCase in the UI. */
 export interface Scope {
@@ -70,8 +70,6 @@ export interface SimulationSettings {
 /** Generated from the backend's response models (`src/api/generated.ts`). */
 type Schemas = components['schemas']
 
-export type SimStatus = Schemas['SimStatus']
-
 /**
  * One simulation record. A multi-simulation parent holds one of the 8 slots. `settings`
  * is narrowed here: the backend passes BRAIN's settings through untyped.
@@ -95,8 +93,6 @@ export interface AlphaCheck {
   [extra: string]: unknown
 }
 
-export type LLMUsage = Schemas['LLMUsage']
-
 /** One market's state inside a whole-catalog sync, for the sync matrix. */
 export type SyncMarket = Schemas['SyncMarket']
 
@@ -113,7 +109,5 @@ export type Session = Schemas['Session']
 export type Today = Schemas['Today']
 
 export type BarStatus = Schemas['Bar']
-
-export type BackgroundTask = Schemas['BackgroundTask']
 
 export type TasksSummary = Schemas['TasksSummary']

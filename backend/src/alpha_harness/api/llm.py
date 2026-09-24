@@ -1,4 +1,4 @@
-"""The assistant: keys, models, prompts, and the context it is shown.
+"""The assistant: keys, models and the prompts it sends.
 
 Prompts are served in full on purpose: one decides what an answer looks like and is
 otherwise invisible. Keys are the only secret here, and leave only as a masked hint.
@@ -6,44 +6,26 @@ otherwise invisible. Keys are the only secret here, and leave only as a masked h
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal
+from typing import Any, Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from ..catalog.queries import Tuple4
 from ..llm.keys import serialise
 from ..llm.prompts import PROMPTS
-from ..llm.providers import catalogue
-from ..llm.registry import LLMModel, LLMModels
+from ..llm.providers import LLMProviders, catalogue
+from ..llm.registry import LLMModels
+from ..llm.text import estimate_tokens
 from ..schemas import Out
 from .deps import State
 
 router = APIRouter(prefix="/api/llm", tags=["assistant"])
 
 
-class Scope(BaseModel):
-    instrument_type: str = "EQUITY"
-    region: str
-    delay: int
-    universe: str
-
-    def to_tuple(self) -> Tuple4:
-        return Tuple4(
-            instrument_type=self.instrument_type,
-            region=self.region,
-            delay=self.delay,
-            universe=self.universe,
-        )
-
-
 class PromptInfo(Out):
     slug: str
     label: str
     purpose: str
-    context: Literal["none", "catalog_tree", "dataset_fields"]
-    model: str | None
-    temperature: float
     body: str
     characters: int
     estimated_tokens: int
@@ -94,27 +76,6 @@ class LLMKeyStatus(Out):
     quota_timezone: str
 
 
-class LLMProvider(Out):
-    id: str
-    label: str
-    base_url: str
-    onboarding_url: str
-    key_hint: str
-    tier_note: str
-    #: True for a provider that bills the user rather than offering a free tier.
-    paid: bool
-    openai_compatible: bool
-    #: Empty for google: its models are in the roster.
-    models: list[LLMModel]
-
-
-class LLMProviders(Out):
-    providers: list[LLMProvider]
-    default: str
-    note: str
-    paid_note: str
-
-
 class KeyWorks(Out):
     key_id: int
     ok: Literal[True]
@@ -135,28 +96,6 @@ def _check(result: dict[str, Any]) -> KeyWorks | KeyFailed:
     return KeyFailed.model_validate(result)
 
 
-class ContextCounts(Out):
-    fields: int
-    datasets: int
-    categories: int
-    subcategories: int
-
-
-class LLMContextRendered(Out):
-    text: str
-    scope: str
-    counts: ContextCounts
-    characters: int
-    estimated_tokens: int
-
-
-class LLMContextTree(Out):
-    scope: str
-    counts: ContextCounts
-    #: category -> subcategory -> dataset, with metadata and no fields.
-    categories: list[dict[str, Any]]
-
-
 # --- setup ----------------------------------------------------------------
 
 
@@ -167,7 +106,7 @@ async def models(state: State) -> LLMModels:
     Requests-per-day is the limit that ends a session, so it travels with every entry
     rather than sitting in a help page.
     """
-    return LLMModels.model_validate(state.llm.registry.to_dict())
+    return state.llm.registry.roster()
 
 
 # --- prompts --------------------------------------------------------------
@@ -175,26 +114,20 @@ async def models(state: State) -> LLMModels:
 
 @router.get("/prompts")
 async def list_prompts() -> PromptList:
-    """Every prompt, in full."""
-    return PromptList.model_validate(
-        {
-            "prompts": [
-                {
-                    "slug": p.slug,
-                    "label": p.label,
-                    "purpose": p.purpose,
-                    "context": p.context,
-                    "model": p.model,
-                    "temperature": p.temperature,
-                    "body": p.body,
-                    "characters": len(p.body),
-                    # Roughly four characters to a token. Shown because prompt tokens come
-                    # out of the same per-minute budget as the answer.
-                    "estimatedTokens": max(1, len(p.body) // 4),
-                }
-                for p in PROMPTS.values()
-            ],
-        }
+    """Every system prompt the application sends, in full. The token estimate is shown
+    because prompt tokens come out of the same per-minute budget as the answer."""
+    return PromptList(
+        prompts=[
+            PromptInfo(
+                slug=p.slug,
+                label=p.label,
+                purpose=p.purpose,
+                body=p.body,
+                characters=len(p.body),
+                estimated_tokens=estimate_tokens(p.body),
+            )
+            for p in PROMPTS
+        ]
     )
 
 
@@ -211,7 +144,7 @@ async def providers() -> LLMProviders:
     All of them are free and need no card — the assistant is optional here, so asking for
     payment details would turn a convenience into a purchase decision.
     """
-    return LLMProviders.model_validate(catalogue())
+    return catalogue()
 
 
 class AddKey(BaseModel):
@@ -246,7 +179,7 @@ async def check_key(key_id: int, state: State) -> KeyWorks | KeyFailed:
 
 @router.post("/keys/check")
 async def check_all_keys(state: State) -> list[KeyWorks | KeyFailed]:
-    return [_check(c) for c in await state.llm.check_all()]
+    return [_check(await state.llm.check_key(k.id)) for k in await state.llm.keys.list_keys()]
 
 
 class KeyToggle(BaseModel):
@@ -271,32 +204,3 @@ async def toggle_key(key_id: int, body: KeyToggle, state: State) -> LLMKey:
 @router.delete("/keys/{key_id}", status_code=204)
 async def remove_key(key_id: int, state: State) -> None:
     await state.llm.keys.remove(key_id)
-    state.llm.forget(key_id)
-
-
-# --- context --------------------------------------------------------------
-
-
-@router.get("/context")
-async def context(
-    state: State,
-    region: str,
-    delay: int,
-    universe: str,
-    instrument_type: str = "EQUITY",
-    rendered: Annotated[
-        bool, Query(description="Return the exact text the model receives")
-    ] = False,
-) -> LLMContextRendered | LLMContextTree:
-    """Exactly what the model is shown about your data.
-
-    The hierarchy with metadata, and no individual fields — tens of thousands of field
-    names would fill the context window. Set ``rendered`` to read the literal text.
-    """
-    scope = Scope(
-        instrument_type=instrument_type, region=region, delay=delay, universe=universe
-    ).to_tuple()
-    if rendered:
-        text, meta = await state.llm.context.render(scope)
-        return LLMContextRendered.model_validate({"text": text, **meta})
-    return LLMContextTree.model_validate(await state.llm.context.tree(scope))

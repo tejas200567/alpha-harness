@@ -18,6 +18,7 @@ import {
   pool,
 } from '@/screens/pool/api'
 import { MAX_SEEDS, MIN_SEEDS, useSeedPick } from '@/screens/research-labs/evolution/seed-pick'
+import { SharpeCell } from '@/screens/tasks/columns'
 import {
   Badge,
   Button,
@@ -27,7 +28,6 @@ import {
   Fieldset,
   Input,
   Metric,
-  MetricBadge,
   Panel,
   Segmented,
   STATUS,
@@ -48,10 +48,6 @@ const BOUNDS: { key: AlphaMetricKey; label: string; div: number }[] = [
   { key: 'margin', label: 'Margin bps', div: 10_000 },
   { key: 'operator_count', label: 'Operators', div: 1 },
 ]
-
-const signed = (render: (v: number | null) => string) => (v: number | null) => (
-  <span className={TEXT_TONE[signTone(v)]}>{render(v)}</span>
-)
 
 const COLUMNS: Column<AlphaRow>[] = [
   {
@@ -86,14 +82,7 @@ const COLUMNS: Column<AlphaRow>[] = [
     width: '90px',
     align: 'right',
     sortable: true,
-    cell: (r) =>
-      r.sharpe == null ? (
-        '—'
-      ) : (
-        <MetricBadge tone={r.sharpe > 0 ? 'profit' : r.sharpe < 0 ? 'loss' : 'neutral'}>
-          {fmt.ratio(r.sharpe)}
-        </MetricBadge>
-      ),
+    cell: (r) => <SharpeCell value={r.sharpe} />,
   },
   {
     key: 'fitness',
@@ -117,7 +106,7 @@ const COLUMNS: Column<AlphaRow>[] = [
     width: '88px',
     align: 'right',
     sortable: true,
-    cell: (r) => signed((v) => fmt.pct(v))(r.returns),
+    cell: (r) => <span className={TEXT_TONE[signTone(r.returns)]}>{fmt.pct(r.returns)}</span>,
   },
   {
     key: 'drawdown',
@@ -257,7 +246,9 @@ export function Stored({ onOpen }: { onOpen: (alphaId: string) => void }) {
   const chosen = market ? picked : selected
   const toggle = (ids: string[], on: boolean) => {
     if (market) {
-      pick.toggle(ids, on)
+      useSeedPick.setState((s) => ({
+        ids: on ? [...new Set([...s.ids, ...ids])] : s.ids.filter((id) => !ids.includes(id)),
+      }))
       return
     }
     setSelected((prev) => {
@@ -464,9 +455,10 @@ function SeedPickBar({ market }: { market: Scope }) {
   const count = useSeedPick((s) => s.ids.length)
   const back = (done: boolean) => {
     const pick = useSeedPick.getState()
+    const to = pick.from
     if (done) pick.finish()
     else pick.cancel()
-    void navigate({ to: '/labs/evolution' })
+    void navigate({ to })
   }
 
   return (

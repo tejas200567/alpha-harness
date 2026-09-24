@@ -15,10 +15,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
-from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlparse
 
 from sqlalchemy import case, update
@@ -27,7 +25,9 @@ from ..brain.errors import BrainError
 from ..brain.schemas import SimulationRequest, SimulationStatus, SimulationType
 from ..db.models import DedupEntry, QuotaSnapshot, SimStatus, SimulationRecord, utcnow
 
-ChangeHook = Callable[[list[dict[str, Any]]], Awaitable[None] | None]
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from datetime import datetime
 
 #: Most regions a region-agnostic simulation is translated into, and so the most cores and
 #: daily simulations one can cost (``docs/learn/advanced-topics/region-agnostic-alpha``:
@@ -88,11 +88,6 @@ _STATUS_MAP = {
 }
 #: Platform statuses of a simulation that has not finished.
 _RUNNING = (SimulationStatus.WAITING, SimulationStatus.SIMULATING)
-
-#: Not yet finished; every other status is final and no transition may leave it.
-#: ``ORPHANED`` belongs here because an identical request arriving while its outcome is
-#: reconciled must share the row rather than pay for a second run.
-ACTIVE = (SimStatus.QUEUED, SimStatus.PENDING, SimStatus.RUNNING, SimStatus.ORPHANED)
 
 
 # -- dedup -------------------------------------------------------------------
@@ -169,23 +164,6 @@ def new_record(
     )
 
 
-async def record_quota(session: Any, rate_limit: Any) -> None:
-    """Store a reading of the ``x-ratelimit-*`` quota headers, if the response carried any.
-
-    Takes an open session so it can join the same transaction that writes the platform
-    id — the quota and the id are learned from one response.
-    """
-    if rate_limit is None:
-        return
-    session.add(
-        QuotaSnapshot(
-            limit_total=rate_limit.limit,
-            remaining=rate_limit.remaining,
-            reset_seconds=rate_limit.reset_seconds,
-        )
-    )
-
-
 async def record_launch(
     session: Any,
     record_id: int,
@@ -200,6 +178,9 @@ async def record_launch(
     kept on the row, and the caller must cancel the simulation on BRAIN. ``ORPHANED`` is
     accepted too, since the stale-send sweep may have given up on a slow send whose id has
     now arrived. A batch's ``children`` ride along only when the parent itself moved.
+
+    The ``x-ratelimit-*`` quota reading from the same response is stored in the same
+    transaction, when the response carried one.
     """
     now = utcnow()
     sent_from = [SimStatus.PENDING, SimStatus.ORPHANED]
@@ -227,7 +208,14 @@ async def record_launch(
             .where(SimulationRecord.id == record_id)
             .values(platform_id=platform_id, submitted_at=now)
         )
-    await record_quota(session, rate_limit)
+    if rate_limit is not None:
+        session.add(
+            QuotaSnapshot(
+                limit_total=rate_limit.limit,
+                remaining=rate_limit.remaining,
+                reset_seconds=rate_limit.reset_seconds,
+            )
+        )
     return bool(won)
 
 
@@ -454,8 +442,4 @@ def serialise(record: SimulationRecord) -> dict[str, Any]:
 
 
 def _iso(value: datetime | None) -> str | None:
-    if value is None:
-        return None
-    if value.tzinfo is None:
-        value = value.replace(tzinfo=UTC)
-    return value.isoformat()
+    return None if value is None else value.isoformat()

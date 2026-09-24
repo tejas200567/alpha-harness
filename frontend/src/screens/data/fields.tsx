@@ -1,7 +1,7 @@
 /** Every field in the market: server-sorted, offset-paged, filtered; a row opens its detail. */
 
 import { keepPreviousData, skipToken, useQuery } from '@tanstack/react-query'
-import { GlobeIcon, MaximizeIcon, MinimizeIcon, SparklesIcon } from 'lucide-react'
+import { GlobeIcon, MapPinIcon, MaximizeIcon, MinimizeIcon, SparklesIcon } from 'lucide-react'
 import { type RefObject, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
@@ -14,7 +14,7 @@ import {
 import { type Scope, scopeLabel } from '@/api/types'
 import { cn } from '@/lib/cn'
 import { DASH, fmt } from '@/lib/format'
-import { runsRegionAgnostic } from '@/lib/scope'
+import { isRegionAgnostic, runsRegionAgnostic } from '@/lib/scope'
 import { useDebounced } from '@/lib/use-debounced'
 import { useDatasetPick } from '@/screens/data/dataset-pick'
 import {
@@ -485,10 +485,27 @@ function FieldFilters({ scope }: { scope: Scope }) {
             size="sm"
             aria-pressed={Boolean(filter.region_agnostic)}
             title="Only Fields that also exist in region ALL"
-            onClick={() => set({ region_agnostic: !filter.region_agnostic })}
+            onClick={() =>
+              set({ region_agnostic: !filter.region_agnostic, region_exclusive: false })
+            }
           >
             <GlobeIcon />
             Region Agnostic
+          </Button>
+        )}
+        {/* Only as complete as the sync: a region never downloaded cannot share a field. */}
+        {!isRegionAgnostic(scope) && (
+          <Button
+            variant={filter.region_exclusive ? 'primary' : 'secondary'}
+            size="sm"
+            aria-pressed={Boolean(filter.region_exclusive)}
+            title={`Only Fields found in ${scope.region} and no Other Synced region`}
+            onClick={() =>
+              set({ region_exclusive: !filter.region_exclusive, region_agnostic: false })
+            }
+          >
+            <MapPinIcon />
+            {scope.region} Exclusive
           </Button>
         )}
         {/* Only ever arrived at from the Pyramid Multiplier Map, so it shows only when set —

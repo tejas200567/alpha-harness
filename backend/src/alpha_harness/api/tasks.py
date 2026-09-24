@@ -46,4 +46,4 @@ async def running(state: State) -> TasksSummary:
     not drag the rest toward zero. Finished tasks linger briefly so a job that completes
     between two polls is still seen.
     """
-    return TasksSummary.model_validate(await state.tasks.summary())
+    return TasksSummary.model_validate(state.tasks.summary())

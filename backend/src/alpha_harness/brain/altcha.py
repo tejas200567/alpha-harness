@@ -2,13 +2,12 @@
 
 BRAIN gates sign-in behind ALTCHA: the server sends a target digest and a salt, and the
 client hashes ``salt + n`` for increasing integers ``n`` until the digest matches. Solving
-is pure CPU, so ``solve_async`` offloads it to a worker thread and a ~1e6-iteration search
-cannot stall the event loop.
+is pure CPU, so sign-in runs it in a worker thread and a ~1e6-iteration search cannot stall
+the event loop.
 """
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import hashlib
 import json
@@ -17,7 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 # ALTCHA permits SHA-1 and SHA-512 too; BRAIN sends SHA-256.
-_HASHERS = {"SHA-256": hashlib.sha256}
+ALGORITHM = "SHA-256"
 
 DEFAULT_MAX_NUMBER = 1_000_000
 
@@ -45,10 +44,8 @@ class Challenge:
         except KeyError as exc:
             raise AltchaError(f"Challenge is missing required field {exc.args[0]!r}") from exc
 
-        if algorithm not in _HASHERS:
-            raise AltchaError(
-                f"Unsupported ALTCHA algorithm {algorithm!r}; expected one of {sorted(_HASHERS)}"
-            )
+        if algorithm != ALGORITHM:
+            raise AltchaError(f"Unsupported ALTCHA algorithm {algorithm!r}; expected {ALGORITHM}")
 
         # `maxnumber` is optional in the ALTCHA challenge format.
         raw_max = payload.get("maxnumber", DEFAULT_MAX_NUMBER)
@@ -96,13 +93,12 @@ def solve(challenge: Challenge) -> Solution:
     Raises :class:`AltchaError` if no solution exists at or below ``maxnumber``, which
     means the challenge was malformed or the algorithm changed.
     """
-    hasher = _HASHERS[challenge.algorithm]
     salt = challenge.salt.encode("utf-8")
     target = challenge.challenge.lower()
     started = time.monotonic()
 
     for number in range(challenge.maxnumber + 1):
-        if hasher(salt + str(number).encode("ascii")).hexdigest() == target:
+        if hashlib.sha256(salt + str(number).encode("ascii")).hexdigest() == target:
             took_ms = int((time.monotonic() - started) * 1000)
             return Solution(challenge=challenge, number=number, took_ms=took_ms)
 
@@ -110,8 +106,3 @@ def solve(challenge: Challenge) -> Solution:
         f"No solution found for {challenge.algorithm} challenge within "
         f"maxnumber={challenge.maxnumber}. The captcha scheme may have changed."
     )
-
-
-async def solve_async(challenge: Challenge) -> Solution:
-    """Solve off the event loop."""
-    return await asyncio.to_thread(solve, challenge)

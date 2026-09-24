@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import random
-import re
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -18,10 +17,11 @@ from typing import TYPE_CHECKING, Any
 import structlog
 from sqlalchemy import func, or_, select
 
-from ..brain.schemas import REGION_AGNOSTIC_REGION, SimulationRequest, SimulationSettings
-from ..db.models import SimStatus, Study, StudyStatus, Trial, TrialState, utcnow
+from ..brain.schemas import REGION_AGNOSTIC_REGION, SimulationSettings
+from ..db.models import Study, StudyStatus, Trial, TrialState, utcnow
 from ..llm.keys import BudgetExhaustedError, LLMError
-from ..llm.prompts import PROMPTS
+from ..llm.prompts import POWER_POOL_LAB
+from ..llm.text import FENCE
 from ..tasks import spawn
 from . import scheduler, search
 from .fastexpr import (
@@ -35,7 +35,9 @@ from .fastexpr import (
     validate,
     walk,
 )
+from .objectives import FAILURE
 from .params import PowerPoolParams, params_of
+from .template import DATA_FIELDS
 
 if TYPE_CHECKING:  # pragma: no cover
     import asyncio
@@ -50,7 +52,6 @@ PER_CALL = 20
 FIELDS_PER_CALL = 200
 MAX_OPERATORS, MAX_FIELDS = 8, 3
 PROPOSED = "Written by the LLM; waiting for cores."
-BASICS = ("close", "open", "high", "low", "vwap", "volume", "adv20", "returns", "cap")
 SCHEMA = {
     "type": "object",
     "properties": {
@@ -106,7 +107,7 @@ async def context_for(
     catalog: Catalog, region: str, delay: int, universes: list[str], dataset: str
 ) -> Context | None:
     marks = ", ".join("?" for _ in universes)
-    extra = (*BASICS, *GROUPING)
+    extra = (*DATA_FIELDS, *GROUPING)
     rows = await catalog.query(
         f"""
         SELECT field_id, dataset_id, field_type, universe, coverage, description,
@@ -155,7 +156,7 @@ async def context_for(
         ),
         description=str(m.get("description") or "")[:800],
         fields=tuple(fields),
-        basics=tuple(field(f) for f in BASICS if f in info and f not in own),
+        basics=tuple(field(f) for f in DATA_FIELDS if f in info and f not in own),
         groups=tuple(g for g in GROUPING if g in info),
         types={f: str(r["field_type"]) for f, r in info.items()},
         own=frozenset(own),
@@ -237,7 +238,7 @@ async def memory_of(optimizer: Optimizer, study_id: int, dataset: str) -> str:
         done = (
             await session.scalars(
                 select(Trial)
-                .where(*mine, Trial.state == TrialState.COMPLETE, score > -10)
+                .where(*mine, Trial.state == TrialState.COMPLETE, score > FAILURE)
                 .order_by(score.desc(), Trial.number)
                 .limit(20)
             )
@@ -331,7 +332,7 @@ def user_prompt(
             f"Write {PER_CALL} new Power Pool Alphas that use {ctx.id}.",
         ]
     )
-    room = budget * 4 - len(PROMPTS["power_pool_lab"].body) - len(head) - len(tail) - 200
+    room = budget * 4 - len(POWER_POOL_LAB) - len(head) - len(tail) - 200
     total = len(ctx.fields)
     start = offset % total if total else 0
     ordered = ctx.fields[start:] + ctx.fields[:start]
@@ -367,7 +368,8 @@ async def refill(optimizer: Optimizer, row: Study, want: int, waiting: bool) -> 
                 )
             ).all()
         )
-    sent = await _send(optimizer, row, ready[:want]) if want > 0 and ready else 0
+        batch = ready[:want] if want > 0 else []
+        sent = await scheduler.send_parked(optimizer, row, batch) if batch else 0
     left = len(ready) - sent
     llm = params_of(row, PowerPoolParams).llm
     calls = int(llm.get("calls") or 0)
@@ -388,31 +390,6 @@ async def refill(optimizer: Optimizer, row: Study, want: int, waiting: bool) -> 
     elif stop and not busy and not (waiting or sent or left):
         await scheduler.finish(optimizer, row.id, StudyStatus.COMPLETE, f"Stopped: {stop}.")
     return sent
-
-
-async def _send(optimizer: Optimizer, row: Study, batch: list[Trial]) -> int:
-    requests = [
-        SimulationRequest(
-            settings=SimulationSettings.model_validate(t.settings), regular=t.expression
-        )
-        for t in batch
-    ]
-    outcomes = (await optimizer.engine.enqueue(requests, task=row.task, skip_duplicates=True)).get(
-        "outcomes", []
-    )
-    async with optimizer.db.session() as session:
-        for index, trial in enumerate(batch):
-            stored = await session.get(Trial, trial.id)
-            if stored is None:
-                continue
-            outcome = outcomes[index] if index < len(outcomes) else {}
-            stored.state = TrialState.QUEUED
-            stored.simulation_record_id = outcome.get("recordId")
-            stored.alpha_id = outcome.get("alphaId")
-            stored.message = (
-                scheduler.FREE if outcome.get("status") == str(SimStatus.SKIPPED) else None
-            )
-    return len(batch)
 
 
 async def _pause(optimizer: Optimizer, study_id: int, message: str) -> None:
@@ -472,7 +449,7 @@ async def _write(optimizer: Optimizer, study_id: int) -> None:
         answered = False
         try:
             answer = await optimizer.llm.generate(
-                system=PROMPTS["power_pool_lab"].body,
+                system=POWER_POOL_LAB,
                 user=user,
                 model_id=model.id,
                 response_schema=SCHEMA,
@@ -578,10 +555,6 @@ async def _note(optimizer: Optimizer, study_id: int, message: str) -> None:
         if stored is not None:
             stored.message = message
     await optimizer.notify()
-
-
-#: A fenced block in a reply, tried when the whole reply is not JSON.
-FENCE = re.compile(r"```(?:ya?ml|json)?\s*\n(.*?)```", re.DOTALL)
 
 
 def parse_alphas(text: str) -> list[dict[str, Any]]:

@@ -4,15 +4,13 @@
  * on Fitness over the first 8 years; the last 2 are never used.
  */
 
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { DnaIcon, ListChecksIcon, PlusIcon, WandSparklesIcon, XIcon } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
-import { toast } from 'sonner'
-import { ApiError, errorMessage } from '@/api/http'
+import { ApiError } from '@/api/http'
 import { DASH, fmt } from '@/lib/format'
-import { useScopeOptions } from '@/lib/scope'
-import { useDebounced } from '@/lib/use-debounced'
+import { marketKey, useScopeOptions } from '@/lib/scope'
 import {
   type EvolutionRequest,
   evolutionLab,
@@ -20,15 +18,20 @@ import {
   type SeedRow,
 } from '@/screens/research-labs/evolution/api'
 import { MAX_SEEDS, useSeedPick } from '@/screens/research-labs/evolution/seed-pick'
-import { CORES, MAX_SIMULATIONS } from '@/screens/research-labs/lab-task'
+import {
+  MAX_SIMULATIONS,
+  simulationsValid,
+  useAddTask,
+  useLabPreview,
+} from '@/screens/research-labs/lab-task'
 import { NeutralizationPicker } from '@/screens/research-labs/neutralization'
-import { Setting } from '@/screens/research-labs/task-settings'
+import { CoresSetting, SimulationsSetting } from '@/screens/research-labs/task-settings'
 import {
   Button,
   Disclosure,
   Empty,
   ErrorNotice,
-  Input,
+  Fieldset,
   Metric,
   Notice,
   Page,
@@ -46,18 +49,14 @@ import { useEvolutionLab } from './state'
 const POPULATIONS = [50, 100, 200]
 const MUTATION_RATES = [0.03, 0.05, 0.08]
 
-const marketKey = (region: string, delay: number, universe: string) =>
-  `${region}:${delay}:${universe}`
-
 export function EvolutionLabScreen() {
   const draft = useEvolutionLab()
-  const set = useEvolutionLab((s) => s.set)
+  const set = useEvolutionLab.setState
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
 
   // Back from Alphas with a finished pick of seeds.
   useEffect(() => {
-    const pick = useSeedPick.getState().take()
+    const pick = useSeedPick.getState().take('/labs/evolution')
     if (pick)
       set({
         region: pick.scope.region,
@@ -66,7 +65,7 @@ export function EvolutionLabScreen() {
         seedIds: pick.ids,
         autoJobId: null,
       })
-  }, [set])
+  }, [])
 
   const options = useQuery({
     queryKey: ['evolution-lab', 'options'],
@@ -92,14 +91,7 @@ export function EvolutionLabScreen() {
     mutation_rate: draft.mutationRate,
     simulations: draft.simulations ?? 0,
   }
-  const key = JSON.stringify(body)
-  const settledKey = useDebounced(key, 300)
-  const preview = useQuery({
-    queryKey: ['evolution-lab', 'preview', settledKey],
-    queryFn: () => evolutionLab.preview(JSON.parse(settledKey) as EvolutionRequest),
-    enabled: settledKey === key,
-    placeholderData: keepPreviousData,
-  })
+  const { preview, current: planned } = useLabPreview('evolution-lab', body, evolutionLab.preview)
   const plan = preview.data
   const hasSeeds = draft.seedIds.length > 0
 
@@ -118,7 +110,7 @@ export function EvolutionLabScreen() {
     const error = job.error
     if (error instanceof ApiError && (error.code === 'unknown_job' || error.status === 404))
       set({ autoJobId: null })
-  }, [job.error, set])
+  }, [job.error])
   // A finished Auto Select replaces the seeds, once.
   useEffect(() => {
     if (found && autoJobId !== appliedJobId)
@@ -126,7 +118,7 @@ export function EvolutionLabScreen() {
         seedIds: found.seeds.map((s) => s.alphaId),
         appliedJobId: autoJobId,
       })
-  }, [found, autoJobId, appliedJobId, set])
+  }, [found, autoJobId, appliedJobId])
 
   // The population is sized from the simulations; until they are assigned, seed for the notes' 100.
   const sized = draft.population !== null || draft.simulations !== null
@@ -143,7 +135,6 @@ export function EvolutionLabScreen() {
         count: wanted,
       }),
     onSuccess: (r) => set({ autoJobId: r.jobId }),
-    onError: (error) => toast.error(errorMessage(error)),
   })
   const busy = auto.isPending || choosing
   const selectSeeds = () => {
@@ -155,14 +146,15 @@ export function EvolutionLabScreen() {
         universe: draft.universe,
       },
       draft.seedIds,
+      '/labs/evolution',
     )
     void navigate({ to: '/pool/$tab', params: { tab: 'stored' } })
   }
 
-  const current = marketKey(draft.region, draft.delay, draft.universe)
+  const current = marketKey(draft)
   const markets = useMemo(() => {
     const items = (options.data?.markets ?? []).map((m) => ({
-      value: marketKey(m.region, m.delay, m.universe),
+      value: marketKey(m),
       label: `${m.region} · D${m.delay} · ${m.universe} (${fmt.int(m.alphas)})`,
     }))
     return items.some((m) => m.value === current)
@@ -177,7 +169,7 @@ export function EvolutionLabScreen() {
   }, [options.data, current, draft.region, draft.delay, draft.universe])
   const chooseMarket = (value: string) => {
     if (value === current) return
-    const [region, delay, universe] = value.split(':')
+    const [region, delay, universe] = value.split('|')
     if (region === undefined || universe === undefined) return
     set({
       region,
@@ -190,29 +182,14 @@ export function EvolutionLabScreen() {
 
   const maxSimulations = options.data?.maxSimulations ?? MAX_SIMULATIONS
   const simulations = draft.simulations
-  const add = useMutation({
-    mutationFn: (count: number) => evolutionLab.addTask({ ...body, simulations: count }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['lab-tasks'] })
-      toast.success('Task Added', {
-        action: {
-          label: 'Open Tasks',
-          onClick: () => void navigate({ to: '/tasks' }),
-        },
-      })
-    },
-    onError: (error) => toast.error(errorMessage(error)),
-  })
+  const add = useAddTask((count: number) => evolutionLab.addTask({ ...body, simulations: count }))
   const ready =
     plan !== undefined &&
-    settledKey === key &&
-    !preview.isFetching &&
+    planned &&
     !choosing &&
     hasSeeds &&
     plan.problems.length === 0 &&
-    simulations !== null &&
-    simulations >= 1 &&
-    simulations <= maxSimulations
+    simulationsValid(simulations, maxSimulations)
 
   const columns: Column<SeedRow>[] = [
     {
@@ -288,7 +265,7 @@ export function EvolutionLabScreen() {
         }
       />
       {options.isError && (
-        <ErrorNotice error={options.error} title="Could not read your operators" />
+        <ErrorNotice error={options.error} title="Could not load the lab's options" />
       )}
       <Panel
         title="Seeds"
@@ -382,35 +359,13 @@ export function EvolutionLabScreen() {
       <Panel title="Settings">
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-start gap-x-8 gap-y-4">
-            <Setting label="Cores">
-              <Segmented
-                label="Cores"
-                items={CORES.map((v) => ({ value: v, label: v }))}
-                value={draft.cores}
-                onChange={(cores) => set({ cores })}
-              />
-            </Setting>
-            <Setting label="Simulations">
-              <Input
-                type="number"
-                min={1}
-                max={maxSimulations}
-                step={1}
-                placeholder="5000"
-                aria-label="Simulations"
-                className="w-32"
-                value={simulations ?? ''}
-                onChange={(e) => {
-                  const n = Number(e.target.value)
-                  set({
-                    simulations:
-                      e.target.value === '' || !Number.isFinite(n)
-                        ? null
-                        : Math.max(0, Math.floor(n)),
-                  })
-                }}
-              />
-            </Setting>
+            <CoresSetting value={draft.cores} onChange={(cores) => set({ cores })} />
+            <SimulationsSetting
+              value={simulations}
+              max={maxSimulations}
+              placeholder="5000"
+              onChange={(next) => set({ simulations: next })}
+            />
           </div>
           {scopeOptions.neutralizations.length > 0 && (
             <NeutralizationPicker
@@ -422,7 +377,7 @@ export function EvolutionLabScreen() {
           )}
           <Disclosure summary="Advanced">
             <div className="flex flex-wrap items-start gap-x-8 gap-y-4">
-              <Setting label="Population">
+              <Fieldset legend="Population">
                 <Segmented
                   label="Population"
                   items={[
@@ -435,8 +390,8 @@ export function EvolutionLabScreen() {
                   value={draft.population ?? 0}
                   onChange={(v) => set({ population: v === 0 ? null : v })}
                 />
-              </Setting>
-              <Setting label="Mutation">
+              </Fieldset>
+              <Fieldset legend="Mutation">
                 <Segmented
                   label="Mutation"
                   items={(options.data?.mutationRates ?? MUTATION_RATES).map((v) => ({
@@ -446,7 +401,7 @@ export function EvolutionLabScreen() {
                   value={draft.mutationRate}
                   onChange={(mutationRate) => set({ mutationRate })}
                 />
-              </Setting>
+              </Fieldset>
             </div>
           </Disclosure>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -476,9 +431,6 @@ export function EvolutionLabScreen() {
           {preview.isError && <ErrorNotice error={preview.error} title="Could not plan the task" />}
           {plan?.problems.map((m) => (
             <Notice key={m} tone="error" title={m} />
-          ))}
-          {plan?.warnings.map((m) => (
-            <Notice key={m} tone="warn" title={m} />
           ))}
           {plan && plan.sample.length > 0 && (
             <Disclosure summary="Sample Alphas">

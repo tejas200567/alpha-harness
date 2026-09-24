@@ -12,19 +12,21 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
+
+from .schemas import camel_dict
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 log = structlog.get_logger(__name__)
 
 #: Finished tasks stay visible this long, so a job that completes between two polls is
 #: still seen rather than vanishing as though it never ran.
 LINGER_SECONDS = 60.0
-
-ChangeHook = Callable[[dict[str, Any]], Awaitable[None] | None]
 
 
 @dataclass(slots=True)
@@ -49,16 +51,8 @@ class Task:
         return (self.finished or time.monotonic()) - self.started
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "id": self.id,
-            "kind": self.kind,
-            "label": self.label,
-            "progress": self.progress,
-            "detail": self.detail,
-            "state": self.state,
-            "error": self.error,
-            "elapsedSeconds": round(self.elapsed, 1),
-            "meta": self.meta,
+        return camel_dict(self, exclude=("started", "finished")) | {
+            "elapsedSeconds": round(self.elapsed, 1)
         }
 
 
@@ -69,7 +63,7 @@ class TaskRegistry:
     the event loop cannot interleave two of them.
     """
 
-    def __init__(self, on_change: ChangeHook | None = None) -> None:
+    def __init__(self, on_change: Callable[[dict[str, Any]], Awaitable[None]]) -> None:
         self._tasks: dict[str, Task] = {}
         self._on_change = on_change
 
@@ -102,14 +96,14 @@ class TaskRegistry:
             task.progress = 1.0
         await self._notify()
 
-    async def list_tasks(self) -> list[dict[str, Any]]:
-        await self._prune()
+    def list_tasks(self) -> list[dict[str, Any]]:
+        self._prune()
         tasks = sorted(self._tasks.values(), key=lambda t: t.started)
         return [t.to_dict() for t in tasks]
 
-    async def summary(self) -> dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         """What the indicator in the top bar needs: are we busy, and with what."""
-        tasks = await self.list_tasks()
+        tasks = self.list_tasks()
         running = [t for t in tasks if t["state"] == "running"]
         known = [t["progress"] for t in running if t["progress"] is not None]
         return {
@@ -122,7 +116,7 @@ class TaskRegistry:
             "tasks": tasks,
         }
 
-    async def _prune(self) -> None:
+    def _prune(self) -> None:
         now = time.monotonic()
         for key in [
             k
@@ -132,11 +126,7 @@ class TaskRegistry:
             del self._tasks[key]
 
     async def _notify(self) -> None:
-        if self._on_change is None:
-            return
-        result = self._on_change(await self.summary())
-        if asyncio.iscoroutine(result):
-            await result
+        await self._on_change(self.summary())
 
 
 #: Detached jobs started from request handlers and labs, held so none is collected mid
@@ -144,18 +134,16 @@ class TaskRegistry:
 _background: set[asyncio.Task[Any]] = set()
 
 
-def spawn[T](coro: Awaitable[T], *, name: str) -> asyncio.Task[T]:
+def spawn[T](coro: Awaitable[T], *, name: str) -> asyncio.Task[T | None]:
     """Run ``coro`` detached, tracked for :func:`cancel_background`."""
 
-    async def run() -> T:
+    async def run() -> T | None:
         try:
             return await coro
-        except asyncio.CancelledError:
-            raise
         # Nobody awaits a detached job, so an uncaught error would otherwise vanish.
         except Exception:
             log.exception("background.failed", name=name)
-            raise
+            return None
 
     task = asyncio.create_task(run(), name=name)
     _background.add(task)

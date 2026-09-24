@@ -14,7 +14,7 @@ import {
   type SubmittableAlpha,
   type SubmittableResponse,
 } from '@/screens/pool/api'
-import { PnlChart } from '@/screens/pool/pnl-chart'
+import { Sparkline } from '@/screens/pool/pnl-chart'
 import {
   Button,
   checkTone,
@@ -212,7 +212,7 @@ function Card({
       )}
       {a.pnl.length > 1 && (
         <div className="rounded-md border border-hairline bg-surface-2 p-2">
-          <PnlChart values={a.pnl} compact label={`Cumulative PnL of ${a.alphaId}`} />
+          <Sparkline values={a.pnl} label={`Cumulative PnL of ${a.alphaId}`} />
         </div>
       )}
       {passed.length > 0 && (

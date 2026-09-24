@@ -73,6 +73,7 @@ export function PropertiesPanel({ alpha }: { alpha: AlphaInfo }) {
     setDraft({ ...draft, [key]: value })
 
   const save = useMutation({
+    meta: { inline: true },
     mutationFn: async () => {
       // BRAIN drops an empty description from the request rather than clearing it, so refuse
       // the save instead of reporting one that never happened.

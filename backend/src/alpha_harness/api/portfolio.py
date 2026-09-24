@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Any, Literal
 
 from fastapi import APIRouter
@@ -11,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from ..schemas import Out
 from ..tools import portfolio
+from ..vault.store import json_list
 from .deps import State, refuse
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
@@ -119,10 +119,6 @@ class PortfolioRequest(BaseModel):
     cost_bps: float = Field(default=5.0, ge=0, le=100)
 
 
-def _labels(raw: Any) -> list[str]:
-    return [str(v) for v in json.loads(raw)] if isinstance(raw, str) else []
-
-
 def _investability(row: dict[str, Any]) -> Investability:
     if row.get("max_trade") == "ON":
         return "max_trade"
@@ -141,7 +137,7 @@ async def members(state: State) -> PortfolioMembers:
     rows = await state.alphas.submitted_members()
     out: list[PortfolioMember] = []
     for r in rows:
-        pyramids = _labels(r["pyramids"])
+        pyramids = json_list(r["pyramids"])
         out.append(
             PortfolioMember(
                 alpha_id=str(r["alpha_id"]),
@@ -150,8 +146,8 @@ async def members(state: State) -> PortfolioMembers:
                 delay=r["delay"],
                 universe=r["universe"],
                 investability=_investability(r),
-                tags=_labels(r["tags"]),
-                classifications=_labels(r["classifications"]),
+                tags=json_list(r["tags"]),
+                classifications=json_list(r["classifications"]),
                 pyramids=pyramids,
                 categories=sorted({p.rsplit("/", 1)[-1] for p in pyramids}),
                 labelled=r["pyramids"] is not None,

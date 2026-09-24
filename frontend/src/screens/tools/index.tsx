@@ -1,19 +1,16 @@
-/** Tools: every tool, two by two.
- *
- * The same card grid as Research Labs, so the two group screens read as one pattern. No
- * "Coming Soon" slots here: the labs are a fixed roster of four and the empty ones say so,
- * while tools are added when something needs one.
- */
+/** Tools: every tool, two by two, in the same cards as Research Labs so the two group
+ *  screens read as one pattern. */
 
 import { Link } from '@tanstack/react-router'
 import {
-  ArrowUpRightIcon,
   CombineIcon,
   ListChecksIcon,
   type LucideIcon,
   SlidersHorizontalIcon,
   UnlinkIcon,
 } from 'lucide-react'
+import { HUB_CARD, HubCardBody } from '@/screens/research-labs'
+
 import { TOOL_TABS } from '@/shell/nav'
 import { Page, PageHeader } from '@/ui/kit'
 
@@ -41,41 +38,21 @@ const SEARCH = {
   superalpha: {},
 } as const
 
-const number = (index: number) => String(index + 1).padStart(2, '0')
-
 export function ToolsScreen() {
   return (
     <Page>
       <PageHeader title="Tools" />
       <div className="grid gap-3 sm:grid-cols-2">
-        {TOOL_TABS.map((tool, index) => {
-          const Icon = ICONS[tool.tab]
-          return (
-            <Link
-              key={tool.tab}
-              to={tool.to}
-              search={SEARCH[tool.tab]}
-              className="panel-highlight group flex min-h-56 flex-col justify-between rounded-lg border border-hairline bg-surface-1 p-6 transition-colors hover:border-hairline-strong hover:bg-surface-2"
-            >
-              <div className="flex items-start justify-between">
-                <span className="flex size-12 items-center justify-center rounded-md border border-hairline-strong bg-surface-2 text-ink-muted transition-colors group-hover:border-primary group-hover:text-primary">
-                  <Icon className="size-6" aria-hidden />
-                </span>
-                <ArrowUpRightIcon
-                  className="size-5 text-ink-tertiary transition-colors group-hover:text-ink"
-                  aria-hidden
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="num text-body-compact text-ink-subtle">{number(index)}</span>
-                <h2 className="text-headline font-semibold text-balance text-ink">{tool.label}</h2>
-                <p className="max-w-prose text-body text-pretty text-ink-subtle">
-                  {ABOUT[tool.tab]}
-                </p>
-              </div>
-            </Link>
-          )
-        })}
+        {TOOL_TABS.map((tool, index) => (
+          <Link key={tool.tab} to={tool.to} search={SEARCH[tool.tab]} className={HUB_CARD}>
+            <HubCardBody
+              icon={ICONS[tool.tab]}
+              index={index}
+              label={tool.label}
+              about={ABOUT[tool.tab]}
+            />
+          </Link>
+        ))}
       </div>
     </Page>
   )

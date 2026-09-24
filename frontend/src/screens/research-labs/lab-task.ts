@@ -1,11 +1,13 @@
-/** What Search Lab and Template Lab share around a task: its draft, market and datasets. */
+/** What the labs share around a task: its draft, market and datasets, its preview, adding it. */
 
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo } from 'react'
+import { toast } from 'sonner'
 import { catalog } from '@/api/catalog'
 import type { Scope } from '@/api/types'
-import { useScope } from '@/lib/scope'
+import { DEFAULT_SCOPE, useScope } from '@/lib/scope'
+import { useDebounced } from '@/lib/use-debounced'
 import { type PickFrom, useDatasetPick } from '@/screens/data/dataset-pick'
 
 export interface LabDraft {
@@ -24,10 +26,19 @@ export interface LabDraft {
   visualization: boolean
 }
 
-export const MAX_SIMULATIONS = 100_000
+export const LAB_DEFAULTS: LabDraft = {
+  region: DEFAULT_SCOPE.region,
+  delay: DEFAULT_SCOPE.delay,
+  universe: DEFAULT_SCOPE.universe,
+  datasetIds: [],
+  cores: 4,
+  simulations: null,
+  decay: 0,
+  vectorOperators: null,
+  neutralizations: [],
+}
 
-/** Matches `labs.search.MAX_CORES`: a task may hold every slot the engine has. */
-export const CORES = [1, 2, 3, 4, 5, 6, 7, 8]
+export const MAX_SIMULATIONS = 100_000
 
 /** A draft's market and datasets: dataset names, and the round trip to the Data Explorer to choose them. */
 type LabMarket = Pick<LabDraft, 'region' | 'delay' | 'universe' | 'datasetIds'>
@@ -72,9 +83,49 @@ export function useLabMarket(
   const choose = () => {
     useDatasetPick.getState().start(scope, draft.datasetIds, from)
     setDataScope(scope)
-    void navigate({ to: '/data/$tab', params: { tab: 'fields' } })
+    void navigate({ to: '/data' })
   }
   return { chosen, names, choose }
+}
+
+/**
+ * A lab's free preview of `body`, asked once the form has been still for `wait` ms. `current`
+ * is whether the plan answers the form as it is now rather than an earlier state of it.
+ */
+export function useLabPreview<Body, Plan>(
+  lab: string,
+  body: Body,
+  preview: (body: Body) => Promise<Plan>,
+  { enabled = true, wait = 300 }: { enabled?: boolean; wait?: number } = {},
+) {
+  const key = JSON.stringify(body)
+  const settled = useDebounced(key, wait)
+  const query = useQuery({
+    queryKey: [lab, 'preview', settled],
+    queryFn: () => preview(JSON.parse(settled) as Body),
+    enabled: enabled && settled === key,
+    placeholderData: keepPreviousData,
+  })
+  return { preview: query, current: settled === key && !query.isFetching }
+}
+
+/** Adds a task, then offers the way to it. */
+export function useAddTask<Value = void>(
+  add: (value: Value) => Promise<unknown>,
+  done = 'Task Added',
+) {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: add,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['lab-tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['today'] })
+      toast.success(done, {
+        action: { label: 'Open Tasks', onClick: () => void navigate({ to: '/tasks' }) },
+      })
+    },
+  })
 }
 
 /** `vec_avg` until the user chooses vector operators. */
@@ -97,6 +148,6 @@ export function labBody(draft: LabDraft, vectorOperators: string[]) {
   }
 }
 
-export function simulationsValid(draft: LabDraft, maxSimulations: number): boolean {
-  return draft.simulations !== null && draft.simulations >= 1 && draft.simulations <= maxSimulations
+export function simulationsValid(simulations: number | null, maxSimulations: number): boolean {
+  return simulations !== null && simulations >= 1 && simulations <= maxSimulations
 }

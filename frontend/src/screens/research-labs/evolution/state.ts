@@ -22,11 +22,9 @@ export interface EvolutionDraft {
   appliedJobId: string | null
 }
 
-export const useEvolutionLab = create<
-  EvolutionDraft & { set: (change: Partial<EvolutionDraft>) => void }
->()(
+export const useEvolutionLab = create<EvolutionDraft>()(
   persist(
-    (set) => ({
+    (): EvolutionDraft => ({
       region: DEFAULT_SCOPE.region,
       delay: DEFAULT_SCOPE.delay,
       universe: DEFAULT_SCOPE.universe,
@@ -38,7 +36,6 @@ export const useEvolutionLab = create<
       mutationRate: 0.05,
       autoJobId: null,
       appliedJobId: null,
-      set: (change) => set(change),
     }),
     { name: 'alpha-harness-evolution-lab' },
   ),

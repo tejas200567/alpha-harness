@@ -5,7 +5,7 @@ import { defineConfig } from 'vite'
 
 // The backend runs as a separate process. Proxying /api and /ws in dev means the
 // frontend never needs CORS or credentials of its own.
-const BACKEND = process.env['VITE_BACKEND_URL'] ?? 'http://127.0.0.1:8000'
+const BACKEND = 'http://127.0.0.1:8000'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -22,11 +22,12 @@ export default defineConfig({
     chunkSizeWarningLimit: 700,
   },
   server: {
-    port: 5173,
+    // The backend's WebSocket accepts this origin only; a silent move to 5174 would load
+    // the app with its live updates refused.
+    strictPort: true,
     proxy: {
       '/api': { target: BACKEND, changeOrigin: true },
       '/ws': { target: BACKEND, ws: true, changeOrigin: true },
-      '/openapi.json': { target: BACKEND, changeOrigin: true },
     },
   },
 })

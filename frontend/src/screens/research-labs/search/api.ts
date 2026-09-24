@@ -22,7 +22,6 @@ type Schemas = components['schemas']
 
 export type SearchLabOptions = Schemas['Options']
 export type SearchLabPreview = Schemas['Preview']
-export type QuickRun = Schemas['QuickRun']
 
 const B = '/api/search-lab'
 
@@ -31,12 +30,7 @@ export const searchLab = {
   options: () => http.get<SearchLabOptions>(`${B}/options`),
   /** Free; queues nothing. */
   preview: (body: SearchLabRequest) => http.post<SearchLabPreview>(`${B}/preview`, body),
-  /** Adds the search to Tasks and queues it to run. */
+  /** Adds the search to Tasks, queued to run. */
   runTask: (body: SearchLabRequest & { simulations: number }) =>
-    http.post<Schemas['AddedTask']>(`${B}/tasks?run=true`, body),
-  /**
-   * The Dashboard's one click: today's unclaimed simulations, run now, over `dataset_ids`
-   * or, when empty, the pyramids not yet formulated this quarter.
-   */
-  quick: (body: Schemas['QuickRequest']) => http.post<QuickRun>(`${B}/quick`, body),
+    http.post<Schemas['AddedTask']>(`${B}/tasks`, body),
 }

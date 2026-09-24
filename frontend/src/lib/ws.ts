@@ -90,15 +90,6 @@ class Telemetry {
 
 export const telemetry = new Telemetry()
 
-/** Run `handler` for every message on `topic`. The handler may change freely. */
-function useTopic(topic: Topic, handler: (payload: unknown) => void): void {
-  const ref = useRef(handler)
-  useEffect(() => {
-    ref.current = handler
-  })
-  useEffect(() => telemetry.subscribe(topic, (payload) => ref.current(payload)), [topic])
-}
-
 /**
  * Refetch queries under `queryKey` whenever `topic` reports a change. The socket is a signal,
  * not state, so a drifting payload shape can never desync the UI; bursts collapse to one
@@ -108,26 +99,28 @@ export function useRefetchOn(topic: Topic, queryKey: readonly unknown[], minGapM
   const queryClient = useQueryClient()
   const last = useRef(0)
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const keyRef = useRef(queryKey)
+  // Read when a message lands, so one subscription serves every render.
+  const latest = useRef({ queryKey, minGapMs })
   useEffect(() => {
-    keyRef.current = queryKey
+    latest.current = { queryKey, minGapMs }
   })
 
-  useTopic(topic, () => {
-    const fire = () => {
-      last.current = Date.now()
-      pending.current = null
-      void queryClient.invalidateQueries({ queryKey: keyRef.current })
-    }
-    const since = Date.now() - last.current
-    if (since >= minGapMs) fire()
-    else if (!pending.current) pending.current = setTimeout(fire, minGapMs - since)
-  })
-
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    const unsubscribe = telemetry.subscribe(topic, () => {
+      const fire = () => {
+        last.current = Date.now()
+        pending.current = null
+        void queryClient.invalidateQueries({ queryKey: latest.current.queryKey })
+      }
+      const gap = latest.current.minGapMs
+      const since = Date.now() - last.current
+      if (since >= gap) fire()
+      else if (!pending.current) pending.current = setTimeout(fire, gap - since)
+    })
+    return () => {
+      unsubscribe()
       if (pending.current) clearTimeout(pending.current)
-    },
-    [],
-  )
+      pending.current = null
+    }
+  }, [topic, queryClient])
 }

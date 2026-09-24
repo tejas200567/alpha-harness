@@ -15,7 +15,6 @@ export type TemplateLabPreview = Schemas['TemplateLabPreview']
 
 export interface TemplateLabRequest extends SearchLabRequest {
   tree: TemplateDoc
-  template_id?: number | null
   template_name: string
 }
 

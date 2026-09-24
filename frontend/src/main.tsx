@@ -5,8 +5,8 @@ import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@ta
 import { RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Toaster } from 'sonner'
-import { ApiError } from '@/api/http'
+import { Toaster, toast } from 'sonner'
+import { ApiError, errorMessage } from '@/api/http'
 import { useLive } from '@/lib/live'
 import { telemetry } from '@/lib/ws'
 import { router } from '@/router'
@@ -19,7 +19,13 @@ const noteVerification = (error: unknown) => {
 
 const queryClient = new QueryClient({
   queryCache: new QueryCache({ onError: noteVerification }),
-  mutationCache: new MutationCache({ onError: noteVerification }),
+  mutationCache: new MutationCache({
+    onError: (error, _variables, _result, mutation) => {
+      noteVerification(error)
+      // A mutation with its own onError, or one that shows its error inline, says it itself.
+      if (!mutation.options.onError && !mutation.meta?.['inline']) toast.error(errorMessage(error))
+    },
+  }),
   defaultOptions: {
     queries: {
       staleTime: 15_000,

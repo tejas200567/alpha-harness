@@ -6,6 +6,7 @@ import { MaximizeIcon } from 'lucide-react'
 import { useState } from 'react'
 import { ApiError, errorMessage } from '@/api/http'
 import { fmt, isNum } from '@/lib/format'
+import { alpha, notApplicable } from '@/screens/alpha/api'
 import { type AlphaSettings, pool } from '@/screens/pool/api'
 import { PnlChart } from '@/screens/pool/pnl-chart'
 import {
@@ -95,7 +96,6 @@ function Body({ alphaId }: { alphaId: string }) {
       </div>
 
       <Section title="Cumulative PnL" description={`${fmt.int(d.days)} trading days stored`}>
-        <div className="flex gap-3"></div>
         {d.problem && <Notice tone="warn">{d.problem}</Notice>}
         {d.pnl.length > 1 ? (
           <PnlChart values={d.pnl} dates={d.dates} label={`Cumulative PnL of ${d.alphaId}`} />
@@ -170,7 +170,7 @@ const cellText = (v: unknown) =>
 function CorrelationResult({ alphaId, kind }: { alphaId: string; kind: Kind }) {
   const q = useQuery({
     queryKey: ['pool', 'correlations', alphaId, kind],
-    queryFn: () => pool.correlations(alphaId, kind),
+    queryFn: () => alpha.correlation(alphaId, kind, 'run'),
     retry: false,
     staleTime: Infinity,
   })
@@ -179,11 +179,7 @@ function CorrelationResult({ alphaId, kind }: { alphaId: string; kind: Kind }) {
   if (q.isPending) return <Skeleton className="h-24" />
   if (q.isError) {
     const e = q.error
-    if (
-      e instanceof ApiError &&
-      e.code === 'platform_error' &&
-      [410, 412].includes(Number(e.body['platformStatus']))
-    ) {
+    if (notApplicable(e)) {
       return (
         <p className="text-body-compact text-ink-subtle">{label}: not applicable to this Alpha.</p>
       )
@@ -212,6 +208,8 @@ function CorrelationResult({ alphaId, kind }: { alphaId: string; kind: Kind }) {
     )
   }
 
+  // A run always comes back kept; `cached: false` only answers a cached-only read.
+  if (!q.data.cached) return null
   const props = q.data.schema?.properties ?? []
   const rows = q.data.records ?? []
 

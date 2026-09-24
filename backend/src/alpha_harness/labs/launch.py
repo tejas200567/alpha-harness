@@ -21,6 +21,15 @@ from ..brain.settings_schema import resolve_options
 from ..db.models import Study, StudyStatus
 from ..schemas import Out
 from . import scheduler, search
+from .params import (
+    CORRELATION_BREAKER,
+    GA_SAMPLER,
+    POWER_POOL_SAMPLER,
+    SEARCH_SAMPLER,
+    SETTINGS_SAMPLER,
+    TASK_SAMPLERS,
+    TEMPLATE_SAMPLER,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -31,6 +40,18 @@ if TYPE_CHECKING:
     from .params import TaskParams
 
 OPERATORS_UNREAD = "Your BRAIN operators could not be read. Sign in again, then reload."
+NO_SIMULATIONS = "Assign the simulations for this task."
+#: Alphas a preview shows.
+SAMPLE_SIZE = 5
+#: What each lab's task names start with, and the objective its trials are scored on.
+_TASKS: dict[str, tuple[str, str]] = {
+    SEARCH_SAMPLER: ("search", "train_sharpe"),
+    TEMPLATE_SAMPLER: ("template", "train_sharpe"),
+    GA_SAMPLER: ("evolution", "train_fitness"),
+    POWER_POOL_SAMPLER: ("power-pool", "sharpe"),
+    SETTINGS_SAMPLER: ("settings-sampler", "sharpe"),
+    CORRELATION_BREAKER: ("correlation-breaker", "sharpe"),
+}
 
 
 # --- wire shapes every lab's responses share ------------------------------------------
@@ -247,13 +268,13 @@ async def market_for(body: SearchRequest, state: Any, need: tuple[str, ...] = ()
 
 
 def preview_samples(
-    draw: Callable[[random.Random], SimulationRequest | None], *, tries: int, want: int = 5
+    draw: Callable[[random.Random], SimulationRequest | None], *, tries: int
 ) -> list[SampleAlpha]:
-    """Up to ``want`` Alphas a task could send, from at most ``tries`` draws."""
+    """Up to :data:`SAMPLE_SIZE` Alphas a task could send, from at most ``tries`` draws."""
     rng = random.Random()
     sample: list[SampleAlpha] = []
     for _ in range(tries):
-        if len(sample) >= want:
+        if len(sample) >= SAMPLE_SIZE:
             break
         request = draw(rng)
         if request is not None:
@@ -272,27 +293,24 @@ async def add_study(
     state: Any,
     *,
     now: datetime,
-    lab: str,
-    prefix: str,
     sampler: str,
     params: TaskParams,
-    objective: str,
     simulations: int,
     batch_size: int,
     template_source: str,
     template_name: str | None = None,
-    template_id: int | None = None,
     run: bool = False,
     seeds: Callable[[int], list[Trial]] | None = None,
-) -> Study:
+) -> AddedTask:
     """Store a task: not started, or queued for the scheduler when ``run``.
 
     ``seeds`` are trials the task starts with, written in the same transaction.
     """
+    lab = TASK_SAMPLERS[sampler]
+    prefix, objective = _TASKS[sampler]
     task = f"{prefix}-{now:%y%m%d%H%M%S%f}"
     row = Study(
         name=f"{lab} · {task}",
-        template_id=template_id,
         template_name=template_name or lab,
         template_source=template_source,
         sampler=sampler,
@@ -314,4 +332,4 @@ async def add_study(
     if run:
         await scheduler.start_waiting(state.optimizer)
     await state.optimizer.notify()
-    return row
+    return AddedTask(id=row.id, name=row.name)

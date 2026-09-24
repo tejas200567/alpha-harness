@@ -4,7 +4,6 @@ import { useMutation } from '@tanstack/react-query'
 import { ExternalLinkIcon, PlusIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { errorMessage } from '@/api/http'
 import { fmt } from '@/lib/format'
 import { type LLMKey, type LLMProvider, llm } from '@/screens/ai/api'
 import { Badge, Button, Empty, ErrorNotice, Field, Input, Notice, Panel, Skeleton } from '@/ui/kit'
@@ -136,7 +135,6 @@ function AddKeyDialog({
       toast.success(`Added ${p.label} Key ${result.hint}`)
       invalidate()
     },
-    onError: (e) => toast.error(errorMessage(e)),
   })
 
   const reset = () => {

@@ -22,14 +22,14 @@ if TYPE_CHECKING:
     from collections.abc import Container
 
 
+#: camelCase out, either spelling in. Also the config of pydantic dataclasses on the wire.
+WIRE = ConfigDict(alias_generator=to_camel, populate_by_name=True, serialize_by_alias=True)
+
+
 class Out(BaseModel):
     """Serialises to camelCase, accepts either spelling on the way in."""
 
-    model_config = ConfigDict(
-        alias_generator=to_camel,
-        populate_by_name=True,
-        serialize_by_alias=True,
-    )
+    model_config = WIRE
 
 
 def camel_dict(obj: Any, exclude: Container[str] = ()) -> dict[str, Any]:
@@ -123,14 +123,10 @@ class SyncRunRow(Out):
     label: str
     status: SyncStatus
     phase: Literal["categories", "datasets", "fields", "details"] | None
-    cursor_offset: int
-    cursor_dataset: str | None
     categories_synced: int
     datasets_synced: int
     fields_synced: int
-    fields_expected: int | None
     fraction: float | None
-    truncated_datasets: list[str]
     error: str | None
     started_at: str | None
     finished_at: str | None

@@ -33,6 +33,7 @@ export function SignIn({ storedEmail }: { storedEmail: string | null }) {
   const [shown, setShown] = useState(false)
 
   const signIn = useMutation({
+    meta: { inline: true },
     mutationFn: async () => {
       const trimmed = email.trim()
       const reuseStored = !password && storedEmail && (!trimmed || trimmed === storedEmail)

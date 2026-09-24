@@ -22,8 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
-from datetime import UTC, timedelta
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -38,13 +37,15 @@ from ..db.models import (
     TrialState,
     utcnow,
 )
-from ..vault.yields import verdict
+from ..vault.yields import IGNORED_CHECKS, QUOTA_CHECKS, checks_of, clean, verdict
 from . import objectives as obj
 from . import scheduler
 from .objectives import StudyNotFoundError
 from .params import SEARCH_SAMPLER, TASK_SAMPLERS, TEMPLATE_SAMPLER, SearchParams, params_of
 
 if TYPE_CHECKING:  # pragma: no cover
+    from collections.abc import Awaitable, Callable
+
     import optuna
 
     from ..account import PlatformMetadata
@@ -69,25 +70,6 @@ VAULT_STATS = frozenset(
 VAULT_WAIT = timedelta(minutes=5)
 
 
-def tpe(
-    *,
-    batch_size: int,
-    seed: int | None,
-    n_startup_trials: int = 20,
-    multivariate: bool = True,
-    group: bool = True,
-) -> Any:
-    from optuna.samplers import TPESampler
-
-    return TPESampler(
-        n_startup_trials=n_startup_trials,
-        multivariate=multivariate,
-        group=group,
-        constant_liar=batch_size > 1,
-        seed=seed,
-    )
-
-
 class Optimizer:
     """Owns every running study."""
 
@@ -101,7 +83,7 @@ class Optimizer:
         endpoints: BrainEndpoints,
         metadata: PlatformMetadata,
         *,
-        on_change: Any = None,
+        on_change: Callable[[dict[str, Any]], Awaitable[None]],
         alphas: AlphaVault,
         backfill: Backfill | None = None,
     ) -> None:
@@ -119,18 +101,15 @@ class Optimizer:
         self.open_trials: dict[int, dict[int, Any]] = {}
         self._locks: dict[int, asyncio.Lock] = {}
         self._task: asyncio.Task[None] | None = None
-        self._stopping = asyncio.Event()
 
     # -- lifecycle -------------------------------------------------------
 
     async def start(self) -> None:
         if self._task is not None:
             return
-        self._stopping.clear()
         self._task = asyncio.create_task(self._run(), name="optimizer")
 
     async def stop(self) -> None:
-        self._stopping.set()
         if self._task is not None:
             self._task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -139,17 +118,12 @@ class Optimizer:
         log.info("optimize.stopped")
 
     async def _run(self) -> None:
-        while not self._stopping.is_set():
+        while True:
             try:
                 await self.tick()
-            except asyncio.CancelledError:
-                raise
             except Exception:
                 log.exception("optimize.tick_failed")
-            try:
-                await asyncio.wait_for(self._stopping.wait(), timeout=POLL_SECONDS)
-            except TimeoutError:
-                continue
+            await asyncio.sleep(POLL_SECONDS)
 
     async def tick(self) -> dict[int, dict[str, int]]:
         """Start waiting tasks that fit, then advance every running study by one round."""
@@ -212,21 +186,19 @@ class Optimizer:
 
             # Evolution Lab breeds its own children: there is no sampler to tell.
             told = await self._harvest(
-                study_id,
-                vault_first=True,
-                tell=row.sampler in (SEARCH_SAMPLER, TEMPLATE_SAMPLER),
+                study_id, tell=row.sampler in (SEARCH_SAMPLER, TEMPLATE_SAMPLER)
             )
             asked = await scheduler.advance(self, study_id)
         if told or asked:
             await self.notify()
         return {"told": told, "asked": asked}
 
-    async def _harvest(self, study_id: int, *, tell: bool = True, vault_first: bool = False) -> int:
+    async def _harvest(self, study_id: int, *, tell: bool) -> int:
         """Score every trial whose simulation reached a terminal state.
 
         ``tell=False`` stores the scores without reporting them to Optuna, for GA studies.
-        ``vault_first`` reads the Alpha the tracker already stored locally instead of asking
-        BRAIN for it again, which saves one request per simulation.
+        The Alpha the tracker already stored locally is read first instead of asking BRAIN
+        for it again, which saves one request per simulation.
         """
         async with self.db.session() as session:
             row = await session.get(Study, study_id)
@@ -261,7 +233,7 @@ class Optimizer:
 
         objective_list = obj.resolve(list(row.objectives or []))
         saved: dict[str, dict[str, Any]] = {}
-        if vault_first and all(o.key in VAULT_STATS for o in objective_list):
+        if all(o.key in VAULT_STATS for o in objective_list):
             wanted = [
                 (
                     records[t.simulation_record_id].alpha_id
@@ -311,24 +283,18 @@ class Optimizer:
                 )
                 continue
 
-            if vault_first:
-                stored_alpha = saved.get(alpha_id)
-                # Every objective, not just Sharpe: a row stored without its train block has
-                # Sharpe but no Train Fitness, and scoring it would fail the trial for good.
-                if stored_alpha is not None and all(
-                    stored_alpha.get(o.key) is not None for o in objective_list
-                ):
-                    values = [float(stored_alpha[o.key]) for o in objective_list]
-                    summary = vault_summary(stored_alpha)
-                    finished.append((live.get(trial.number), trial, values, summary))
-                    continue
-                if record.finished_at is not None:
-                    ended = record.finished_at
-                    ended = ended if ended.tzinfo else ended.replace(tzinfo=UTC)
-                    now = utcnow()
-                    now = now if now.tzinfo else now.replace(tzinfo=UTC)
-                    if now - ended < VAULT_WAIT:
-                        continue  # The tracker stores it moments after it finishes.
+            stored_alpha = saved.get(alpha_id)
+            # Every objective, not just Sharpe: a row stored without its train block has
+            # Sharpe but no Train Fitness, and scoring it would fail the trial for good.
+            if stored_alpha is not None and all(
+                stored_alpha.get(o.key) is not None for o in objective_list
+            ):
+                values = [float(stored_alpha[o.key]) for o in objective_list]
+                summary = vault_summary(stored_alpha)
+                finished.append((live.get(trial.number), trial, values, summary))
+                continue
+            if record.finished_at is not None and utcnow() - record.finished_at < VAULT_WAIT:
+                continue  # The tracker stores it moments after it finishes.
 
             try:
                 alpha = await self.endpoints.get_alpha(alpha_id)
@@ -415,15 +381,15 @@ class Optimizer:
                 for t in trials
             ]
 
-        run = params_of(row, SearchParams)
-        sampler = tpe(
-            batch_size=row.batch_size,
-            seed=row.seed,
-            n_startup_trials=run.n_startup_trials,
-            multivariate=run.multivariate,
-            group=run.group,
+        from optuna.samplers import TPESampler
+
+        sampler = TPESampler(
+            n_startup_trials=params_of(row, SearchParams).n_startup_trials,
+            multivariate=True,
+            group=True,
+            constant_liar=row.batch_size > 1,
         )
-        study = await asyncio.to_thread(_rebuild, sampler, list(row.directions or []), history)
+        study = await asyncio.to_thread(_rebuild, sampler, history)
         self.studies[study_id] = study
         return study
 
@@ -435,17 +401,14 @@ class Optimizer:
 
     # -- reading ---------------------------------------------------------
 
-    async def _counts(self, session: Any, study_id: int) -> dict[str, int]:
-        rows = await session.execute(
-            select(Trial.state, func.count())
-            .where(Trial.study_id == study_id)
-            .group_by(Trial.state)
-        )
-        return {str(state): int(n) for state, n in rows.all()}
-
     async def counts(self, study_id: int) -> dict[str, int]:
         async with self.db.session() as session:
-            return await self._counts(session, study_id)
+            rows = await session.execute(
+                select(Trial.state, func.count())
+                .where(Trial.study_id == study_id)
+                .group_by(Trial.state)
+            )
+            return {str(state): int(n) for state, n in rows.all()}
 
     async def get(self, study_id: int) -> Study | None:
         async with self.db.session() as session:
@@ -461,11 +424,7 @@ class Optimizer:
         self.forget(study_id)
 
     async def notify(self) -> None:
-        if self._on_change is None:
-            return
-        result = self._on_change({"kind": "studies"})
-        if asyncio.iscoroutine(result):
-            await result
+        await self._on_change({"kind": "studies"})
 
 
 # --- optuna plumbing, all synchronous ------------------------------------
@@ -518,7 +477,7 @@ def _load_distributions(raw: dict[str, Any]) -> dict[str, Any]:
     return {name: json_to_distribution(value) for name, value in raw.items()}
 
 
-def _rebuild(sampler: Any, directions: list[str], history: list[dict[str, Any]]) -> optuna.Study:
+def _rebuild(sampler: Any, history: list[dict[str, Any]]) -> optuna.Study:
     """Recreate a study from its finished trials.
 
     Only terminal trials are replayed. Open ones are told later as replayed trials, so
@@ -529,10 +488,7 @@ def _rebuild(sampler: Any, directions: list[str], history: list[dict[str, Any]])
     from optuna.trial import create_trial
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
-    study = optuna.create_study(
-        directions=[optuna.study.StudyDirection[d.upper()] for d in directions or ["maximize"]],
-        sampler=sampler,
-    )
+    study = optuna.create_study(direction="maximize", sampler=sampler)
 
     state_map = {
         "COMPLETE": OptunaState.COMPLETE,
@@ -588,11 +544,11 @@ def _optuna_params(params: dict[str, Any], distributions: dict[str, Any]) -> dic
 def submittable(result: dict[str, Any]) -> bool:
     """Whether anything BRAIN has reported so far refuses this Alpha.
 
-    Looser than :func:`vault.yields.is_submittable` on purpose: an Alpha still being judged
+    Looser than a ``submittable`` verdict on purpose: an Alpha still being judged
     shows on the Tasks list, which fills in while BRAIN works. An Alpha with no gating checks
     is not submittable -- the usual reason is erroring out before BRAIN judged anything.
     """
-    return verdict(result.get("checks") or []) in ("submittable", "pending")
+    return clean(result.get("checks") or [])
 
 
 def still_judging(result: dict[str, Any]) -> bool:
@@ -605,18 +561,15 @@ def still_judging(result: dict[str, Any]) -> bool:
 
 
 def ranked(
-    trials: list[Trial],
-    directions: list[str] | None,
-    current: dict[str, list[dict[str, Any]]] | None = None,
+    trials: list[Trial], current: dict[str, list[dict[str, Any]]] | None = None
 ) -> list[dict[str, Any]]:
-    """Finished trials, best first on the first objective.
+    """Finished trials, best first on the first objective, which is always maximised.
 
     ``current`` holds the checks BRAIN has since finished, by alpha id; a trial's own copy is
     frozen at simulation time and only stands in for an Alpha the vault does not hold.
     """
-    maximize = (list(directions or []) or ["maximize"])[0] == "maximize"
     done = [(t, t.values[0]) for t in trials if t.state == TrialState.COMPLETE and t.values]
-    done.sort(key=lambda pair: float(pair[1]), reverse=maximize)
+    done.sort(key=lambda pair: float(pair[1]), reverse=True)
     rows = []
     for t, value in done:
         result: dict[str, Any] = t.result or {}
@@ -639,7 +592,15 @@ def ranked(
                 "drawdown": stats.get("drawdown"),
                 "margin": stats.get("margin"),
                 "feasible": t.feasible,
-                "failedChecks": result.get("failedChecks") or [],
+                # A trial's own list is frozen at simulation time and predates the rule that
+                # a quota check is not the Alpha's business, so it is filtered on the way out
+                # as well as on the way in.
+                "failedChecks": (failed := without_quota_checks_by_name(result)),
+                # Of those, the ones that actually refuse the Alpha. A check in
+                # ``IGNORED_CHECKS`` can FAIL without meaning anything about the Alpha --
+                # ``REGULAR_SUBMISSION`` is your submission quota -- so ``verdict`` skips it
+                # and anything counting refusals has to skip it too, or the two disagree.
+                "refusedBy": [c for c in failed if str(c).upper() not in IGNORED_CHECKS],
                 "submittable": submittable(result),
                 "pending": still_judging(result),
                 "source": bool((t.params or {}).get("source")),
@@ -648,13 +609,15 @@ def ranked(
     return rows
 
 
+def without_quota_checks_by_name(result: dict[str, Any]) -> list[str]:
+    """A result's failed checks, less the ones that describe the day's submission quota."""
+    failed = result.get("failedChecks") or []
+    return [c for c in failed if str(c).upper() not in QUOTA_CHECKS]
+
+
 def vault_summary(saved: dict[str, Any]) -> dict[str, Any]:
     """The result row for an Alpha read from the local store instead of from BRAIN."""
-    try:
-        checks = json.loads(saved.get("checks") or "[]")
-    except ValueError:
-        checks = []
-    checks = [c for c in checks if isinstance(c, dict)] if isinstance(checks, list) else []
+    checks = checks_of(saved.get("checks"))
     failed = [c.get("name") for c in checks if c.get("result") == "FAIL"]
     return {
         "alphaId": saved.get("alpha_id"),

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -48,13 +48,12 @@ class AuthService:
         endpoints: BrainEndpoints,
         *,
         metadata: PlatformMetadata,
-        authenticator: Authenticator | None = None,
     ) -> None:
         self.db = db
         self.sealer = sealer
         self.endpoints = endpoints
         self.metadata = metadata
-        self.auth = authenticator or Authenticator(endpoints)
+        self.auth = Authenticator(endpoints)
         self._session = SessionInfo.anonymous()
         self._user_profile: dict[str, Any] | None = None
         #: One session change at a time: a UI sign-in, a silent re-login and a status
@@ -93,11 +92,7 @@ class AuthService:
         """Save (or replace) the BRAIN login, sealed at rest."""
         sealed = self.sealer.seal(password, context=PASSWORD_CONTEXT)
         async with self.db.session() as session:
-            existing = (
-                (await session.execute(select(Credential).where(Credential.email == email)))
-                .scalars()
-                .first()
-            )
+            existing = await session.scalar(select(Credential).where(Credential.email == email))
             if existing is not None:
                 existing.password_sealed = sealed
             else:
@@ -130,7 +125,7 @@ class AuthService:
             self._session = restored or SessionInfo.anonymous()
             return self._session
         self._session = restored
-        await self._save_cookies(restored)
+        await self._save_cookies()
         await self._warm_operators()
         return restored
 
@@ -186,7 +181,7 @@ class AuthService:
                 # Touched first: _save_cookies files the jar under the most recent sign-in,
                 # so a new email's cookies would otherwise land on the previous account's row.
                 await self._touch_last_login(email)
-                await self._save_cookies(info)
+                await self._save_cookies()
                 # Warm the profile so the first screen can greet them by name without a
                 # second round trip. Failure is swallowed inside; a missing name is cosmetic.
                 await self.get_user_profile()
@@ -216,15 +211,13 @@ class AuthService:
             if info.authenticated:
                 # No credential to store: the sign-in that started this never got far enough
                 # to have one accepted, and the cookie jar is what carries the session now.
-                await self._save_cookies(info)
+                await self._save_cookies()
                 await self.get_user_profile()
                 await self._warm_operators()
             return info
 
-    async def status(self, *, refresh: bool = False) -> SessionInfo:
-        """Current state. ``refresh`` re-validates against the platform."""
-        if not refresh:
-            return self._session
+    async def status(self) -> SessionInfo:
+        """The session as the platform sees it now; :attr:`session` is the cheap read."""
         # Locked: a check still in flight when a sign-in lands would put the old state back.
         async with self._lock:
             fresh = await self.auth.status()
@@ -247,9 +240,10 @@ class AuthService:
     async def logout(self) -> None:
         async with self._lock:
             self._user_profile = None
-            await self.auth.logout()
+            await self.endpoints.logout()
             await self._clear_cookies()
             self._session = SessionInfo.anonymous()
+            log.info("brain.session.ended")
 
     async def _warm_operators(self) -> None:
         """Cache the account's own operator list once signed in.
@@ -269,17 +263,11 @@ class AuthService:
             credential = await _current_credential(session)
             if credential is None:
                 return None
-            row = (
-                (
-                    await session.execute(
-                        select(BrainSessionRow)
-                        .where(BrainSessionRow.credential_id == credential.id)
-                        .order_by(BrainSessionRow.updated_at.desc())
-                        .limit(1)
-                    )
-                )
-                .scalars()
-                .first()
+            row = await session.scalar(
+                select(BrainSessionRow)
+                .where(BrainSessionRow.credential_id == credential.id)
+                .order_by(BrainSessionRow.updated_at.desc())
+                .limit(1)
             )
             if row is None:
                 return None
@@ -289,56 +277,32 @@ class AuthService:
                 log.warning("session.cookies_unreadable")
                 return None
 
-    async def _save_cookies(self, info: SessionInfo) -> None:
+    async def _save_cookies(self) -> None:
         cookies = self.endpoints.client.export_cookies()
         if not cookies:
             return
         sealed = self.sealer.seal(json.dumps(cookies), context=COOKIE_CONTEXT)
-        expires = datetime.fromtimestamp(info.expires_at, tz=UTC) if info.expires_at else None
 
         async with self.db.session() as session:
             credential = await _current_credential(session)
             if credential is None:
                 return
-            row = (
-                (
-                    await session.execute(
-                        select(BrainSessionRow).where(
-                            BrainSessionRow.credential_id == credential.id
-                        )
-                    )
-                )
-                .scalars()
-                .first()
+            row = await session.scalar(
+                select(BrainSessionRow).where(BrainSessionRow.credential_id == credential.id)
             )
             if row is None:
-                session.add(
-                    BrainSessionRow(
-                        credential_id=credential.id,
-                        cookies_sealed=sealed,
-                        user_id=info.user_id,
-                        permissions=info.permissions,
-                        expires_at=expires,
-                    )
-                )
+                session.add(BrainSessionRow(credential_id=credential.id, cookies_sealed=sealed))
             else:
                 row.cookies_sealed = sealed
-                row.user_id = info.user_id
-                row.permissions = info.permissions
-                row.expires_at = expires
 
     async def _clear_cookies(self) -> None:
         async with self.db.session() as session:
-            for row in (await session.execute(select(BrainSessionRow))).scalars():
+            for row in await session.scalars(select(BrainSessionRow)):
                 await session.delete(row)
 
     async def _touch_last_login(self, email: str) -> None:
         async with self.db.session() as session:
-            credential = (
-                (await session.execute(select(Credential).where(Credential.email == email)))
-                .scalars()
-                .first()
-            )
+            credential = await session.scalar(select(Credential).where(Credential.email == email))
             if credential is not None:
                 credential.last_login_at = utcnow()
 
@@ -385,8 +349,6 @@ class PlatformMetadata:
         async with self.db.session() as session:
             row = await session.get(MetadataCache, SCHEMA_KEY)
             cached, fetched = (row.value, row.fetched_at) if row else (None, None)
-        if fetched is not None and fetched.tzinfo is None:
-            fetched = fetched.replace(tzinfo=UTC)
         if cached is not None and fetched is not None and utcnow() - fetched < SCHEMA_MAX_AGE:
             return cached
         try:
@@ -426,16 +388,10 @@ async def _current_credential(session: Any) -> Credential | None:
     Most-recent rather than oldest-first, so signing in with a different email is the
     account silent re-login and the cookie jar then use.
     """
-    return (
-        (
-            await session.execute(
-                select(Credential)
-                .order_by(Credential.last_login_at.desc().nulls_last(), Credential.id.desc())
-                .limit(1)
-            )
-        )
-        .scalars()
-        .first()
+    return await session.scalar(
+        select(Credential)
+        .order_by(Credential.last_login_at.desc().nulls_last(), Credential.id.desc())
+        .limit(1)
     )
 
 

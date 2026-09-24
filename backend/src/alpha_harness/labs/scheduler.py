@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 from sqlalchemy import String, func, or_, select, type_coerce
 
+from ..brain.schemas import SimulationRequest, SimulationSettings
 from ..brain.settings_schema import validate_settings
 from ..db.models import SimStatus, SimulationRecord, Study, StudyStatus, Trial, TrialState, utcnow
 from . import ga, search, template
@@ -38,13 +39,42 @@ if TYPE_CHECKING:  # pragma: no cover
 
     import optuna
 
-    from ..brain.schemas import SimulationRequest
     from .study import Optimizer
 
 log = structlog.get_logger(__name__)
 
 #: Marks a trial answered from an Alpha already simulated: it spent no quota.
 FREE = "Matched an Alpha already simulated; no quota spent."
+
+
+def queued(outcome: dict[str, Any]) -> dict[str, Any]:
+    """A trial's fields once the engine has taken its request, per ``enqueue``'s outcome."""
+    return {
+        "state": TrialState.QUEUED,
+        "simulation_record_id": outcome.get("recordId"),
+        "alpha_id": outcome.get("alphaId"),
+        "message": FREE if outcome.get("status") == str(SimStatus.SKIPPED) else None,
+    }
+
+
+async def send_parked(optimizer: Optimizer, row: Study, batch: Sequence[Trial]) -> int:
+    """Send trials written up front and parked until cores were free.
+
+    ``batch`` must still be attached to the caller's session: the outcome is written by
+    assigning to those rows, which is what saves a round trip per trial.
+    """
+    requests = [
+        SimulationRequest(
+            settings=SimulationSettings.model_validate(t.settings), regular=t.expression
+        )
+        for t in batch
+    ]
+    outcomes = (await optimizer.engine.enqueue(requests, task=row.task)).get("outcomes", [])
+    for index, trial in enumerate(batch):
+        for field, value in queued(outcomes[index] if index < len(outcomes) else {}).items():
+            setattr(trial, field, value)
+    return len(batch)
+
 
 #: Held by anything that reads free cores and then hands some out, so two of them
 #: cannot hand out the same free cores. Never held while taking a study's lock.
@@ -143,7 +173,13 @@ def ask_points(
             log.warning("tasks.point_unavailable", problem=problems[0])
             study.tell(trial, state=OptunaState.PRUNED)
             continue
-        key = None if request is None else search.identity(request)
+        key = (
+            None
+            if request is None
+            else search.identity_of(
+                request.regular, request.settings.model_dump(by_alias=True, exclude_none=True)
+            )
+        )
         if request is None or key is None or key in keys or key in seen:
             known = None if key is None else seen.get(key)
             if known is False:
@@ -307,9 +343,7 @@ async def _queue(
     """
     from optuna.distributions import distribution_to_json
 
-    result = await optimizer.engine.enqueue(
-        [request for _, _, request in picked], task=row.task, skip_duplicates=True
-    )
+    result = await optimizer.engine.enqueue([request for _, _, request in picked], task=row.task)
     outcomes = result.get("outcomes", [])
     live = optimizer.open_trials.setdefault(row.id, {})
     number = last_number
@@ -328,11 +362,8 @@ async def _queue(
                     },
                     expression=request.regular,
                     settings=request.settings.model_dump(by_alias=True, exclude_none=True),
-                    state=TrialState.QUEUED,
-                    simulation_record_id=outcome.get("recordId"),
-                    alpha_id=outcome.get("alphaId"),
-                    message=FREE if outcome.get("status") == str(SimStatus.SKIPPED) else None,
                     generation=params.get("generation"),
+                    **queued(outcome),
                 )
             )
             if asked is not None:

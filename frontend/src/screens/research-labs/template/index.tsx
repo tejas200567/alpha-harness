@@ -4,8 +4,7 @@
  * allows and keeps what gives the best Sharpe.
  */
 
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   CopyPlusIcon,
   EllipsisIcon,
@@ -16,15 +15,15 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { errorMessage } from '@/api/http'
 import { cn } from '@/lib/cn'
 import { fmt } from '@/lib/format'
-import { useDebounced } from '@/lib/use-debounced'
 import {
   labBody,
   MAX_SIMULATIONS,
   simulationsValid,
+  useAddTask,
   useLabMarket,
+  useLabPreview,
   vectorOperatorsOf,
 } from '@/screens/research-labs/lab-task'
 import { DatasetsPanel, SettingsPanel } from '@/screens/research-labs/task-settings'
@@ -74,9 +73,9 @@ let syncedThisSession = false
 
 export function TemplateLabScreen() {
   const draft = useTemplateLab()
-  const navigate = useNavigate()
+  const set = useTemplateLab.setState
   const queryClient = useQueryClient()
-  const { chosen, names, choose } = useLabMarket(draft, draft.set, '/labs/template')
+  const { chosen, names, choose } = useLabMarket(draft, set, '/labs/template')
   const [naming, setNaming] = useState<'save-as' | 'rename' | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [opening, setOpening] = useState<Openable | null>(null)
@@ -120,14 +119,12 @@ export function TemplateLabScreen() {
     tree: doc,
     template_name: '',
   }
-  const key = JSON.stringify(previewBody)
-  const settledKey = useDebounced(key, 400)
-  const preview = useQuery({
-    queryKey: ['template-lab', 'preview', settledKey],
-    queryFn: () => templateLab.preview(JSON.parse(settledKey) as TemplateLabRequest),
-    enabled: options.isSuccess && settledKey === key,
-    placeholderData: keepPreviousData,
-  })
+  const { preview, current: planned } = useLabPreview(
+    'template-lab',
+    previewBody,
+    templateLab.preview,
+    { enabled: options.isSuccess, wait: 400 },
+  )
   const plan = preview.data
   const templateProblems = plan?.templateProblems ?? []
   const marketPlan =
@@ -148,30 +145,13 @@ export function TemplateLabScreen() {
   const ready =
     plan !== undefined &&
     chosen &&
-    settledKey === key &&
-    !preview.isFetching &&
+    planned &&
     plan.problems.length === 0 &&
-    simulationsValid(draft, maxSimulations)
+    simulationsValid(draft.simulations, maxSimulations)
 
-  const add = useMutation({
-    mutationFn: (count: number) =>
-      templateLab.addTask({
-        ...previewBody,
-        template_id: saved,
-        template_name: taskName,
-        simulations: count,
-      }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['lab-tasks'] })
-      toast.success('Task Added', {
-        action: {
-          label: 'Open Tasks',
-          onClick: () => void navigate({ to: '/tasks' }),
-        },
-      })
-    },
-    onError: (error) => toast.error(errorMessage(error)),
-  })
+  const add = useAddTask((count: number) =>
+    templateLab.addTask({ ...previewBody, template_name: taskName, simulations: count }),
+  )
   const sync = useMutation({
     mutationFn: () => templateLab.options(true),
     onSuccess: (data) => {
@@ -179,7 +159,6 @@ export function TemplateLabScreen() {
       void refreshTemplates()
       toast.success(`${fmt.int(data.operators.count)} operators synced`)
     },
-    onError: (error) => toast.error(errorMessage(error)),
   })
   const save = useMutation({
     mutationFn: (id: number) =>
@@ -193,9 +172,9 @@ export function TemplateLabScreen() {
       void refreshTemplates()
       toast.success('Template saved')
     },
-    onError: (error) => toast.error(errorMessage(error)),
   })
   const saveAs = useMutation({
+    meta: { inline: true },
     mutationFn: (value: Naming) => templateLab.create({ ...value, tree: doc }),
     onSuccess: (row) => {
       draft.saved(Number(row.id), row.name)
@@ -205,6 +184,7 @@ export function TemplateLabScreen() {
     },
   })
   const rename = useMutation({
+    meta: { inline: true },
     // Renaming keeps the saved blocks; unsaved changes stay unsaved.
     mutationFn: (value: Naming) =>
       templateLab.update(saved ?? 0, { ...value, tree: current?.tree ?? doc }),
@@ -225,7 +205,6 @@ export function TemplateLabScreen() {
       void refreshTemplates()
       toast.success('Template deleted')
     },
-    onError: (error) => toast.error(errorMessage(error)),
   })
 
   const openTemplate = (next: Openable) => {
@@ -359,11 +338,11 @@ export function TemplateLabScreen() {
         ids={draft.datasetIds}
         names={names}
         onChoose={choose}
-        onRemove={(id) => draft.set({ datasetIds: draft.datasetIds.filter((x) => x !== id) })}
+        onRemove={(id) => set({ datasetIds: draft.datasetIds.filter((x) => x !== id) })}
       />
       <SettingsPanel
         draft={draft}
-        set={draft.set}
+        set={set}
         vector={options.data?.vector ?? []}
         chosenVector={vectorOperators}
         decays={options.data?.decays}

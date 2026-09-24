@@ -1,22 +1,20 @@
 /**
- * The assistant: providers, keys and their daily budgets, prompts, the context the model
- * is shown, and the chat. Bodies are snake_case only. Keys never come back — only `hint`.
+ * The assistant: providers, keys and their daily budgets, the prompts it sends, and the chat.
+ * Bodies are snake_case only. Keys never come back — only `hint`.
  */
 
 import type { components } from '@/api/generated'
 import { ApiError, http, qs } from '@/api/http'
-import type { Scope, ScopeBody } from '@/api/types'
+import type { ScopeBody } from '@/api/types'
 import { fmt } from '@/lib/format'
 
 type Schemas = components['schemas']
 
-export type LLMModel = Schemas['LLMModel']
+export type LLMModel = Schemas['ModelInfo']
 export type LLMModels = Schemas['LLMModels']
 export type LLMProvider = Schemas['LLMProvider']
 export type LLMProvidersResponse = Schemas['LLMProviders']
-export type LLMKeyUsage = Schemas['LLMKeyUsage']
 export type LLMKey = Schemas['LLMKey']
-export type LLMBudget = Schemas['LLMBudget']
 export type LLMKeyStatus = Schemas['LLMKeyStatus']
 
 export interface AddKeyRequest {
@@ -29,7 +27,6 @@ export interface AddKeyRequest {
 
 export type KeyCheck = Schemas['KeyWorks'] | Schemas['KeyFailed']
 export type PromptInfo = Schemas['PromptInfo']
-export type LLMContextRendered = Schemas['LLMContextRendered']
 export type Reasoning = Schemas['ChatOptions']['defaultReasoning']
 export type ChatOptions = Schemas['ChatOptions']
 export type ChatThreadSummary = Schemas['ChatThreadSummary']
@@ -92,10 +89,6 @@ export const llm = {
   checkKey: (id: number) => http.post<KeyCheck>(`/api/llm/keys/${id}/check`),
   checkAll: () => http.post<KeyCheck[]>('/api/llm/keys/check'),
   prompts: () => http.get<Schemas['PromptList']>('/api/llm/prompts'),
-  context: (scope: Scope) =>
-    http.get<LLMContextRendered>(
-      `/api/llm/context${qs({ region: scope.region, delay: scope.delay, universe: scope.universe, instrument_type: scope.instrumentType, rendered: true })}`,
-    ),
 }
 
 export const chat = {

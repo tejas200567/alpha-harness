@@ -78,7 +78,8 @@ class AlphaQuery:
     created_after: date | datetime | None = None
     created_before: date | datetime | None = None
 
-    def tokens(self) -> list[str]:
+    def path(self) -> str:
+        """This query against your own alphas."""
         tokens = [f"limit={self.limit}", f"offset={self.offset}"]
         if self.order:
             tokens.append(f"order={quote(self.order, safe='-.')}")
@@ -97,13 +98,7 @@ class AlphaQuery:
                 Filter("dateCreated", "<", _bound(self.created_before, next_day=True)).token()
             )
 
-        return tokens
-
-    def query(self) -> str:
-        return "&".join(self.tokens())
-
-    def path(self, user_id: str = "self") -> str:
-        return f"/users/{user_id}/alphas?{self.query()}"
+        return f"/users/self/alphas?{'&'.join(tokens)}"
 
 
 def _bound(value: date | datetime, *, next_day: bool) -> datetime:

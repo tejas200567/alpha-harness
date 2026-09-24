@@ -5,7 +5,6 @@ import { useNavigate } from '@tanstack/react-router'
 import { CheckIcon, CopyIcon, EllipsisIcon, ExternalLinkIcon, RefreshCwIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { errorMessage } from '@/api/http'
 import { cn } from '@/lib/cn'
 import { fmt } from '@/lib/format'
 import { pool } from '@/screens/pool/api'
@@ -47,7 +46,6 @@ export function RecheckButton({ alphaId }: { alphaId: string }) {
       // Not under the prefix above: the sidebar badge and Dashboard count.
       void queryClient.invalidateQueries({ queryKey: ['pool', 'submittable-count'] })
     },
-    onError: (e) => toast.error(errorMessage(e)),
   })
   return (
     <Button size="sm" loading={mutation.isPending} onClick={() => mutation.mutate()}>
@@ -128,7 +126,10 @@ export function AstInspector({
         className,
       )}
     >
-      <code className="num block min-w-0 flex-1 break-all text-body-compact leading-relaxed text-ink selection:bg-primary-subtle">
+      {/* `pre-wrap`, not the browser's default for `code`, which collapses every run of
+          whitespace: a multi-statement expression is written across lines and reads as one
+          line without it. Still wraps, so a long single line is not pushed off the panel. */}
+      <code className="num block min-w-0 flex-1 break-all whitespace-pre-wrap text-body-compact leading-relaxed text-ink selection:bg-primary-subtle">
         {tokens.map((token, i) => (
           <span key={i} className={AST_CLASS[token.kind]}>
             {token.text}

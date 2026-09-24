@@ -16,13 +16,14 @@ History lives in the database so a conversation survives a restart.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
 from sqlalchemy import select
 
 from ..db.models import ChatMessage, ChatThread, utcnow
-from .context import clip, loads_or
+from .prompts import ASSISTANT
+from .text import clip, loads_or
 
 if TYPE_CHECKING:
     from ..catalog.queries import CatalogQueries, Tuple4
@@ -35,9 +36,11 @@ log = structlog.get_logger(__name__)
 #: short enough that prompt tokens do not eat the per-minute budget.
 HISTORY_TURNS = 12
 
+type Reasoning = Literal["quick", "normal", "careful", "deep"]
+
 #: Reasoning effort, in words rather than token counts. The mapping is to Google's own
 #: thinking levels; the labels are what a consultant sees.
-REASONING: dict[str, dict[str, Any]] = {
+REASONING: dict[Reasoning, dict[str, Any]] = {
     "quick": {
         "level": "MINIMAL",
         "label": "Quick",
@@ -63,7 +66,7 @@ REASONING: dict[str, dict[str, Any]] = {
     },
 }
 
-DEFAULT_REASONING = "normal"
+DEFAULT_REASONING: Reasoning = "normal"
 
 
 def reasoning_options() -> list[dict[str, Any]]:
@@ -91,29 +94,6 @@ FIELD_PICK_SCHEMA: dict[str, Any] = {
     },
     "required": ["reply"],
 }
-
-
-SYSTEM = """\
-You are the research assistant inside Alpha Harness. The person talking to you has no \
-background in finance and will give this ten minutes. Write for them: short sentences, \
-no jargon without a plain-language gloss, never "simply" or "just".
-
-Your job is to turn a hunch into something runnable. They describe an idea in ordinary \
-words; you find the data that could measure it.
-
-You are given a list of the data fields available to them. Use ONLY those names. Never \
-invent one — a made-up field becomes a simulation that fails, and they have a limited \
-number each day.
-
-Return JSON with:
-  "reply"    — two or three sentences. What you think they mean, and what you picked.
-  "picks"    — the fields worth running, each with one plain sentence on why.
-  "datasets" — the dataset ids those fields came from.
-
-Pick between three and ten fields. Fewer is better than padding the list. If nothing in \
-the data fits the idea, say so plainly in "reply", return an empty "picks", and suggest \
-the nearest thing that does exist.
-"""
 
 
 class ChatService:
@@ -181,27 +161,21 @@ class ChatService:
         text: str,
         *,
         scope: Tuple4,
-        model: str | None = None,
-        reasoning: str = DEFAULT_REASONING,
-        dataset_ids: list[str] | None = None,
+        model: str | None,
+        reasoning: Reasoning,
+        dataset_ids: list[str],
     ) -> dict[str, Any]:
-        """One exchange: their words in, a reply and a set of field picks out."""
-        if reasoning not in REASONING:
-            raise ValueError(
-                f"{reasoning!r} is not a reasoning setting. Choose one of: "
-                + ", ".join(REASONING)
-                + "."
-            )
+        """One exchange: their words in, a reply and a set of field picks out.
 
-        thread = None
+        Nothing is stored until the model has answered, so a failed exchange leaves no
+        conversation behind that holds only the question.
+        """
+        history: list[ChatMessage] = []
         if thread_id is not None:
             found = await self.thread(thread_id)
             if found is None:
                 raise ValueError(f"No conversation {thread_id}.")
-            thread, history = found
-        else:
-            thread = await self.start(text, scope)
-            history = []
+            _, history = found
 
         fields, available, catalog_note = await self._field_menu(scope, dataset_ids)
         if not fields:
@@ -209,8 +183,6 @@ class ChatService:
                 f"No data has been downloaded for {scope.label} yet, so there is nothing "
                 "for the assistant to choose from. Download this market first."
             )
-
-        await self._append(thread.id, "user", text)
 
         prompt = "\n\n---\n\n".join(
             [
@@ -221,7 +193,7 @@ class ChatService:
         )
 
         answer = await self.llm.generate(
-            system=SYSTEM,
+            system=ASSISTANT,
             user=prompt,
             model_id=model,
             temperature=0.6,
@@ -237,8 +209,11 @@ class ChatService:
         if dropped:
             log.warning("chat.invented_fields", fields=dropped[:10], scope=scope.label)
 
+        if thread_id is None:
+            thread_id = (await self.start(text, scope)).id
+        await self._append(thread_id, "user", text)
         await self._append(
-            thread.id,
+            thread_id,
             "assistant",
             parsed["reply"],
             picks=kept,
@@ -251,16 +226,16 @@ class ChatService:
             reasoning=reasoning,
             tokens=answer.total_tokens,
         )
-        await self._touch(thread.id)
+        await self._touch(thread_id)
 
         return {
-            "threadId": thread.id,
+            "threadId": thread_id,
             "reply": parsed["reply"],
             "picks": kept,
             "datasets": parsed["datasets"],
             "dropped": dropped,
             "catalogNote": catalog_note,
-            "usage": answer.to_dict()["usage"],
+            "usage": answer.usage,
             "model": answer.model,
             "reasoning": reasoning,
         }

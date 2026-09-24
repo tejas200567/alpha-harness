@@ -22,7 +22,6 @@ export type FieldPage = Schemas['FieldPage']
 export type DataFieldDetail = Schemas['DataFieldDetail']
 export type FieldAvailabilityRow = Schemas['FieldAvailabilityRow']
 export type DatasetRow = Schemas['DatasetRow']
-export type PyramidCell = Schemas['PyramidCell']
 export type PyramidGridData = Schemas['PyramidGrid']
 
 /** Unknown keys sort by alpha_count on the backend. */
@@ -68,8 +67,7 @@ export const catalog = {
     http.get<DataFieldDetail>(`${B}/fields/${encodeURIComponent(id)}${scopeQs(s)}`),
   availability: (id: string) =>
     http.get<FieldAvailabilityRow[]>(`${B}/fields/${encodeURIComponent(id)}/availability`),
-  datasets: (s: Scope, search?: string) =>
-    http.get<DatasetRow[]>(`${B}/datasets${scopeQs(s, { search })}`),
+  datasets: (s: Scope) => http.get<DatasetRow[]>(`${B}/datasets${scopeQs(s)}`),
 
   pyramids: () => http.get<PyramidGridData>(`${B}/pyramids`),
 }

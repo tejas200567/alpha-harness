@@ -3,25 +3,23 @@
  * categories, whole subcategories or single datasets. Syncing lives in Sync with BRAIN.
  */
 
-import { Link, useNavigate, useParams } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { fmt } from '@/lib/format'
 import { useScope } from '@/lib/scope'
 import { useDatasetPick } from '@/screens/data/dataset-pick'
-import { Button, Empty, LINK, Metric, Page, PageHeader, Panel } from '@/ui/kit'
+import { Button, Metric, Page, PageHeader } from '@/ui/kit'
 import { FieldsTab } from './fields'
 import { MarketBar } from './market'
 
 export function DataScreen() {
-  const { tab } = useParams({ from: '/data/$tab' })
   const [scope, update] = useScope('data')
   const picking = useDatasetPick((s) => s.active)
-  const follow = useDatasetPick((s) => s.follow)
 
-  // A pick follows the market shown here: another region or delay empties it.
+  // A pick follows the market shown here.
   useEffect(() => {
-    if (picking) follow(scope)
-  }, [picking, follow, scope])
+    if (picking) useDatasetPick.getState().follow(scope)
+  }, [picking, scope])
 
   return (
     <Page>
@@ -31,17 +29,7 @@ export function DataScreen() {
       />
       {picking && <PickBar />}
       <MarketBar scope={scope} update={update} />
-      {tab === 'fields' ? (
-        <FieldsTab scope={scope} />
-      ) : (
-        <Panel>
-          <Empty title={`There is no “${tab}” tab`}>
-            <Link to="/data/$tab" params={{ tab: 'fields' }} className={LINK}>
-              Open Fields
-            </Link>
-          </Empty>
-        </Panel>
-      )}
+      <FieldsTab scope={scope} />
     </Page>
   )
 }

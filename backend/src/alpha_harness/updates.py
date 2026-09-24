@@ -27,7 +27,7 @@ from importlib.metadata import version as installed_version
 from pathlib import Path
 from typing import Any
 
-import httpx
+import httpx2
 import structlog
 from packaging.version import InvalidVersion, Version
 
@@ -164,7 +164,7 @@ async def _ask() -> tuple[Release | None, str | None]:
     release: Release | None = None
     problem: str | None = None
     try:
-        async with httpx.AsyncClient(timeout=CHECK_TIMEOUT) as client:
+        async with httpx2.AsyncClient(timeout=CHECK_TIMEOUT) as client:
             response = await client.get(
                 RELEASES_URL,
                 headers={
@@ -185,7 +185,7 @@ async def _ask() -> tuple[Release | None, str | None]:
             release = _read(response.json())
             if release is None:
                 problem = "GitHub's answer did not name a version."
-    except httpx.HTTPError as exc:
+    except httpx2.HTTPError as exc:
         problem = f"Could not reach GitHub: {exc}"
 
     _cache = (time.monotonic(), release, problem)
@@ -264,21 +264,25 @@ def request(version: str, *, wheel_url: str | None = None) -> Path:
     return path
 
 
+def _launcher_json(name: str) -> dict[str, Any]:
+    """One of the launcher's JSON files, or nothing when it is absent or unreadable."""
+    home = launcher_home()
+    if home is None:
+        return {}
+    try:
+        body = json.loads((home / name).read_text(encoding="utf-8"))
+    except OSError, ValueError:
+        return {}
+    return body if isinstance(body, dict) else {}
+
+
 def last_failure() -> str | None:
     """Why the launcher could not install the last requested version, if it could not.
 
     Without this an install that failed leaves the same Update button on screen and no
     account of why nothing changed.
     """
-    home = launcher_home()
-    if home is None:
-        return None
-    try:
-        body = json.loads((home / ERROR_FILE).read_text(encoding="utf-8"))
-    except OSError, ValueError:
-        return None
-    if not isinstance(body, dict):
-        return None
+    body = _launcher_json(ERROR_FILE)
     version, reason = body.get("version"), body.get("error")
     if not isinstance(reason, str):
         return None
@@ -287,12 +291,5 @@ def last_failure() -> str | None:
 
 def pending() -> str | None:
     """The version already requested and not yet installed, if any."""
-    home = launcher_home()
-    if home is None:
-        return None
-    try:
-        body = json.loads((home / REQUEST_FILE).read_text(encoding="utf-8"))
-    except OSError, ValueError:
-        return None
-    wanted = body.get("version") if isinstance(body, dict) else None
+    wanted = _launcher_json(REQUEST_FILE).get("version")
     return wanted if isinstance(wanted, str) else None

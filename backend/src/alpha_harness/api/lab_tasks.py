@@ -7,8 +7,9 @@ stopped, changed or removed. Search Lab, Template Lab and Evolution Lab add sche
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
@@ -16,14 +17,27 @@ from sqlalchemy import func, or_, select
 
 from ..db.models import SimStatus, SimulationRecord, Study, StudyStatus, Trial, TrialState, utcnow
 from ..labs import scheduler, search
-from ..labs.objectives import OBJECTIVES, StudyNotFoundError
-from ..labs.params import TASK_SAMPLERS, TEMPLATE_SAMPLER, task_params
+from ..labs.objectives import FAILURE, OBJECTIVES, StudyNotFoundError
+from ..labs.params import (
+    CORRELATION_BREAKER,
+    SETTINGS_SAMPLER,
+    TASK_SAMPLERS,
+    TEMPLATE_SAMPLER,
+    task_params,
+)
 from ..labs.study import ranked
 from ..schemas import Out
-from ..vault.yields import checks_of, verdict
+from ..tasks import Task
+from ..tools import power_pool
+from ..tools.submission_planner import ESCAPE
+from ..vault.yields import checks_of, clean, is_submitted, verdict
 from .deps import State, refuse
 
 router = APIRouter(prefix="/api/lab-tasks", tags=["lab-tasks"])
+
+#: Labs that vary settings around one fixed expression, so ``template_source`` is that
+#: expression rather than a skeleton to search.
+ONE_EXPRESSION = frozenset({SETTINGS_SAMPLER, CORRELATION_BREAKER})
 
 #: Where a task can be run from: never started, paused, or failed. A failed task may have
 #: sent simulations that finished after it stopped; running it again scores them.
@@ -56,6 +70,11 @@ class LabTask(Out):
     markets: int | None = None
     truncation: float | None = None
     nan_handling: str | None = None
+    test_period: str | None = None
+    #: The expression every simulation in the task ran, for the tasks that have one: the
+    #: Settings Sampler and the Correlation Breaker vary settings around a fixed expression.
+    #: Null for a lab that searches expressions, where there is no single answer.
+    expression: str | None = None
     #: Evolution Lab only: its market's universe, seeds, population and mutation rate.
     universe: str | None
     seeds: int
@@ -77,6 +96,9 @@ class LabTask(Out):
     best: float | None
     objective_label: str
     created_at: str | None
+    #: When Run was pressed. A task then waits for its cores, which can be a long time and is
+    #: not running time -- the two are shown apart rather than added together.
+    queued_at: str | None = None
     #: When it first began running, which is where elapsed time is measured from.
     started_at: str | None
     finished_at: str | None
@@ -108,8 +130,19 @@ class RankedAlpha(Out):
     #: From the vault, which holds every simulated Alpha; a trial's own stats may lack them.
     long_count: int | None = None
     short_count: int | None = None
+    #: The after-cost t-stat over sqrt(10): the Sharpe once 5 bps is charged against each
+    #: day's own turnover, scaled by sqrt(years of data / 10) so fewer years prove less. Null
+    #: until the daily PnL *and* turnover are stored.
+    after_cost_sharpe: float | None = None
     feasible: bool | None
     failed_checks: list[str]
+    #: Of ``failed_checks``, those that gate submission. A check BRAIN fails for a reason
+    #: that is nothing to do with the Alpha is left out, so an empty list means submittable.
+    refused_by: list[str]
+    #: Already on the platform. It is still a result of this task, so it is listed, but it
+    #: is no longer a candidate: its Power Pool correlation is measured against a pool it is
+    #: itself in, and self-correlation is excluded, so the figure shown is its *next* closest.
+    submitted: bool = False
     #: Nothing BRAIN has reported refuses it: no FAIL and no ERROR.
     submittable: bool
     #: Submittable only because a check has not answered yet. The Submission Planner waits for
@@ -117,6 +150,70 @@ class RankedAlpha(Out):
     pending: bool = False
     #: The Alpha the sweep started from, kept first as its reference point.
     source: bool = False
+
+
+class WorkflowStarted(Out):
+    task_id: str
+
+
+class AlphaIds(BaseModel):
+    """An explicit set of Alphas, for the panes that are not one task's results."""
+
+    alpha_ids: list[str] = Field(min_length=1, max_length=20_000, alias="alphaIds")
+
+    model_config = {"populate_by_name": True}
+
+
+class PowerPoolRow(Out):
+    """One of the task's Alphas, against the submitted Power Pool of its own region."""
+
+    alpha_id: str
+    region: str
+    universe: str | None
+    delay: int | None
+    sharpe: float | None
+    #: Its highest correlation with a pool member; null when none shared enough days.
+    correlation: float | None
+    #: Pool members it was compared against.
+    against: int
+    #: The member it correlates most with, and that member's Sharpe.
+    closest: str | None
+    closest_sharpe: float | None
+    #: The Sharpe it would need to clear *every* collision at or above the ceiling, which is
+    #: not always the closest one's. Null below the ceiling, where there is nothing to beat.
+    needed: float | None
+    #: ``clear`` below the ceiling, ``beats`` above it but past the Sharpe rule, ``blocked``
+    #: above it without the Sharpe, ``unmeasured`` when no pair shared enough days.
+    verdict: Literal["clear", "beats", "blocked", "unmeasured"]
+
+
+class PowerPoolScope(Out):
+    """One region: the pool its Alphas are measured against."""
+
+    region: str
+    #: The submitted Power Pool Alphas of this region, whatever their delay or universe.
+    pool: list[str]
+    #: Of those, with no stored series, so they could not be measured. A sync downloads them.
+    pool_without_pnl: list[str]
+
+
+class PowerPoolCorrelation(Out):
+    """What the Power Pool panel shows for one task."""
+
+    ceiling: float
+    sharpe_edge: float
+    #: Submitted Power Pool Alphas held locally, across every market.
+    pool_size: int
+    #: The task's Alphas BRAIN treats as Power Pool eligible, and the rest, which this
+    #: measurement has nothing to say about.
+    power_pool_alphas: int
+    other_alphas: int
+    #: Of the Power Pool ones, those with no stored series yet.
+    without_pnl: list[str]
+    #: One entry per measured Alpha, flat: the table that shows these is a list of Alphas,
+    #: not a list of regions, and the region is on the row already.
+    rows: list[PowerPoolRow]
+    scopes: list[PowerPoolScope]
 
 
 async def _rows(state: Any) -> list[Study]:
@@ -173,7 +270,7 @@ async def _progress(state: Any, ids: list[int]) -> dict[int, dict[str, Any]]:
             .where(
                 Trial.study_id.in_(ids),
                 Trial.state == TrialState.COMPLETE,
-                value > OBJECTIVES["sharpe"].failure_value,
+                value > FAILURE,
                 or_(Trial.generation.is_(None), Trial.generation != 0),
             )
             .group_by(Trial.study_id)
@@ -212,6 +309,8 @@ def _task(row: Study, progress: dict[str, Any]) -> LabTask:
             "markets": params.get("markets"),
             "truncation": params.get("truncation"),
             "nanHandling": params.get("nanHandling"),
+            "testPeriod": params.get("testPeriod"),
+            "expression": row.template_source if row.sampler in ONE_EXPRESSION else None,
             "cores": scheduler.cores_of(row),
             "datasetIds": params.get("datasetIds") or [],
             "fields": len((params.get("space") or {}).get("fields") or {}),
@@ -225,6 +324,7 @@ def _task(row: Study, progress: dict[str, Any]) -> LabTask:
             "best": progress["best"],
             "objectiveLabel": objective.label,
             "createdAt": row.created_at.isoformat() if row.created_at else None,
+            "queuedAt": params.get("queuedAt"),
             "startedAt": row.started_at.isoformat() if row.started_at else None,
             "finishedAt": row.finished_at.isoformat() if row.finished_at else None,
         }
@@ -251,24 +351,20 @@ async def _queue(state: Any, ids: list[int]) -> None:
     async with contextlib.AsyncExitStack() as stack:
         for task_id in sorted(ids):
             await stack.enter_async_context(state.optimizer.lock(task_id))
-        await _mark_queued(state, ids, queued_at)
+        async with state.db.session() as session:
+            for task_id in ids:
+                row = await session.get(Study, task_id)
+                if row is not None and row.status in RUNNABLE:
+                    if row.status == StudyStatus.FAILED:
+                        row.message = None
+                        row.finished_at = None
+                    row.status = StudyStatus.QUEUED
+                    params = task_params(row)
+                    params.queued_at = queued_at
+                    row.sampler_params = params.dump()
+            await session.commit()
     await scheduler.start_waiting(state.optimizer)
     await state.optimizer.notify()
-
-
-async def _mark_queued(state: Any, ids: list[int], queued_at: str) -> None:
-    async with state.db.session() as session:
-        for task_id in ids:
-            row = await session.get(Study, task_id)
-            if row is not None and row.status in RUNNABLE:
-                if row.status == StudyStatus.FAILED:
-                    row.message = None
-                    row.finished_at = None
-                row.status = StudyStatus.QUEUED
-                params = task_params(row)
-                params.queued_at = queued_at
-                row.sampler_params = params.dump()
-        await session.commit()
 
 
 @router.post("/run-all")
@@ -277,6 +373,64 @@ async def run_all(state: State) -> LabTasks:
     fresh = sorted(r.id for r in await _rows(state) if r.status == StudyStatus.IDLE)
     await _queue(state, fresh)
     return await list_tasks(state)
+
+
+# Registered before the ``/{task_id}`` routes: that path matches any single segment, so a
+# literal one declared after it is never reached and answers 405 instead.
+@router.post("/power-pool-workflow", status_code=202)
+async def power_pool_workflow(body: AlphaIds, state: State) -> WorkflowStarted:
+    """Narrow these Alphas in three steps, each on what the one before kept: unsubmitted, then
+    no check FAIL or ERROR, then Power Pool Correlation passed. The survivors get After-Cost
+    Sharpe.
+
+    PnL alone decides Power Pool Correlation, so it comes first: two requests per Alpha (BRAIN
+    answers the first with a Retry-After while it builds the series), and only in a region
+    where a submitted Power Pool Alpha exists to collide with. Turnover and yearly-stats, one
+    each, follow only for the Alphas that pass: After-Cost Sharpe on one the Power Pool
+    refuses is requests spent on nothing. None of it spends quota.
+    """
+    alpha_ids = list(dict.fromkeys(body.alpha_ids))
+
+    async def work(task: Task) -> str:
+        stored = await state.alphas.by_ids(alpha_ids)
+        unsubmitted = [a for a in alpha_ids if a in stored and not is_submitted(stored[a])]
+        survivors = [a for a in unsubmitted if clean(checks_of(stored[a].get("checks")))]
+        # Only an Alpha BRAIN judges as Power Pool is measured, so only its PnL is fetched.
+        judged = [a for a in survivors if power_pool.is_power_pool(stored[a])]
+        pool = await _pool_members(state)
+        wanted = {power_pool.scope_of(stored[a]) for a in judged}
+        contested = ({power_pool.scope_of(r) for r in pool.values()} & wanted) - {None}
+        need = [a for a in judged if power_pool.scope_of(stored[a]) in contested] + [
+            a for a, r in pool.items() if power_pool.scope_of(r) in contested
+        ]
+        failed = await state.backfill.fetch_each(
+            task, await state.alphas.lacking_pnl(need), state.backfill.fetch_pnl, what="PnL"
+        )
+        found = await _power_pool(state, judged)
+        passed = [r.alpha_id for r in found.rows if r.verdict in SATISFIED]
+        failed += await state.backfill.fetch_each(
+            task,
+            await state.alphas.lacking_series(passed),
+            state.backfill.fetch_returns,
+            what="Turnover",
+        )
+        detail = (
+            f"{len(unsubmitted)} Unsubmitted Alphas → {len(survivors)} with no Checks FAIL or "
+            f"ERROR → {len(passed)} Pass Power Pool Correlation"
+        )
+        return detail + (f". {len(failed)} could not be downloaded" if failed else "")
+
+    try:
+        started = await state.backfill.start_job("power-pool-workflow", "Power Pool Workflow", work)
+    except RuntimeError as exc:
+        raise refuse(409, "already_running", str(exc)) from exc
+    return WorkflowStarted(task_id=started)
+
+
+@router.post("/power-pool-correlation")
+async def power_pool_correlation_for(body: AlphaIds, state: State) -> PowerPoolCorrelation:
+    """The same measurement over an explicit set of Alphas, for the panes that span tasks."""
+    return await _power_pool(state, body.alpha_ids)
 
 
 @router.post("/{task_id}/run")
@@ -377,7 +531,7 @@ async def top(
     limit: Annotated[int, Query(ge=1, le=5000)] = 20,
 ) -> list[RankedAlpha]:
     """The task's best Alphas on what it searches for. Seeds are not among them."""
-    row = await _one(state, task_id)
+    await _one(state, task_id)  # 404 for an unknown task
     async with state.db.session() as session:
         best = list(
             (
@@ -395,16 +549,111 @@ async def top(
         )
     stored = await state.alphas.by_ids([t.alpha_id for t in best if t.alpha_id])
     current = {a: checks_of(r.get("checks")) for a, r in stored.items() if r.get("checks")}
+    # No download is started from here. Reading a page is not asking for one, and these are
+    # three BRAIN requests per Alpha: enough of them earns a 429, which pauses *every* caller
+    # of the shared client -- the simulation engine's dispatch and polling included. Calculate
+    # After-Cost Sharpe is the way to ask, and it says how many it will fetch before it does.
     return [
         RankedAlpha.model_validate(
             r
             | {
                 "longCount": (stored.get(r["alphaId"]) or {}).get("long_count"),
                 "shortCount": (stored.get(r["alphaId"]) or {}).get("short_count"),
+                "afterCostSharpe": (stored.get(r["alphaId"]) or {}).get("after_cost_t10"),
+                "submitted": is_submitted(stored.get(r["alphaId"])),
             }
         )
-        for r in ranked(best, row.directions, current)
+        for r in ranked(best, current)
     ]
+
+
+#: Verdicts that let an Alpha into the Power Pool on correlation.
+SATISFIED = frozenset({"clear", "beats"})
+
+
+async def _pool_members(state: State) -> dict[str, dict[str, Any]]:
+    """Your submitted Power Pool Alphas, by id."""
+    submitted = await state.alphas.by_ids(
+        [str(r["alpha_id"]) for r in await state.alphas.submitted_members()]
+    )
+    return {a: r for a, r in submitted.items() if power_pool.is_power_pool(r)}
+
+
+async def _power_pool(state: State, alpha_ids: list[str]) -> PowerPoolCorrelation:
+    """Correlate these Alphas against the submitted Power Pool, region by region."""
+    pool_meta = await _pool_members(state)
+    stored = await state.alphas.by_ids(list(dict.fromkeys(alpha_ids)))
+    # BRAIN attaches POWER_POOL_CORRELATION only to Alphas it would judge this way, so the
+    # rest of the sweep is nothing to do with the Power Pool and is counted, not measured.
+    candidates = {a: r for a, r in stored.items() if power_pool.is_power_pool(r)}
+    grid = await state.alphas.pnl_grid([*candidates, *pool_meta])
+    has_pnl = set(grid[0])
+
+    by_region: dict[str, list[str]] = {}
+    for alpha_id, r in pool_meta.items():
+        region = power_pool.scope_of(r)
+        if region is not None:
+            by_region.setdefault(region, []).append(alpha_id)
+
+    meta = candidates | pool_meta
+    without_pnl: list[str] = []
+    wanted: dict[str, list[str]] = {}
+    # A region with nothing submitted in it needs no series and no arithmetic: there is
+    # nothing for its Alphas to be correlated against, so each one is the first of its region
+    # and clear on this rule. Leaving them out read as a refusal, which is the opposite.
+    unopposed: dict[str, list[str]] = {}
+    for alpha_id in dict.fromkeys(alpha_ids):
+        row = candidates.get(alpha_id)
+        region = power_pool.scope_of(row) if row else None
+        if region is None:
+            continue
+        if region not in by_region:
+            unopposed.setdefault(region, []).append(alpha_id)
+            continue
+        # The region is listed even when none of its Alphas can be measured yet, so its
+        # scope still names the pool members a Portfolio sync has not downloaded.
+        measurable = wanted.setdefault(region, [])
+        if alpha_id in has_pnl:
+            measurable.append(alpha_id)
+        else:
+            without_pnl.append(alpha_id)
+
+    # Nothing is downloaded here: an Alpha with no series is reported in ``without_pnl`` and
+    # left out, and the Power Pool Workflow fetches it when the reader wants it.
+
+    scopes: list[PowerPoolScope] = []
+    measured: list[PowerPoolRow] = [
+        PowerPoolRow.model_validate(r | {"region": region})
+        for region, ids in unopposed.items()
+        for r in power_pool.correlate(grid, meta, ids, [])
+    ]
+    scopes.extend(
+        PowerPoolScope(region=region, pool=[], pool_without_pnl=[]) for region in unopposed
+    )
+    for region in sorted(wanted, key=lambda r: (-len(wanted[r]), r)):
+        members = by_region[region]
+        # Every member, synced or not: a member without PnL is a collision nobody measured,
+        # and an unsynced pool must read as unmeasured, not as an empty one.
+        found = await asyncio.to_thread(power_pool.correlate, grid, meta, wanted[region], members)
+        measured.extend(PowerPoolRow.model_validate(r | {"region": region}) for r in found)
+        scopes.append(
+            PowerPoolScope(
+                region=region,
+                pool=members,
+                pool_without_pnl=[m for m in members if m not in has_pnl],
+            )
+        )
+
+    return PowerPoolCorrelation(
+        ceiling=power_pool.CEILING,
+        sharpe_edge=ESCAPE,
+        pool_size=len(pool_meta),
+        power_pool_alphas=len(candidates),
+        other_alphas=len(stored) - len(candidates),
+        without_pnl=without_pnl,
+        rows=measured,
+        scopes=scopes,
+    )
 
 
 class TaskAlpha(RankedAlpha):
@@ -446,7 +695,7 @@ async def submittable_alphas(state: State) -> list[TaskAlpha]:
     by_trial = {t.id: t.study_id for t in trials}
     out: list[TaskAlpha] = []
     seen: set[str] = set()
-    for r in ranked(trials, None, current):
+    for r in ranked(trials, current):
         alpha_id = str(r["alphaId"])
         if not r["submittable"] or alpha_id in seen:
             continue
@@ -459,6 +708,8 @@ async def submittable_alphas(state: State) -> list[TaskAlpha]:
                 | {
                     "longCount": vault.get("long_count"),
                     "shortCount": vault.get("short_count"),
+                    "afterCostSharpe": vault.get("after_cost_t10"),
+                    "submitted": is_submitted(vault),
                     "taskId": task.id,
                     "taskName": task.template_name or TASK_SAMPLERS.get(task.sampler, task.sampler),
                 }

@@ -186,9 +186,7 @@ def first_pass(space: dict[str, Any], field_id: str) -> dict[str, Any]:
     return {"universe": universe, f"field@{universe}": field_id}
 
 
-def suggest(
-    trial: Any, space: dict[str, Any], choices: dict[str, list[str]] | None = None
-) -> dict[str, Any]:
+def suggest(trial: Any, space: dict[str, Any], choices: dict[str, list[str]]) -> dict[str, Any]:
     """One point, asked define-by-run: each choice exists only where its shape needs it.
 
     Names are shared across shapes (``ts`` and ``d`` are the same slot in every shape that
@@ -197,7 +195,6 @@ def suggest(
     field from that universe's own slot, so a field is never paired with a universe that
     lacks it.
     """
-    choices = choices or field_choices(space)
     fields: dict[str, str] = space["fields"]
     universes = list(space["universes"])
     universe = (
@@ -252,12 +249,6 @@ def request_for(params: dict[str, Any], run: SearchParams) -> SimulationRequest:
         ),
         regular=render(params),
     )
-
-
-def identity(request: SimulationRequest) -> tuple[str, str]:
-    """What makes two points the same simulation: expression and normalised settings."""
-    settings = request.settings.model_dump(by_alias=True, exclude_none=True)
-    return identity_of(request.regular, settings)
 
 
 def identity_of(expression: str | None, settings: dict[str, Any] | None) -> tuple[str, str]:

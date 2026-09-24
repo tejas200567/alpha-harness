@@ -4,23 +4,12 @@
  * the trailing year against the submission cutoff. Figures stay neutral; loss is the only hue.
  */
 
-import {
-  BaselineSeries,
-  ColorType,
-  createChart,
-  createSeriesMarkers,
-  LineSeries,
-  LineStyle,
-  type Time,
-} from 'lightweight-charts'
+import { createSeriesMarkers, LineSeries, LineStyle, type Time } from 'lightweight-charts'
 import { useEffect, useRef } from 'react'
-import { color, theme } from '@/screens/pool/pnl-chart'
+import { addUnderwater, baseChart, color, compact, zeroLine } from '@/screens/pool/pnl-chart'
 import type { Point } from './analysis'
 
 export type ChartView = 'pnl' | 'underwater' | 'sharpe'
-
-const compact = (price: number) =>
-  new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(price)
 
 export function AlphaChart({
   view,
@@ -51,22 +40,9 @@ export function AlphaChart({
   useEffect(() => {
     const node = element.current
     if (!node) return
-    const hairline = color('color-hairline')
     const guide = color('color-ink-tertiary')
-    const chart = createChart(node, {
-      autoSize: true,
-      layout: {
-        background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: color('color-ink-subtle'),
-        fontFamily: theme('font-mono'),
-        fontSize: 11,
-        attributionLogo: false,
-      },
-      grid: { vertLines: { visible: false }, horzLines: { color: hairline } },
-      rightPriceScale: { borderVisible: false },
-      // Ten years of days is ~2,500 bars; the default 0.5px minimum cannot fit them, and the
-      // chart silently drops the early years instead.
-      timeScale: { borderVisible: false, minBarSpacing: 0.01 },
+    const chart = baseChart(node)
+    chart.applyOptions({
       localization: {
         priceFormatter:
           view === 'underwater'
@@ -75,27 +51,8 @@ export function AlphaChart({
               ? (p: number) => p.toFixed(2)
               : compact,
       },
-      crosshair: {
-        vertLine: {
-          color: guide,
-          style: LineStyle.Dashed,
-          labelBackgroundColor: color('color-surface-4'),
-        },
-        horzLine: {
-          color: guide,
-          style: LineStyle.Dashed,
-          labelBackgroundColor: color('color-surface-4'),
-        },
-      },
     })
     const at = (points: Point[]) => points.map((p) => ({ time: p.date as Time, value: p.value }))
-    const zero = {
-      price: 0,
-      color: guide,
-      lineStyle: LineStyle.Dotted,
-      lineWidth: 1 as const,
-      axisLabelVisible: false,
-    }
 
     if (view === 'pnl') {
       if (constrained.length > 1) {
@@ -136,7 +93,7 @@ export function AlphaChart({
       series.setData(
         pnl.map((p) => ({ time: p.date as Time, value: p.value, color: held(p) ? ink : trained })),
       )
-      series.createPriceLine(zero)
+      series.createPriceLine(zeroLine())
       const first = testStart === null ? undefined : pnl.find(held)
       if (first) {
         createSeriesMarkers(series, [
@@ -150,20 +107,7 @@ export function AlphaChart({
         ])
       }
     } else if (view === 'underwater') {
-      const loss = 'color-pnl-negative'
-      chart
-        .addSeries(BaselineSeries, {
-          baseValue: { type: 'price', price: 0 },
-          topLineColor: 'transparent',
-          topFillColor1: 'transparent',
-          topFillColor2: 'transparent',
-          bottomLineColor: color(loss),
-          bottomFillColor1: color(loss, 0.05),
-          bottomFillColor2: color(loss, 0.35),
-          lineWidth: 1,
-          priceLineVisible: false,
-        })
-        .setData(at(underwater))
+      addUnderwater(chart, undefined, { lastValueVisible: true }).setData(at(underwater))
     } else {
       const series = chart.addSeries(LineSeries, {
         color: color('color-ink'),
@@ -172,7 +116,7 @@ export function AlphaChart({
         title: 'Sharpe, trailing year',
       })
       series.setData(at(sharpe))
-      series.createPriceLine(zero)
+      series.createPriceLine(zeroLine())
       if (cutoff !== null) {
         series.createPriceLine({
           price: cutoff,

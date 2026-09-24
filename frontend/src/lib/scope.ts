@@ -44,6 +44,10 @@ export const runsRegionAgnostic = (scope: { region: string }): boolean =>
 export const regionLabel = (region: string): string =>
   region === REGION_AGNOSTIC ? 'All Regions' : region
 
+/** One market as a single string, for sets and select values. */
+export const marketKey = (m: { region: string; delay: number; universe: string }): string =>
+  `${m.region}|${m.delay}|${m.universe}`
+
 /** A stored scope, or the default when there is none. */
 const usable = (scope: Scope | undefined): Scope => scope ?? DEFAULT_SCOPE
 
@@ -74,8 +78,8 @@ export function useScope(key: string): [Scope, (change: Partial<Scope>) => void]
   return [scope, update]
 }
 
-export interface Choice {
-  value: string
+export interface Choice<V extends string = string> {
+  value: V
   label: string
 }
 
