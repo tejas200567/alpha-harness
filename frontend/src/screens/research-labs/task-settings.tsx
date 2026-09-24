@@ -195,13 +195,13 @@ export function SettingsPanel({
               />
             </Fieldset>
           )}
-          <Setting label="Visualization">
+          <Fieldset legend="Visualization">
             <Checkbox
               label="Enabled"
               checked={draft.visualization}
-              onChange={(e) => set({ visualization: e.target.checked })}
+              onChange={(checked) => set({ visualization: checked })}
             />
-          </Setting>
+          </Fieldset>
         </div>
         {neutralizations.length > 0 && (
           <NeutralizationPicker

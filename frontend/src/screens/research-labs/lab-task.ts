@@ -36,6 +36,7 @@ export const LAB_DEFAULTS: LabDraft = {
   decay: 0,
   vectorOperators: null,
   neutralizations: [],
+  visualization: false,
 }
 
 export const MAX_SIMULATIONS = 100_000

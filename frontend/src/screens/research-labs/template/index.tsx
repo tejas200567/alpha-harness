@@ -1,3 +1,5 @@
+import { useNavigate } from '@tanstack/react-router'
+import { errorMessage } from '@/api/http'
 /**
  * Template Lab: open a template, change it with blocks, choose datasets and settings, then
  * add its search to Tasks. The lab tries each choice and variable value the template
@@ -258,7 +260,11 @@ export function TemplateLabScreen() {
               <PlusIcon />
               Add Task
             </Button>
-            <Button variant="secondary" disabled={doc.root === null} onClick={() => setRaaOpen(true)}>
+            <Button
+              variant="secondary"
+              disabled={doc.root === null}
+              onClick={() => setRaaOpen(true)}
+            >
               RAA Batch
             </Button>
           </>
@@ -392,7 +398,6 @@ export function TemplateLabScreen() {
         open={raaOpen}
         onOpenChange={setRaaOpen}
         tree={doc}
-        templateId={saved}
         templateName={taskName}
         vectorOperators={vectorOperators}
         decay={draft.decay}
@@ -410,7 +415,6 @@ function RaaBatchDialog({
   open,
   onOpenChange,
   tree,
-  templateId,
   templateName,
   vectorOperators,
   decay,
@@ -423,7 +427,6 @@ function RaaBatchDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
   tree: TemplateDoc
-  templateId: string | number | null
   templateName: string
   vectorOperators: string[]
   decay: number
@@ -442,7 +445,6 @@ function RaaBatchDialog({
     mutationFn: () =>
       templateLab.addTask({
         tree,
-        template_id: typeof templateId === 'number' ? templateId : null,
         template_name: templateName,
         region: 'ALL',
         delay: 1,
