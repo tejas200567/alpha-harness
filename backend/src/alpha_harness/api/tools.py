@@ -863,6 +863,9 @@ class RaFromTask(_Body):
     min_score: float | None = None
     #: Skip implausibly high scores: usually degenerate Alphas.
     max_score: float | None = None
+    #: One expression per field set, the best-scoring: variants of one field succeed
+    #: or fail together, so each costs RA quota for little new information.
+    distinct_fields: bool = True
     #: Report what would be queued and spend nothing. On unless turned off.
     dry_run: bool = True
 
@@ -925,6 +928,7 @@ async def raa_from_task(body: RaFromTask, state: State) -> RaFromTaskResult:
     requests: list[Any] = []
     sample: list[str] = []
     seen: set[str] = set()
+    fields_seen: set[frozenset[str]] = set()
     neutralizations: set[str] = set()
     one_region = duplicates = 0
     for expression, settings, _value in rows:
@@ -937,6 +941,14 @@ async def raa_from_task(body: RaFromTask, state: State) -> RaFromTaskResult:
             duplicates += 1
             continue
         seen.add(expression)
+        if body.distinct_fields:
+            key = frozenset(
+                w for w in region_agnostic._identifiers(expression) if w in coverage
+            )
+            if key in fields_seen:
+                duplicates += 1
+                continue
+            fields_seen.add(key)
         found = region_agnostic.plan(
             expression=expression, universe=body.universe, coverage=coverage
         )

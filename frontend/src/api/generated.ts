@@ -4510,6 +4510,11 @@ export interface components {
              */
             cores: number;
             /**
+             * Distinct Fields
+             * @default true
+             */
+            distinct_fields: boolean;
+            /**
              * Dry Run
              * @default true
              */
