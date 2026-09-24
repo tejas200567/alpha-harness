@@ -415,16 +415,19 @@ async def _power_pool_candidates(state: State, task_ids: list[int]) -> tuple[lis
             if n in by_name
         )
         sub_universe_pass = by_name.get("LOW_SUB_UNIVERSE_SHARPE", {}).get("result") != "FAIL"
-        robust_key = next(
-            (k for k in by_name if k.startswith("LOW_ROBUST_UNIVERSE_SHARPE")), None
-        )
+        robust_key = next((k for k in by_name if k.startswith("LOW_ROBUST_UNIVERSE_SHARPE")), None)
         robust_pass = by_name.get(robust_key, {}).get("result") != "FAIL" if robust_key else True
         flag = info.degenerate_warning
         good = (
-            sharpe is not None and sharpe >= 1.0
-            and ops is not None and ops <= 8
-            and fields is not None and fields <= 3
-            and turnover_pass and sub_universe_pass and robust_pass
+            sharpe is not None
+            and sharpe >= 1.0
+            and ops is not None
+            and ops <= 8
+            and fields is not None
+            and fields <= 3
+            and turnover_pass
+            and sub_universe_pass
+            and robust_pass
             and flag is None
         )
         if good:
@@ -660,22 +663,14 @@ async def superalpha_preview(
 ) -> SuperAlphaPreview:
     problems: list[str] = []
 
-    selection = superalpha.SELECTIONS.get(
-        body.selection_name
-    )
-    combo = superalpha.COMBOS.get(
-        body.combo_name
-    )
+    selection = superalpha.SELECTIONS.get(body.selection_name)
+    combo = superalpha.COMBOS.get(body.combo_name)
 
     if selection is None:
-        problems.append(
-            f"Unknown selection preset: {body.selection_name}"
-        )
+        problems.append(f"Unknown selection preset: {body.selection_name}")
 
     if combo is None:
-        problems.append(
-            f"Unknown combo preset: {body.combo_name}"
-        )
+        problems.append(f"Unknown combo preset: {body.combo_name}")
 
     result: dict[str, Any] = {}
 
@@ -686,44 +681,25 @@ async def superalpha_preview(
         )
 
         if result["selected_count"] < 2:
-            problems.append(
-                "Fewer than two diversified alpha "
-                "candidates are available."
-            )
+            problems.append("Fewer than two diversified alpha candidates are available.")
 
     return SuperAlphaPreview(
         selection=selection or "",
         combo=combo or "",
-        candidate_count=int(
-            result.get("eligible_count", 0)
-        ),
-        eligible_count=int(
-            result.get("eligible_count", 0)
-        ),
-        pool_count=int(
-            result.get("pool_count", 0)
-        ),
-        family_count=int(
-            result.get("family_count", 0)
-        ),
-        selected_count=int(
-            result.get("selected_count", 0)
-        ),
-        selected_family_count=int(
-            result.get("selected_family_count", 0)
-        ),
+        candidate_count=int(result.get("eligible_count", 0)),
+        eligible_count=int(result.get("eligible_count", 0)),
+        pool_count=int(result.get("pool_count", 0)),
+        family_count=int(result.get("family_count", 0)),
+        selected_count=int(result.get("selected_count", 0)),
+        selected_family_count=int(result.get("selected_family_count", 0)),
         structural_redundancy_removed=int(
             result.get(
                 "structural_redundancy_removed",
                 0,
             )
         ),
-        median_pair_corr=result.get(
-            "median_pair_corr"
-        ),
-        max_pair_corr=result.get(
-            "max_pair_corr"
-        ),
+        median_pair_corr=result.get("median_pair_corr"),
+        max_pair_corr=result.get("max_pair_corr"),
         selected=result.get(
             "selected",
             [],
@@ -772,6 +748,7 @@ async def superalpha_add_task(body: SuperAlphaPreviewRequest, state: State) -> A
 
 
 # --- Region-Agnostic Lab ---------------------------------------------------
+
 
 class RaaRequest(BaseModel):
     """One expression, one RA universe, one simulation per request."""
@@ -860,11 +837,158 @@ async def raa_task(body: RaaRequest, state: State) -> AddedTask:
             cores=body.cores,
         ),
         objective="sharpe",
-    # One expression is one trial; its child count (quota cost) is params.children.
-    simulations=1,
+        # One expression is one trial; its child count (quota cost) is params.children.
+        simulations=1,
         batch_size=(body.cores + 1) * MAX_BATCH,
         template_source=body.expression,
         template_name=f"Region-Agnostic \u00b7 {body.universe}",
         seeds=settings_sampler.seed_trials([request], has_source=False),
     )
     return AddedTask(id=row.id, name=row.name)
+
+
+# -- proven alphas, re-run region-agnostic ------------------------------------------
+
+from pydantic import BaseModel as _Body  # noqa: E402
+from pydantic import Field as _Field  # noqa: E402
+
+from ..schemas import Out as _Out  # noqa: E402
+
+
+class RaFromTask(_Body):
+    study_id: int
+    top: int = _Field(default=30, ge=1, le=200)
+    universe: str = "MEDIUM"
+    cores: int = _Field(default=2, ge=1, le=8)
+    min_score: float | None = None
+    #: Skip implausibly high scores: usually degenerate Alphas.
+    max_score: float | None = None
+    #: Report what would be queued and spend nothing. On unless turned off.
+    dry_run: bool = True
+
+
+class RaFromTaskResult(_Out):
+    source: str
+    considered: int
+    kept: int
+    one_region: int
+    duplicates: int
+    neutralizations: list[str]
+    sample: list[str]
+    task: AddedTask | None
+
+
+@router.post("/region-agnostic/from-task")
+async def raa_from_task(body: RaFromTask, state: State) -> RaFromTaskResult:
+    """Re-run a finished task's best Alphas as region-agnostic simulations.
+
+    An expression that already clears the bar in one region is the likeliest to clear it
+    in a second, which is all an RA submission needs. Each keeps its own neutralization,
+    decay and truncation; it is kept only when its fields reach two or more RA regions.
+    """
+    from sqlalchemy import func, select
+
+    from ..db.models import Study, Trial, TrialState
+
+    if body.universe not in region_agnostic.UNIVERSES:
+        raise refuse(
+            422, "bad_universe", f"RA universe must be one of {region_agnostic.UNIVERSES}."
+        )
+    if body.cores > state.engine.slots:
+        raise refuse(422, "too_many_cores", f"The engine has {state.engine.slots} slots.")
+
+    score = func.json_extract(Trial.values, "$[0]")
+    filters = [
+        Trial.study_id == body.study_id,
+        Trial.state == TrialState.COMPLETE,
+        score.is_not(None),
+    ]
+    if body.min_score is not None:
+        filters.append(score >= body.min_score)
+    if body.max_score is not None:
+        filters.append(score <= body.max_score)
+    async with state.db.session() as session:
+        study = await session.get(Study, body.study_id)
+        if study is None:
+            raise refuse(404, "task_not_found", f"No task {body.study_id}.")
+        rows = (
+            await session.execute(
+                select(Trial.expression, Trial.settings, score)
+                .where(*filters)
+                .order_by(score.desc())
+                .limit(body.top * 3)
+            )
+        ).all()
+    source = getattr(study, "name", None) or f"task {body.study_id}"
+
+    coverage = await state.catalog.region_coverage()
+    requests: list[Any] = []
+    sample: list[str] = []
+    seen: set[str] = set()
+    neutralizations: set[str] = set()
+    one_region = duplicates = 0
+    for expression, settings, _value in rows:
+        if len(requests) >= body.top:
+            break
+        settings = settings or {}
+        if not expression or settings.get("region") == "ALL":
+            continue
+        if expression in seen:
+            duplicates += 1
+            continue
+        seen.add(expression)
+        found = region_agnostic.plan(
+            expression=expression, universe=body.universe, coverage=coverage
+        )
+        if found["problems"]:
+            one_region += 1
+            continue
+        neutralization = str(settings.get("neutralization") or "SUBINDUSTRY")
+        neutralizations.add(neutralization)
+        requests.append(
+            region_agnostic.build_request(
+                expression=expression,
+                universe=body.universe,
+                neutralization=neutralization,
+                decay=int(settings.get("decay") or 0),
+                truncation=float(settings.get("truncation") or 0.08),
+            )
+        )
+        sample.append(expression)
+
+    task = None
+    if requests and not body.dry_run:
+        row = await add_study(
+            state,
+            now=utcnow(),
+            lab="Region-Agnostic Lab",
+            prefix="region-agnostic",
+            sampler=RAA_SAMPLER,
+            params=RaaParams(
+                region="ALL",
+                delay=region_agnostic.DELAY,
+                universe=body.universe,
+                neutralization=", ".join(sorted(neutralizations)),
+                expression=f"{len(requests)} proven Alphas from {source}",
+                children=4,
+                cores=body.cores,
+            ),
+            objective="sharpe",
+            simulations=len(requests),
+            batch_size=(body.cores + 1) * MAX_BATCH,
+            template_source=sample[0],
+            template_name=f"Proven \u2192 RA \u00b7 {body.universe}",
+            seeds=settings_sampler.seed_trials(requests, has_source=False),
+        )
+        task = AddedTask(id=row.id, name=row.name)
+
+    return RaFromTaskResult(
+        source=source,
+        considered=len(rows),
+        kept=len(requests),
+        one_region=one_region,
+        duplicates=duplicates,
+        neutralizations=sorted(neutralizations),
+        sample=sample[:5],
+        task=task,
+    )

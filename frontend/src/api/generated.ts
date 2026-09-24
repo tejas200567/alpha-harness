@@ -1918,6 +1918,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tools/region-agnostic/from-task": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Raa From Task
+         * @description Re-run a finished task's best Alphas as region-agnostic simulations.
+         *
+         *     An expression that already clears the bar in one region is the likeliest to clear it
+         *     in a second, which is all an RA submission needs. Each keeps its own neutralization,
+         *     decay and truncation; it is kept only when its fields reach two or more RA regions.
+         */
+        post: operations["raa_from_task_api_tools_region_agnostic_from_task_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tools/region-agnostic/preview": {
         parameters: {
             query?: never;
@@ -4477,6 +4501,53 @@ export interface components {
             verdict: {
                 [key: string]: unknown;
             } | null;
+        };
+        /** RaFromTask */
+        RaFromTask: {
+            /**
+             * Cores
+             * @default 2
+             */
+            cores: number;
+            /**
+             * Dry Run
+             * @default true
+             */
+            dry_run: boolean;
+            /** Max Score */
+            max_score?: number | null;
+            /** Min Score */
+            min_score?: number | null;
+            /** Study Id */
+            study_id: number;
+            /**
+             * Top
+             * @default 30
+             */
+            top: number;
+            /**
+             * Universe
+             * @default MEDIUM
+             */
+            universe: string;
+        };
+        /** RaFromTaskResult */
+        RaFromTaskResult: {
+            /** Considered */
+            considered: number;
+            /** Duplicates */
+            duplicates: number;
+            /** Kept */
+            kept: number;
+            /** Neutralizations */
+            neutralizations: string[];
+            /** Oneregion */
+            oneRegion: number;
+            /** Sample */
+            sample: string[];
+            /** Source */
+            source: string;
+            task: components["schemas"]["AddedTask"] | null;
         };
         /** RaaPlan */
         RaaPlan: {
@@ -8437,6 +8508,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AddedTask"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    raa_from_task_api_tools_region_agnostic_from_task_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RaFromTask"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RaFromTaskResult"];
                 };
             };
             /** @description Validation Error */
