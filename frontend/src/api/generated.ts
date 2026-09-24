@@ -276,6 +276,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/alphas/{alpha_id}/ra-children": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ra Children
+         * @description A region-agnostic parent's children, and with ``check`` BRAIN's verdict on them.
+         *
+         *     A parent has no PnL, correlations or per-child checks of its own: /check on the parent
+         *     carries every child's checks under is.subregions, and /check on a child answers 400.
+         *     Without ``check`` this reads only the cached alpha body, so it is cheap to ask.
+         */
+        get: operations["ra_children_api_alphas__alpha_id__ra_children_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/cookie": {
         parameters: {
             query?: never;
@@ -4424,6 +4448,36 @@ export interface components {
             /** Stopping */
             stopping: boolean;
         };
+        /** RaChild */
+        RaChild: {
+            /** Alphaid */
+            alphaId: string;
+            /** Failedchecks */
+            failedChecks: string[];
+            /** Pyramids */
+            pyramids: string[];
+            /** Ratio */
+            ratio: number | null;
+            /** Region */
+            region: string | null;
+        };
+        /** RaChildren */
+        RaChildren: {
+            /** Checked */
+            checked: boolean;
+            /** Children */
+            children: string[];
+            /** Details */
+            details: components["schemas"]["RaChild"][];
+            /** Parent */
+            parent: boolean;
+            /** Score */
+            score: number | null;
+            /** Verdict */
+            verdict: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** RaaPlan */
         RaaPlan: {
             /** Children */
@@ -5962,6 +6016,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BrainPayload"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ra_children_api_alphas__alpha_id__ra_children_get: {
+        parameters: {
+            query?: {
+                check?: boolean;
+            };
+            header?: never;
+            path: {
+                alpha_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RaChildren"];
                 };
             };
             /** @description Validation Error */

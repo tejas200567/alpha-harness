@@ -21,6 +21,7 @@ import {
   Skeleton,
 } from '@/ui/kit'
 import { Sheet } from '@/ui/overlay'
+import { RaChildren } from './ra-children'
 import { AlphaActionsMenu, AstInspector, checkFigure, OpenInBrain, RecheckButton } from './shared'
 
 type Kind = 'self' | 'prod'
@@ -110,6 +111,7 @@ function Body({ alphaId }: { alphaId: string }) {
         <KV items={settingsItems(d.settings)} />
       </Section>
 
+      <RaChildren alphaId={d.alphaId} />
       <Section
         title="Submission Checks"
         description="As BRAIN last reported them. Pending checks resolve with Re-check on BRAIN."

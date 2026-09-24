@@ -871,3 +871,82 @@ async def performance(
         refresh=refresh,
         cached_only=cached_only,
     )
+
+
+# -- region-agnostic parents -------------------------------------------------------
+
+
+class RaChild(Out):
+    alpha_id: str
+    #: From the pyramid BRAIN matched it to (USA/D1/PV -> USA); None when none matched.
+    region: str | None
+    #: Worst value / limit over Sharpe, Fitness and 2Y Sharpe; 1.0 or more clears all three.
+    ratio: float | None
+    failed_checks: list[str]
+    pyramids: list[str]
+
+
+class RaChildren(Out):
+    parent: bool
+    children: list[str]
+    #: False until asked: /check is a slow, polled call.
+    checked: bool
+    score: float | None
+    #: BRAIN's MIN_SUBMITTABLE_CHILDREN check on the parent, as sent.
+    verdict: dict[str, Any] | None
+    details: list[RaChild]
+
+
+def _pyramid_region(pyramids: list[str]) -> str | None:
+    for name in pyramids:
+        if isinstance(name, str) and "/" in name:
+            return name.split("/", 1)[0]
+    return None
+
+
+@router.get("/{alpha_id}/ra-children")
+async def ra_children(alpha_id: str, state: State, check: bool = False) -> RaChildren:
+    """A region-agnostic parent's children, and with ``check`` BRAIN's verdict on them.
+
+    A parent has no PnL, correlations or per-child checks of its own: /check on the parent
+    carries every child's checks under is.subregions, and /check on a child answers 400.
+    Without ``check`` this reads only the cached alpha body, so it is cheap to ask.
+    """
+    from ..labs import ra_scoring
+
+    body, _ = await _cached(
+        state, f"alpha:{alpha_id}", lambda: state.endpoints.alpha_body(alpha_id), refresh=False
+    )
+    kids = [c for c in body.get("children") or [] if isinstance(c, str)]
+    parent = bool(kids) and not body.get("parent")
+    if not parent or not check:
+        return RaChildren(
+            parent=parent, children=kids, checked=False, score=None, verdict=None, details=[]
+        )
+    found = await state.endpoints.check_alpha(alpha_id)
+    checks = (found.get("is") or {}).get("checks") or []
+    if checks:
+        await state.alphas.save_checks(alpha_id, checks)
+    summary = ra_scoring.summarise(alpha_id, found)["regionAgnostic"]
+    verdict = next(
+        (c for c in ra_scoring.parent_checks(found) if c.get("name") == ra_scoring.MIN_CHILDREN),
+        None,
+    )
+    details = [
+        RaChild(
+            alpha_id=child_id,
+            region=_pyramid_region(info["pyramids"]),
+            ratio=info["ratio"],
+            failed_checks=info["failedChecks"],
+            pyramids=info["pyramids"],
+        )
+        for child_id, info in summary["children"].items()
+    ]
+    return RaChildren(
+        parent=True,
+        children=kids,
+        checked=True,
+        score=summary["score"],
+        verdict=verdict,
+        details=details,
+    )
