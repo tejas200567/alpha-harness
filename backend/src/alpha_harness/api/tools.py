@@ -860,8 +860,8 @@ async def raa_task(body: RaaRequest, state: State) -> AddedTask:
             cores=body.cores,
         ),
         objective="sharpe",
-        # The scheduler holds slots per child, so the round's cost is the child count.
-        simulations=found["children"],
+    # One expression is one trial; its child count (quota cost) is params.children.
+    simulations=1,
         batch_size=(body.cores + 1) * MAX_BATCH,
         template_source=body.expression,
         template_name=f"Region-Agnostic \u00b7 {body.universe}",

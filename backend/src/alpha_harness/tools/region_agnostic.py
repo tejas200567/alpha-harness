@@ -28,9 +28,9 @@ UNIVERSES = ("SMALL", "MEDIUM", "LARGE")
 
 #: What each RA universe actually means, per region, for the detail card.
 UNIVERSE_MAP: dict[str, dict[str, str]] = {
-    "LARGE":  {"GLB": "MINVOL1M",  "USA": "TOP2500",  "EUR": "MINVOL1M",  "ASI": "TOP3000"},
-    "MEDIUM": {"GLB": "MINVOL10M", "USA": "TOP1200",  "EUR": "MINVOL10M", "ASI": "TOP2000"},
-    "SMALL":  {"GLB": "TOP500",    "USA": "TOP800",   "EUR": "TOPDIV3000", "ASI": "TOP1000"},
+    "LARGE": {"USA": "TOP3000", "EUR": "TOP2500", "ASI": "MINVOL1M", "GLB": "MINVOL1M"},
+    "MEDIUM": {"USA": "TOP2000", "EUR": "TOP1200", "ASI": "MINVOL10M", "GLB": "MINVOL10M"},
+    "SMALL": {"USA": "TOP1000", "EUR": "TOP800", "ASI": "TOP500", "GLB": "TOPDIV3000"},
 }
 
 #: RAA never runs any other delay.

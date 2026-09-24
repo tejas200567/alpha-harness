@@ -24,6 +24,8 @@ from .params import (
     DESC_AWARE_SAMPLER,
     GA_SAMPLER,
     POWER_POOL_SAMPLER,
+    RAA_SAMPLER,
+    SEARCH_SAMPLER,
     SETTINGS_SAMPLER,
     SUPERALPHA_SAMPLER,
     TASK_SAMPLERS,
@@ -245,7 +247,7 @@ async def advance(optimizer: Optimizer, study_id: int) -> int:
 
         return await power_pool.refill(optimizer, row, want, waiting)
     # Both write every simulation up front, so both are drained the same way.
-    if row.sampler in (SETTINGS_SAMPLER, CORRELATION_BREAKER):
+    if row.sampler in (SETTINGS_SAMPLER, CORRELATION_BREAKER, RAA_SAMPLER):
         from ..tools import settings_sampler  # same cycle: it builds on this module
 
         return await settings_sampler.refill(optimizer, row, want, waiting)
@@ -257,6 +259,15 @@ async def advance(optimizer: Optimizer, study_id: int) -> int:
         from ..tools import superalpha
 
         return await superalpha.refill(optimizer, row, want, waiting)
+    if row.sampler not in (TEMPLATE_SAMPLER, SEARCH_SAMPLER):
+        name = TASK_SAMPLERS.get(row.sampler, row.sampler)
+        await finish(
+            optimizer,
+            study_id,
+            StudyStatus.FAILED,
+            f"The scheduler has no runner for {name} tasks.",
+        )
+        return 0
     if want <= 0:
         return 0
 
