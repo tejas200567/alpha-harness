@@ -40,7 +40,7 @@ from ..tools import (
     submission_planner,
     superalpha,
 )
-from ..vault.yields import checks_of, is_promising, is_submittable, verdict
+from ..vault.yields import checks_of, verdict
 from .alphas import page as alpha_page
 from .deps import State, refuse
 from .vault import AlphaSettings
