@@ -48,6 +48,8 @@ VARIABLES: dict[str, tuple[Any, ...]] = {
 LOOKBACK_VARIABLES = frozenset({"LOOKBACK", "FAST_LOOKBACK", "SLOW_LOOKBACK"})
 VARIABLE_NAMES = frozenset({"FIELD", *VARIABLES})
 TAGS = ("A", "B", "C", "D")
+#: Regions a region-agnostic simulation fans out to; it needs two of them.
+RA_REGIONS = ("ASI", "EUR", "GLB", "USA")
 #: Fixed fields a template may read. Each is checked per universe when a task is added.
 DATA_FIELDS = ("close", "open", "high", "low", "vwap", "volume", "adv20", "returns", "cap")
 GROUP_FIELDS = search.GROUPS
@@ -542,6 +544,11 @@ def draw(
     groups = [params[f"GROUP#{tag}"] for name, tag in use.values if name == "GROUP"]
     if len(set(fields)) < len(fields) or len(set(groups)) < len(groups):
         return params, None
+    regions = run.space.get("regions") if run.region == "ALL" else None
+    if regions and len(ra_common(fields, regions)) < 2:
+        # These fields meet in fewer than two regions: BRAIN would charge for a
+        # region-agnostic simulation it then refuses. Pruned, it costs nothing.
+        return params, None
     return params, request_for(params, run)
 
 
@@ -720,3 +727,40 @@ PRESETS: tuple[Preset, ...] = (
         source="AIRS",
     ),
 )
+
+
+# --- region-agnostic --------------------------------------------------------
+
+
+def ra_filter(
+    fields: dict[str, Any], coverage: dict[str, frozenset[str]]
+) -> tuple[dict[str, Any], dict[str, list[str]], int, int]:
+    """Fields a region-agnostic task can run: those in two or more RA regions.
+
+    Returns the kept fields, each kept field's RA regions, how many reach fewer than two,
+    and how many have no per-region data. Unknown fields are left out rather than assumed
+    universal: a region failure is charged, up to four simulations each time.
+    """
+    kept: dict[str, Any] = {}
+    regions: dict[str, list[str]] = {}
+    narrow = unknown = 0
+    for field_id, kind in fields.items():
+        found = coverage.get(field_id)
+        if found is None:
+            unknown += 1
+            continue
+        mine = sorted(set(found) & set(RA_REGIONS))
+        if len(mine) < 2:
+            narrow += 1
+            continue
+        kept[field_id] = kind
+        regions[field_id] = mine
+    return kept, regions, narrow, unknown
+
+
+def ra_common(field_ids: list[str], regions: dict[str, list[str]]) -> list[str]:
+    """The RA regions every one of these fields reaches."""
+    common = set(RA_REGIONS)
+    for field_id in field_ids:
+        common &= set(regions.get(field_id, ()))
+    return sorted(common)

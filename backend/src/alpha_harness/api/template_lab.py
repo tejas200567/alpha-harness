@@ -13,6 +13,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
+from ..brain.schemas import REGION_AGNOSTIC_REGION
 from ..db.models import Template, utcnow
 from ..labs import search, template
 from ..labs.launch import (
@@ -235,6 +236,37 @@ async def delete_template(template_id: int, state: State) -> TemplateRemoved:
     return TemplateRemoved(removed=template_id)
 
 
+
+def _region_agnostic(
+    space: dict[str, Any],
+    body: TemplateTask,
+    coverage: dict[str, frozenset[str]],
+    problems: list[str],
+    warnings: list[str],
+) -> None:
+    """Region ALL: keep fields in two or more RA regions, and pin the chosen universe.
+
+    A field reaching fewer than two regions is refused by BRAIN after it is charged, so it
+    is left out here; each kept field's regions go into the space, so a draw pairing two
+    fields that meet in one region is pruned before it is sent.
+    """
+    kept, regions, narrow, unknown = template.ra_filter(space["fields"], coverage)
+    space["fields"], space["regions"] = kept, regions
+    if narrow or unknown:
+        warnings.append(
+            f"Left out {narrow + unknown} fields region-agnostic can't run: {narrow} reach "
+            f"fewer than two of {', '.join(template.RA_REGIONS)}, {unknown} have no "
+            "per-region data."
+        )
+    if not kept:
+        problems.append("None of these fields reaches two or more region-agnostic regions.")
+    universe = getattr(body, "universe", None)
+    if universe and universe in space["universes"]:
+        space["universes"] = [universe]
+    elif universe:
+        problems.append(f"{universe} is not a synced region-agnostic universe.")
+
+
 async def _plan(body: TemplateTask, state: Any) -> dict[str, Any]:
     """Everything a task would search, checked, without queueing anything."""
     problems: list[str] = []
@@ -265,6 +297,9 @@ async def _plan(body: TemplateTask, state: Any) -> dict[str, Any]:
         "neutralizations": market["neutralizations"],
         "variables": {name: list(values) for name, values in template.VARIABLES.items()},
     }
+    if body.region == REGION_AGNOSTIC_REGION:
+        coverage = await state.catalog.region_coverage()
+        _region_agnostic(space, body, coverage, problems, market["warnings"])
     sample: list[SampleAlpha] = []
     problems = list(dict.fromkeys(problems))
     if not problems and doc is not None:
@@ -279,7 +314,7 @@ async def _plan(body: TemplateTask, state: Any) -> dict[str, Any]:
 
     return {
         "round": body.cores * 10,
-        "fields": field_counts(pool.fields),
+        "fields": field_counts(space["fields"]),
         "leftOut": {"vector": pool.vector_skipped},
         "universes": list(pool.universes),
         "skeleton": template.skeleton(doc) if doc is not None else "?",
