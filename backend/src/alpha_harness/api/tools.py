@@ -853,6 +853,7 @@ from pydantic import BaseModel as _Body  # noqa: E402
 from pydantic import Field as _Field  # noqa: E402
 
 from ..schemas import Out as _Out  # noqa: E402
+from ..labs.search import GROUPS as _GROUP_FIELDS  # noqa: E402
 
 
 class RaFromTask(_Body):
@@ -943,7 +944,10 @@ async def raa_from_task(body: RaFromTask, state: State) -> RaFromTaskResult:
         seen.add(expression)
         if body.distinct_fields:
             key = frozenset(
-                w for w in region_agnostic._identifiers(expression) if w in coverage
+                w
+                for w in region_agnostic._identifiers(expression)
+                # Grouping fields (sector, industry) are not what makes a variant new.
+                if w in coverage and w not in _GROUP_FIELDS
             )
             if key in fields_seen:
                 duplicates += 1
