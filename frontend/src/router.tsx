@@ -107,6 +107,11 @@ const submissionPlanner = createRoute({
     'SubmissionPlannerScreen',
   ),
 })
+const superalpha = createRoute({
+  getParentRoute: () => tools,
+  path: 'superalpha',
+  component: lazyRouteComponent(() => import('@/screens/tools/superalpha'), 'SuperAlphaScreen'),
+})
 
 const correlationBreaker = createRoute({
   getParentRoute: () => tools,
@@ -189,7 +194,13 @@ const routeTree = root.addChildren([
   matrix,
   data,
   labs.addChildren([labsIndex, searchLab, templateLab, evolutionLab, powerPoolLab]),
-  tools.addChildren([toolsIndex, settingsSampler, submissionPlanner, correlationBreaker]),
+  tools.addChildren([
+    toolsIndex,
+    settingsSampler,
+    submissionPlanner,
+    correlationBreaker,
+    superalpha,
+  ]),
   tasks.addChildren([tasksIndex, taskResults]),
   pool.addChildren([poolIndex, poolTab]),
   portfolio,

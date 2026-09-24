@@ -9,6 +9,7 @@ exists. Correlations are slow, rate-limited jobs, so their answers are kept in
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Annotated, Any, Literal
@@ -18,6 +19,7 @@ from pydantic import BaseModel, Field, RootModel
 from sqlalchemy import delete, func, select
 
 from ..brain.errors import BrainError
+from ..brain.filters import AlphaQuery, Filter
 from ..db.models import BrainCache, SimulationRecord, Study, Trial, TrialState, utcnow
 from ..labs.fastexpr import ParseError, data_fields, operator_count, operator_names, parse
 from ..labs.params import TASK_SAMPLERS
@@ -30,7 +32,7 @@ from ..vault.yields import (
     verdict,
     without_quota_checks,
 )
-from .deps import State
+from .deps import State, refuse
 from .portfolio import PortfolioResult
 
 router = APIRouter(prefix="/api/alphas", tags=["alphas"])
@@ -97,6 +99,12 @@ class AlphaInfo(Out):
     power_pool_operators: int | None
     #: Distinct data fields, grouping fields excluded; null when the code is unreadable.
     data_fields: list[str] | None
+    #: A plausibility flag this alpha's own numbers raise (see degenerate_warning());
+    #: null when nothing looks implausible. Never a pass/fail -- for human review.
+    degenerate_warning: str | None
+    #: Current Osmosis allocation for this Alpha, 0-100000. null when BRAIN doesn't
+    #: report one (e.g. never allocated, or not eligible).
+    osmosis_points: int | None
     #: Operators called, once each, for the Power Pool description template.
     operators: list[str] | None
     #: ``vault.yields.verdict`` on its checks: the same rule the Planner and Tasks use.
@@ -235,6 +243,34 @@ def _power_pool_counts(code: Any) -> tuple[int | None, list[str] | None, list[st
     return operator_count(tree), data_fields(tree), operator_names(tree)
 
 
+def degenerate_warning(stats: AlphaStats | None) -> str | None:
+    """A plausibility check the platform's own checks don't run.
+
+    Proven necessary, not theoretical: a real alpha in this vault (JjNnmZEe,
+    ts_scale(vec_avg(fnd14_accel_filer_is_shell_company), 21)) reported Sharpe 31.66,
+    Fitness 229.8, turnover 0.2%, returns 1053% -- a near-static position built on a
+    rare, near-binary field, not a real trading signal. Flags, never blocks: the final
+    judgment is still the platform's checks plus human review.
+    """
+    if stats is None:
+        return None
+    if (
+        stats.turnover is not None
+        and stats.turnover < 0.01
+        and stats.returns is not None
+        and stats.returns > 1.0
+    ):
+        return (
+            f"Turnover {stats.turnover:.1%} with returns {stats.returns:.0%} -- "
+            "likely a near-static position exploiting a rare edge case, not real trading."
+        )
+    if stats.fitness is not None and abs(stats.fitness) > 5.0:
+        return f"Fitness {stats.fitness:.2f} is far outside the normal range (~0.3-4)."
+    if stats.sharpe is not None and abs(stats.sharpe) > 10.0:
+        return f"Sharpe {stats.sharpe:.2f} is implausibly high for a real signal."
+    return None
+
+
 def _info(alpha_id: str, body: dict[str, Any]) -> AlphaInfo:
     code = body.get("regular") or body.get("combo") or body.get("selection") or {}
     sample = body.get("is") or {}
@@ -271,6 +307,8 @@ def _info(alpha_id: str, body: dict[str, Any]) -> AlphaInfo:
         brain_url=f"{PLATFORM_ALPHA_URL}{alpha_id}",
         power_pool_operators=counted,
         data_fields=fields,
+        degenerate_warning=degenerate_warning(_stats(sample)),
+        osmosis_points=body.get("osmosisPoints"),
         operators=operators,
         # The mode matters as much as the checks: a quick-mode alpha is sent the performance
         # checks and none of the submission ones, so the checks alone read as "all clear".
@@ -378,6 +416,193 @@ async def summary(state: State) -> BrainPayload:
     return BrainPayload(await state.endpoints.alphas_summary())
 
 
+class OsmosisUniverseBreakdown(Out):
+    universe: str
+    n_alphas: int
+    points_total: int
+
+
+class OsmosisScopeCoverage(Out):
+    region: str
+    delay: int
+    n_alphas: int
+    points_total: int
+    #: >=10 alphas per Osmosis_allocation_.md's real rule.
+    meets_alpha_minimum: bool
+    #: Exactly 100,000 points, per the same doc ("EXACTLY 100,000 points total").
+    fully_allocated: bool
+    #: Universe is not part of an Osmosis scope (Region x Delay only, per the real
+    #: doc) -- shown for context, since a region/delay pair can span several universes.
+    universes: list[OsmosisUniverseBreakdown]
+
+
+class OsmosisCoverageResult(Out):
+    scopes: list[OsmosisScopeCoverage]
+    #: Scopes with >=10 alphas AND exactly 100,000 points.
+    complete_scopes: int
+    #: Osmosis needs >=3 complete scopes (Osmosis_allocation_.md).
+    meets_minimum_scopes: bool
+    alphas_examined: int
+    #: From /users/self/alphas/summary -- lets a caller tell "examined everything" from
+    #: "examined a sample" without a second request.
+    total_active: int | None
+
+
+@router.get("/osmosis/coverage")
+async def osmosis_coverage(state: State, max_alphas: int = 500) -> OsmosisCoverageResult:
+    """Real per-scope Osmosis coverage: fetched from your actual submitted Alphas, not a
+    hardcoded scope list -- Osmosis_allocation_.md defines a scope as whatever Region x
+    Delay your Genius level allows, which is account-specific, not fixed. Also breaks
+    each scope down by universe for context, even though universe isn't part of the
+    scope definition itself.
+
+    Osmosis eligibility is any submission date (unlike quarterly Signals), so this walks
+    every submitted Alpha up to max_alphas, paginated via the real list_alphas() filter DSL.
+    Default max_alphas=500 comfortably covers a few hundred active Alphas in one call;
+    raise it if /summary reports more than that.
+    """
+    by_scope: dict[tuple[str, int], dict[str, Any]] = {}
+    offset = 0
+    page_size = 100
+    examined = 0
+    while examined < max_alphas:
+        query = AlphaQuery(
+            limit=min(page_size, max_alphas - examined),
+            offset=offset,
+            filters=[Filter(field="status", op="!=", value="UNSUBMITTED")],
+        )
+        page = await state.endpoints.list_alphas(query)
+        results = page.get("results") or []
+        if not results:
+            break
+        for a in results:
+            settings = a.get("settings") or {}
+            region, delay, universe = (
+                settings.get("region"), settings.get("delay"), settings.get("universe")
+            )
+            if region is None or delay is None:
+                continue
+            key = (region, int(delay))
+            bucket = by_scope.setdefault(key, {"n": 0, "points": 0, "universes": {}})
+            points = int(a.get("osmosisPoints") or 0)
+            bucket["n"] += 1
+            bucket["points"] += points
+            uk = universe or "UNKNOWN"
+            ub = bucket["universes"].setdefault(uk, {"n": 0, "points": 0})
+            ub["n"] += 1
+            ub["points"] += points
+        examined += len(results)
+        offset += len(results)
+        if len(results) < page_size or offset >= int(page.get("count") or 0):
+            break
+
+    scopes = [
+        OsmosisScopeCoverage(
+            region=region,
+            delay=delay,
+            n_alphas=v["n"],
+            points_total=v["points"],
+            meets_alpha_minimum=v["n"] >= 10,
+            fully_allocated=v["points"] == 100_000,
+            universes=[
+                OsmosisUniverseBreakdown(universe=u, n_alphas=uv["n"], points_total=uv["points"])
+                for u, uv in sorted(v["universes"].items(), key=lambda kv: -kv[1]["n"])
+            ],
+        )
+        for (region, delay), v in sorted(by_scope.items(), key=lambda kv: -kv[1]["points"])
+    ]
+    complete = sum(1 for s in scopes if s.meets_alpha_minimum and s.fully_allocated)
+    summary = await state.endpoints.alphas_summary()
+    return OsmosisCoverageResult(
+        scopes=scopes,
+        complete_scopes=complete,
+        meets_minimum_scopes=complete >= 3,
+        alphas_examined=examined,
+        total_active=summary.get("active"),
+    )
+
+
+class OsmosisPointsRequest(BaseModel):
+    points: int = Field(ge=0, le=100_000)
+
+
+class OsmosisScopeAlpha(Out):
+    alpha_id: str
+    fitness: float | None
+    sharpe: float | None
+    osmosis_points: int
+
+
+@router.get("/osmosis/scope-alphas")
+async def osmosis_scope_alphas(
+    region: str, delay: int, state: State, max_alphas: int = 200
+) -> list[OsmosisScopeAlpha]:
+    """Every submitted Alpha in one Region/Delay scope, with fitness/sharpe/current
+    osmosisPoints -- the real per-alpha detail osmosis/coverage aggregates away, needed
+    to build any real allocation plan responsibly instead of guessing at it.
+    """
+    out: list[OsmosisScopeAlpha] = []
+    offset = 0
+    page_size = 100
+    while len(out) < max_alphas:
+        query = AlphaQuery(
+            limit=min(page_size, max_alphas - len(out)),
+            offset=offset,
+            filters=[
+                Filter(field="status", op="!=", value="UNSUBMITTED"),
+                Filter(field="settings.region", op="=", value=region),
+                Filter(field="settings.delay", op="=", value=delay),
+            ],
+        )
+        page = await state.endpoints.list_alphas(query)
+        results = page.get("results") or []
+        if not results:
+            break
+        for a in results:
+            isd = a.get("is") or {}
+            out.append(
+                OsmosisScopeAlpha(
+                    alpha_id=str(a.get("id")),
+                    fitness=isd.get("fitness"),
+                    sharpe=isd.get("sharpe"),
+                    osmosis_points=int(a.get("osmosisPoints") or 0),
+                )
+            )
+        offset += len(results)
+        if len(results) < page_size or offset >= int(page.get("count") or 0):
+            break
+    return out
+
+
+@router.patch("/{alpha_id}/osmosis-points")
+async def set_osmosis_points(alpha_id: str, body: OsmosisPointsRequest, state: State) -> AlphaInfo:
+    """Set one Alpha's Osmosis allocation. Reuses update_alpha() exactly -- the same
+    verified PATCH /alphas/{id} mechanism update_properties() already uses for
+    description/tags -- osmosisPoints is just one more field on the same body.
+
+    One Alpha at a time, deliberately: a real write to your account, no bulk-allocation
+    plan/apply here -- build and confirm a scope's full allocation manually, one Alpha at
+    a time, until a reviewed bulk-plan endpoint exists.
+
+    Proven necessary, not theoretical: update_alpha() discards HTTP status entirely and
+    just returns whatever body BRAIN sent, error or success alike. A live run found 5 of
+    12 Alphas in one scope silently rejected -- BRAIN's real message is "Cannot update
+    Osmosis points for non-compensated alpha" -- while this endpoint, ignoring the PATCH
+    response and only re-fetching, reported every one of them as 200 OK. update_properties()
+    next to this function already has the right check (a real success carries an "id"; an
+    error body does not); applied here identically instead of trusting a blind re-fetch.
+    """
+    patched = await state.endpoints.update_alpha(alpha_id, {"osmosisPoints": body.points})
+    if not patched.get("id"):
+        raise refuse(
+            422,
+            "osmosis_points_rejected",
+            f"BRAIN rejected the Osmosis points update for {alpha_id}: "
+            f"{json.dumps(patched)[:300]}",
+        )
+    return _info(alpha_id, patched)
+
+
 @router.get("/{alpha_id}/page")
 async def page(alpha_id: str, state: State, refresh: Refresh = False) -> AlphaView:
     """Everything the Alpha page shows, in one call.
@@ -438,6 +663,105 @@ async def page(alpha_id: str, state: State, refresh: Refresh = False) -> AlphaVi
         lineage=await _lineage(state, alpha_id),
         fetched_at=fetched.isoformat(),
         problems=problems,
+    )
+
+
+class PowerPoolCandidate(Out):
+    alpha_id: str
+    sharpe: float | None
+    operators: int | None
+    fields: int | None
+    turnover_pass: bool | None
+    sub_universe_pass: bool | None
+    robust_universe_pass: bool | None
+    #: None when BRAIN has not computed it yet -- runs only with Check Submission.
+    power_pool_correlation: str | None
+    #: The six criteria this endpoint CAN check automatically. Power Pool correlation
+    #: (< 0.5, or Sharpe 10% above the most correlated Alpha) still needs Check
+    #: Submission run manually -- shown separately above, never folded into this.
+    eligible_on_known_criteria: bool
+    #: A plausibility flag (see degenerate_warning()); null when nothing looks off.
+    #: An alpha with a warning is never eligible_on_known_criteria, whatever its numbers say.
+    degenerate_warning: str | None
+
+
+class TaskPowerPoolResult(Out):
+    candidates: list[PowerPoolCandidate]
+    checked: int
+    skipped: int
+
+
+@router.get("/tasks/{study_id}/power-pool-eligibility")
+async def task_power_pool_eligibility(study_id: int, state: State) -> TaskPowerPoolResult:
+    """Which Alphas from a finished task actually clear Power Pool's real bar.
+
+    Reuses page() directly -- the same AlphaInfo the Alpha detail screen already builds,
+    so power_pool_operators/data_fields/checks are computed exactly once, the same way.
+    """
+    async with state.db.session() as session:
+        alpha_ids = (
+            await session.scalars(
+                select(Trial.alpha_id).where(
+                    Trial.study_id == study_id, Trial.alpha_id.is_not(None)
+                )
+            )
+        ).all()
+
+    candidates: list[PowerPoolCandidate] = []
+    skipped = 0
+    for alpha_id in alpha_ids:
+        try:
+            view = await page(str(alpha_id), state)
+        except Exception:
+            skipped += 1
+            continue
+        info = view.alpha
+        by_name = {str(c.get("name", "")).upper(): c for c in info.checks}
+
+        sharpe = by_name.get("LOW_SHARPE", {}).get("value")
+        ops = info.power_pool_operators
+        fields = len(info.data_fields) if info.data_fields is not None else None
+
+        turnover_pass = all(
+            by_name.get(n, {}).get("result") == "PASS"
+            for n in ("LOW_TURNOVER", "HIGH_TURNOVER")
+            if n in by_name
+        )
+        sub_universe_pass = by_name.get("LOW_SUB_UNIVERSE_SHARPE", {}).get("result") != "FAIL"
+        robust_key = next(
+            (k for k in by_name if k.startswith("LOW_ROBUST_UNIVERSE_SHARPE")), None
+        )
+        robust_pass = by_name.get(robust_key, {}).get("result") != "FAIL" if robust_key else True
+
+        pp_corr_key = next(
+            (k for k in by_name if "POWER_POOL" in k and "CORREL" in k), None
+        )
+        pp_correlation = by_name.get(pp_corr_key, {}).get("result") if pp_corr_key else None
+
+        flagged = degenerate_warning(info.in_sample)
+        eligible = (
+            sharpe is not None and sharpe >= 1.0
+            and ops is not None and ops <= 8
+            and fields is not None and fields <= 3
+            and turnover_pass and sub_universe_pass and robust_pass
+            and flagged is None
+        )
+        candidates.append(
+            PowerPoolCandidate(
+                alpha_id=str(alpha_id),
+                sharpe=sharpe,
+                operators=ops,
+                fields=fields,
+                turnover_pass=turnover_pass,
+                sub_universe_pass=sub_universe_pass,
+                robust_universe_pass=robust_pass,
+                power_pool_correlation=pp_correlation,
+                eligible_on_known_criteria=eligible,
+                degenerate_warning=flagged,
+            )
+        )
+    return TaskPowerPoolResult(
+        candidates=candidates, checked=len(candidates), skipped=skipped
     )
 
 

@@ -41,6 +41,7 @@ export const TOOL_TABS = [
   { tab: 'settings-sampler', label: 'Settings Sampler', to: '/tools/settings-sampler' },
   { tab: 'submission-planner', label: 'Submission Planner', to: '/tools/submission-planner' },
   { tab: 'correlation-breaker', label: 'Correlation Breaker', to: '/tools/correlation-breaker' },
+  { tab: 'superalpha', label: 'SuperAlpha', to: '/tools/superalpha' },
 ] as const
 
 /** `group` heads a run of items in the sidebar; empty sits above every heading. An item's

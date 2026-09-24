@@ -14,6 +14,8 @@ export interface SearchLabRequest {
   vector_operators: string[]
   decay: number
   cores: number
+  neutralizations?: string[]
+  visualization?: boolean
   /** Needed to add a task; a preview ignores it. */
   simulations?: number
 }

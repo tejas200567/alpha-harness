@@ -1,0 +1,34 @@
+{
+  "regions": {
+    "GLB": { "universe": "TOP3000",  "neutralization": "SUBINDUSTRY", "decay": 4 },
+    "USA": { "universe": "TOP3000",  "neutralization": "SUBINDUSTRY", "decay": 4 },
+    "ASI": { "universe": "MINVOL1M", "neutralization": "COUNTRY",     "decay": 8 }
+  },
+  "defaults": {
+    "delay": 1,
+    "truncation": 0.02,
+    "pasteurization": "ON",
+    "nanHandling": "ON",
+    "unitHandling": "VERIFY",
+    "language": "FASTEXPR"
+  },
+  "fields": {
+    "GLB": ["returns","close","open","high","low","vwap","volume","adv20","cap","sharesout"],
+    "USA": ["returns","close","vwap","volume","adv20","cap","assets","liabilities",
+            "sales","operating_income","debt","equity","capex","enterprise_value",
+            "anl4_adjusted_netincome_ft","hedge_fund_ownership_percent"],
+    "ASI": ["returns","close","vwap","volume","adv20","cap","mdl110_score",
+            "mdl110_value","mdl110_quality","mdl110_growth","imb5_score",
+            "oth335_combined_all_region_linear","mdl26_ep_industry_percentile_fy1"]
+  },
+  "templates": [
+    { "name": "neg_returns",        "expr": "group_rank(-{field}, subindustry)" },
+    { "name": "ratio_cap",          "expr": "rank({field} / cap)" },
+    { "name": "group_neutralized",  "expr": "group_neutralize(rank({field}), {group})" },
+    { "name": "ts_zscore_20",       "expr": "ts_zscore({field}, 20)" },
+    { "name": "ts_delta_60",        "expr": "rank(ts_delta({field}, 60))" },
+    { "name": "corr_volume",        "expr": "rank(ts_corr({field}, volume, 20))" },
+    { "name": "winsor_rank",        "expr": "rank(winsorize({field}, std=4))" },
+    { "name": "decay_linear_20",    "expr": "rank(decay_linear({field}, 20))" }
+  ]
+}

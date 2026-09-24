@@ -495,6 +495,23 @@ class Catalog:
             raise RuntimeError("Catalog is not open; call await catalog.open() first")
         return self._conn
 
+    async def region_coverage(self) -> dict[str, frozenset[str]]:
+        """Field id -> the regions it appears in, for the RAA preview's intersection test.
+
+        ``data_field`` already stores one row per ``(instrument, region, delay, universe)``
+        tuple; the set form is what the region-agnostic preview needs. ``region = 'ALL'``
+        is excluded — it is the region-agnostic market itself, not a region the
+        intersection test considers. Fields with no row here are absent, and callers
+        treat absence as universal, so a half-synced catalog still previews.
+        """
+        rows = await self.query(
+            "SELECT DISTINCT field_id, region FROM data_field WHERE region <> 'ALL'"
+        )
+        out: dict[str, set[str]] = {}
+        for row in rows:
+            out.setdefault(row["field_id"], set()).add(row["region"])
+        return {key: frozenset(regions) for key, regions in out.items()}
+
     # -- reads -----------------------------------------------------------
 
     async def query(self, sql: str, params: list[Any] | None = None) -> list[dict[str, Any]]:

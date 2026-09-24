@@ -3,16 +3,20 @@
  * Pyramid Multiplier for every Region · Delay · Dataset Category.
  */
 
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
+import { toast } from 'sonner'
+import { alphas } from '@/api/alphas'
+
 import { catalog } from '@/api/catalog'
 import type { Scope } from '@/api/types'
 import { cn } from '@/lib/cn'
 import { DASH, fmt } from '@/lib/format'
 import { useScope } from '@/lib/scope'
 import { useFieldFilter } from '@/screens/data/state'
-import { Empty, ErrorNotice, Page, PageHeader, Panel, Segmented, Skeleton } from '@/ui/kit'
+import { Button, Empty, ErrorNotice, Page, PageHeader, Panel, Segmented, Skeleton } from '@/ui/kit'
+import { Dialog } from '@/ui/overlay'
 import { RegionAgnosticHero, SyncHero } from './sync-matrix'
 
 const REFRESH_MS = 10 * 60 * 1000
@@ -220,6 +224,64 @@ export function PyramidsScreen() {
     open({ region, delay, universe: market.universe, instrumentType: market.instrumentType })
   }
 
+  const [managing, setManaging] = useState<{ region: string; delay: number } | null>(null)
+  const coverage = useQuery({
+    queryKey: ['osmosis', 'coverage'],
+    queryFn: () => alphas.osmosisCoverage(),
+  })
+  const queryClient = useQueryClient()
+  const scopeAlphas = useQuery({
+    queryKey: ['osmosis', 'scope-alphas', managing?.region, managing?.delay],
+    queryFn: () => alphas.osmosisScopeAlphas(managing?.region ?? '', managing?.delay ?? 0),
+    enabled: managing !== null,
+  })
+  const plan = useMemo(() => {
+    const rows = scopeAlphas.data ?? []
+    if (rows.length === 0) return []
+    const each = Math.floor(100_000 / rows.length)
+    const remainder = 100_000 - each * rows.length
+    const bestId = rows.reduce((best, r) =>
+      (r.fitness ?? -Infinity) > (best.fitness ?? -Infinity) ? r : best,
+    ).alphaId
+    return rows.map((r) => ({
+      ...r,
+      targetPoints: r.alphaId === bestId ? each + remainder : each,
+    }))
+  }, [scopeAlphas.data])
+  const apply = useMutation({
+    mutationFn: async () => {
+      const results: { alphaId: string; ok: boolean; message: string }[] = []
+      for (const row of plan) {
+        try {
+          const updated = await alphas.setOsmosisPoints(row.alphaId, row.targetPoints)
+          results.push({
+            alphaId: row.alphaId,
+            ok: updated.osmosisPoints === row.targetPoints,
+            message: `${updated.osmosisPoints} points`,
+          })
+        } catch (error) {
+          results.push({
+            alphaId: row.alphaId,
+            ok: false,
+            message: error instanceof Error ? error.message : 'failed',
+          })
+        }
+      }
+      return results
+    },
+    onSuccess: (results) => {
+      const failed = results.filter((r) => !r.ok)
+      void queryClient.invalidateQueries({ queryKey: ['osmosis'] })
+      if (failed.length === 0) {
+        toast.success(`Allocated ${results.length}/${results.length} Alphas`)
+      } else {
+        toast.error(
+          `${results.length - failed.length}/${results.length} allocated -- ${failed.length} rejected by BRAIN`,
+        )
+      }
+    },
+  })
+
   return (
     <Page>
       <PageHeader title="Sync with BRAIN" description="Download Data Fields" />
@@ -360,6 +422,113 @@ export function PyramidsScreen() {
         )}
         {data && data.categories.length > 0 && <Legend view={view} needed={needed} />}
       </Panel>
+      <Panel title="Osmosis Allocation">
+        {coverage.isError ? (
+          <ErrorNotice error={coverage.error} title="Could not load Osmosis coverage" />
+        ) : !coverage.data ? (
+          <Skeleton className="h-40" />
+        ) : coverage.data.scopes.length === 0 ? (
+          <Empty title="No submitted Alphas found">
+            Osmosis needs at least one submitted Alpha per scope.
+          </Empty>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <div className="text-body-compact text-ink-subtle">
+              {coverage.data.completeScopes} of {coverage.data.scopes.length} scopes fully allocated
+              &middot; needs &ge;3 complete &middot;{' '}
+              {coverage.data.meetsMinimumScopes ? 'minimum met' : 'minimum not yet met'} &middot;{' '}
+              {coverage.data.alphasExamined} Alphas examined
+              {coverage.data.totalActive != null && ` of ${coverage.data.totalActive} active`}
+            </div>
+            <table className="w-full text-body-compact">
+              <thead>
+                <tr className="text-left text-ink-subtle">
+                  <th className="pr-4">Scope</th>
+                  <th className="pr-4">Alphas</th>
+                  <th className="pr-4">Points</th>
+                  <th className="pr-4">Status</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {coverage.data.scopes.map((s) => (
+                  <tr key={`${s.region}-${s.delay}`} className="border-t border-hairline-strong">
+                    <td className="pr-4">
+                      {s.region} D{s.delay}
+                    </td>
+                    <td className="pr-4">
+                      {s.nAlphas} {s.meetsAlphaMinimum ? '' : '(needs ≥10)'}
+                    </td>
+                    <td className="pr-4">{fmt.int(s.pointsTotal)}/100,000</td>
+                    <td className="pr-4">
+                      {s.fullyAllocated && s.meetsAlphaMinimum ? 'Complete' : 'Incomplete'}
+                    </td>
+                    <td>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setManaging({ region: s.region, delay: s.delay })}
+                      >
+                        Manage
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+      <Dialog
+        open={managing !== null}
+        onOpenChange={(open) => !open && setManaging(null)}
+        title={managing ? `${managing.region} D${managing.delay} Osmosis Allocation` : ''}
+      >
+        {scopeAlphas.isPending ? (
+          <Skeleton className="h-40" />
+        ) : scopeAlphas.isError ? (
+          <ErrorNotice error={scopeAlphas.error} title="Could not load scope Alphas" />
+        ) : plan.length === 0 ? (
+          <Empty title="No Alphas in this scope">Nothing to allocate.</Empty>
+        ) : (
+          <div className="flex flex-col gap-2 p-4 text-body-compact">
+            <div className="text-ink-subtle">
+              {plan.length} Alphas &middot; equal split, remainder to the highest-fitness Alpha
+              &middot; a rejected Alpha (e.g. inactive) is reported, not silently skipped
+            </div>
+            <Button size="sm" onClick={() => apply.mutate()} disabled={apply.isPending}>
+              {apply.isPending ? 'Allocating...' : `Allocate ${plan.length} Alphas`}
+            </Button>
+            <table className="w-full">
+              <thead>
+                <tr className="text-left text-ink-subtle">
+                  <th className="pr-4">Alpha</th>
+                  <th className="pr-4">Fitness</th>
+                  <th className="pr-4">Current</th>
+                  <th className="pr-4">Target</th>
+                  <th>Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                {plan.map((row) => {
+                  const result = apply.data?.find((r) => r.alphaId === row.alphaId)
+                  return (
+                    <tr key={row.alphaId} className="border-t border-hairline-strong">
+                      <td className="pr-4 font-mono">{row.alphaId}</td>
+                      <td className="pr-4">{row.fitness ?? DASH}</td>
+                      <td className="pr-4">{row.osmosisPoints}</td>
+                      <td className="pr-4">{row.targetPoints}</td>
+                      <td className={result && !result.ok ? 'text-negative' : ''}>
+                        {result ? result.message : DASH}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Dialog>
     </Page>
   )
 }

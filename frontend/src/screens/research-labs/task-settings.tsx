@@ -6,6 +6,7 @@ import { isRegionAgnostic, regionLabel, useScopeOptions } from '@/lib/scope'
 import { NeutralizationPicker } from '@/screens/research-labs/neutralization'
 import {
   Button,
+  Checkbox,
   Chips,
   Disclosure,
   Empty,
@@ -194,6 +195,13 @@ export function SettingsPanel({
               />
             </Fieldset>
           )}
+          <Fieldset legend="Visualization">
+            <Checkbox
+              label="Enabled"
+              checked={draft.visualization}
+              onChange={(checked) => set({ visualization: checked })}
+            />
+          </Fieldset>
         </div>
         {neutralizations.length > 0 && (
           <NeutralizationPicker

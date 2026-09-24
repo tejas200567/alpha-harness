@@ -1,3 +1,5 @@
+import { useNavigate } from '@tanstack/react-router'
+import { errorMessage } from '@/api/http'
 /**
  * Template Lab: open a template, change it with blocks, choose datasets and settings, then
  * add its search to Tasks. The lab tries each choice and variable value the template
@@ -28,8 +30,14 @@ import {
 } from '@/screens/research-labs/lab-task'
 import { DatasetsPanel, SettingsPanel } from '@/screens/research-labs/task-settings'
 import {
+  descriptionAwareSweep,
+  descriptionAwareSweepTask,
+  fieldIntelligence,
+  highImpactBatch,
+  provenPatternBatch,
   type TemplateLabRequest,
   type TemplateSummary,
+  taskPowerPoolEligibility,
   templateLab,
 } from '@/screens/research-labs/template/api'
 import type { Blocks, TemplateDoc } from '@/screens/research-labs/template/tree'
@@ -73,6 +81,7 @@ export function TemplateLabScreen() {
   const [naming, setNaming] = useState<'save-as' | 'rename' | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [opening, setOpening] = useState<Openable | null>(null)
+  const [raaOpen, setRaaOpen] = useState(false)
 
   const options = useQuery({
     queryKey: ['template-lab', 'options'],
@@ -251,6 +260,13 @@ export function TemplateLabScreen() {
               <PlusIcon />
               Add Task
             </Button>
+            <Button
+              variant="secondary"
+              disabled={doc.root === null}
+              onClick={() => setRaaOpen(true)}
+            >
+              RAA Batch
+            </Button>
           </>
         }
       />
@@ -303,6 +319,13 @@ export function TemplateLabScreen() {
           </div>
         )}
       </Panel>
+
+      <DescriptionAwarePanel
+        region={draft.region}
+        delay={draft.delay}
+        universe={draft.universe}
+        datasetIds={draft.datasetIds}
+      />
 
       <Builder
         doc={doc}
@@ -371,7 +394,127 @@ export function TemplateLabScreen() {
       >
         Tasks already added keep their own copy.
       </Confirm>
+      <RaaBatchDialog
+        open={raaOpen}
+        onOpenChange={setRaaOpen}
+        tree={doc}
+        templateName={taskName}
+        vectorOperators={vectorOperators}
+        decay={draft.decay}
+        neutralizations={draft.neutralizations}
+        cores={draft.cores}
+        visualization={draft.visualization}
+        datasetIds={draft.datasetIds}
+        maxSimulations={maxSimulations}
+      />
     </Page>
+  )
+}
+
+function RaaBatchDialog({
+  open,
+  onOpenChange,
+  tree,
+  templateName,
+  vectorOperators,
+  decay,
+  neutralizations,
+  cores,
+  visualization,
+  datasetIds,
+  maxSimulations,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  tree: TemplateDoc
+  templateName: string
+  vectorOperators: string[]
+  decay: number
+  neutralizations: string[]
+  cores: number
+  visualization: boolean
+  datasetIds: string[]
+  maxSimulations: number
+}) {
+  const [universe, setUniverse] = useState<'LARGE' | 'MEDIUM' | 'SMALL'>('LARGE')
+  const [simulations, setSimulations] = useState(500)
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  const run = useMutation({
+    mutationFn: () =>
+      templateLab.addTask({
+        tree,
+        template_name: templateName,
+        region: 'ALL',
+        delay: 1,
+        universe,
+        dataset_ids: datasetIds,
+        vector_operators: vectorOperators,
+        neutralizations,
+        decay,
+        cores,
+        visualization,
+        simulations,
+      }),
+    onSuccess: () => {
+      onOpenChange(false)
+      void queryClient.invalidateQueries({ queryKey: ['lab-tasks'] })
+      toast.success('RAA Batch Added', {
+        action: { label: 'Open Tasks', onClick: () => void navigate({ to: '/tasks' }) },
+      })
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  })
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Run Region-Agnostic Batch"
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button variant="primary" loading={run.isPending} onClick={() => run.mutate()}>
+            Run RAA Batch
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <Field label="RA Universe">
+          <div className="flex gap-2">
+            {(['LARGE', 'MEDIUM', 'SMALL'] as const).map((u) => (
+              <Button
+                key={u}
+                size="sm"
+                variant={universe === u ? 'primary' : 'secondary'}
+                onClick={() => setUniverse(u)}
+              >
+                {u}
+              </Button>
+            ))}
+          </div>
+        </Field>
+        <Field label="Simulations">
+          <Input
+            type="number"
+            min={1}
+            max={maxSimulations}
+            value={simulations}
+            onChange={(e) =>
+              setSimulations(Math.max(1, Math.min(maxSimulations, Number(e.target.value) || 1)))
+            }
+          />
+        </Field>
+        <p className="text-body-compact text-ink-subtle">
+          Region is fixed to ALL and delay to D1, per BRAIN's RAA rules. Runs the currently open
+          template against the {universe} region-agnostic universe.
+        </p>
+      </div>
+    </Dialog>
   )
 }
 
@@ -505,5 +648,398 @@ function NameDialog({
         {error ? <ErrorNotice error={error} title="Could not save the template" /> : null}
       </form>
     </Dialog>
+  )
+}
+
+function DescriptionAwarePanel({
+  region,
+  delay,
+  universe,
+  datasetIds,
+}: {
+  region: string
+  delay: number
+  universe: string
+  datasetIds: string[]
+}) {
+  const [search, setSearch] = useState('')
+  const sweep = useMutation({
+    mutationFn: () =>
+      descriptionAwareSweep({
+        region,
+        delay,
+        universe,
+        ...(search ? { search } : {}),
+        ...(datasetIds.length ? { dataset_ids: datasetIds } : {}),
+        limit: 50,
+      }),
+    onError: (error) => toast.error(errorMessage(error)),
+  })
+  const result = sweep.data
+  const [inspecting, setInspecting] = useState<string | null>(null)
+  const evidence = useQuery({
+    queryKey: ['field-intelligence', inspecting],
+    queryFn: () => fieldIntelligence(inspecting as string),
+    enabled: inspecting !== null,
+  })
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [lastTaskId, setLastTaskId] = useState<number | null>(null)
+  const [showEligibility, setShowEligibility] = useState(false)
+  const highImpact = useMutation({
+    mutationFn: () => highImpactBatch(region, delay, universe),
+    onError: (error) => toast.error(errorMessage(error)),
+  })
+  const provenPattern = useMutation({
+    mutationFn: () => provenPatternBatch(region, delay, universe),
+    onError: (error) => toast.error(errorMessage(error)),
+  })
+  const addTask = useMutation({
+    mutationFn: () => {
+      if (provenPattern.data?.candidates.length) {
+        return descriptionAwareSweepTask(region, delay, universe, {
+          candidates: provenPattern.data.candidates.map((c) => ({
+            field_id: c.matchedFieldId,
+            expression: c.newExpression,
+          })),
+        })
+      }
+      return descriptionAwareSweepTask(region, delay, universe, {
+        candidates: (highImpact.data?.candidates ?? result?.candidates ?? []).map((c) => ({
+          field_id: c.fieldId,
+          expression: c.expression,
+        })),
+      })
+    },
+    onSuccess: (data) => {
+      setLastTaskId(data.id)
+      void queryClient.invalidateQueries({ queryKey: ['lab-tasks'] })
+      toast.success('Task Added', {
+        action: {
+          label: 'Open Tasks',
+          onClick: () => void navigate({ to: '/tasks' }),
+        },
+      })
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  })
+  const eligibility = useQuery({
+    queryKey: ['power-pool-eligibility', lastTaskId],
+    queryFn: () => taskPowerPoolEligibility(lastTaskId as number),
+    enabled: showEligibility && lastTaskId !== null,
+  })
+
+  return (
+    <Panel
+      title="Description-Aware Sweep"
+      actions={
+        <div className="flex gap-2">
+          <Button size="sm" onClick={() => sweep.mutate()} disabled={sweep.isPending}>
+            Run Sweep
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => highImpact.mutate()}
+            disabled={highImpact.isPending}
+          >
+            Run High-Impact Batch
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => provenPattern.mutate()}
+            disabled={provenPattern.isPending}
+          >
+            Run Proven-Pattern Batch
+          </Button>
+        </div>
+      }
+    >
+      <Field label="Search fields">
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="e.g. eps, revenue, sentiment"
+        />
+      </Field>
+      {sweep.isError ? (
+        <ErrorNotice error={sweep.error} title="Sweep failed" />
+      ) : sweep.isPending ? (
+        <Skeleton className="h-40" />
+      ) : !result ? (
+        <Empty title="No results yet">Run a sweep to see classified candidates.</Empty>
+      ) : result.candidates.length === 0 ? (
+        <Empty title="No candidates">
+          {result.excludedMetadataCount} metadata fields excluded, {result.totalFields} total fields
+          matched.
+        </Empty>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <div className="text-sm text-muted-foreground">
+            {result.candidates.length} candidates &middot; {result.excludedMetadataCount} metadata
+            fields excluded &middot; {result.totalFields} total fields matched
+          </div>
+          <Button size="sm" onClick={() => addTask.mutate()} disabled={addTask.isPending}>
+            Add All as Task
+          </Button>
+          {lastTaskId !== null && (
+            <Button size="sm" variant="ghost" onClick={() => setShowEligibility(true)}>
+              Check Power Pool Eligibility
+            </Button>
+          )}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left">
+                  <th className="pr-4">Field</th>
+                  <th className="pr-4">Description</th>
+                  <th className="pr-4">Classification</th>
+                  <th className="pr-4">Template</th>
+                  <th className="pr-4">Expression</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {result.candidates.map((c) => (
+                  <tr key={c.fieldId} className="border-t">
+                    <td className="pr-4 font-mono">{c.fieldId}</td>
+                    <td className="pr-4">{c.description}</td>
+                    <td className="pr-4">{c.classification}</td>
+                    <td className="pr-4">{c.templateUsed}</td>
+                    <td className="pr-4 font-mono">{c.expression}</td>
+                    <td>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(c.expression)
+                          toast.success('Copied')
+                        }}
+                      >
+                        Copy
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setInspecting(c.fieldId)}>
+                        Evidence
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {highImpact.isError ? (
+        <ErrorNotice error={highImpact.error} title="High-impact batch failed" />
+      ) : highImpact.isPending ? (
+        <Skeleton className="h-40" />
+      ) : !highImpact.data ? null : highImpact.data.candidates.length === 0 ? (
+        <Empty title="No high-impact candidates">
+          No category currently has a positive opportunity score for this market.
+        </Empty>
+      ) : (
+        <div className="flex flex-col gap-2 border-t pt-4">
+          <div className="text-sm font-medium">High-Impact Batch</div>
+          <div className="text-sm text-muted-foreground">
+            {highImpact.data.candidates.length} candidates from{' '}
+            {highImpact.data.categoriesUsed.length} opportunity categories &middot;{' '}
+            {highImpact.data.poolSize} unsubmitted Alphas in this market
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+            {highImpact.data.categoriesUsed.map((c) => (
+              <span key={c.categoryId} className="rounded border px-2 py-1">
+                {c.categoryName} &middot; opportunity {c.opportunity.toFixed(4)}
+                {c.pyramidMultiplier != null && ` ×${c.pyramidMultiplier}`}
+                {c.pyramidLit === false && ' · unlit'}
+              </span>
+            ))}
+          </div>
+          <Button size="sm" onClick={() => addTask.mutate()} disabled={addTask.isPending}>
+            Add All as Task
+          </Button>
+          {lastTaskId !== null && (
+            <Button size="sm" variant="ghost" onClick={() => setShowEligibility(true)}>
+              Check Power Pool Eligibility
+            </Button>
+          )}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left">
+                  <th className="pr-4">Field</th>
+                  <th className="pr-4">Category</th>
+                  <th className="pr-4">Classification</th>
+                  <th className="pr-4">Template</th>
+                  <th className="pr-4">Expression</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {highImpact.data.candidates.map((c) => (
+                  <tr key={c.fieldId} className="border-t">
+                    <td className="pr-4 font-mono">{c.fieldId}</td>
+                    <td className="pr-4">{c.categoryName}</td>
+                    <td className="pr-4">{c.classification}</td>
+                    <td className="pr-4">{c.templateUsed}</td>
+                    <td className="pr-4 font-mono">{c.expression}</td>
+                    <td>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(c.expression)
+                          toast.success('Copied')
+                        }}
+                      >
+                        Copy
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {provenPattern.isError ? (
+        <ErrorNotice error={provenPattern.error} title="Proven-pattern batch failed" />
+      ) : provenPattern.isPending ? (
+        <Skeleton className="h-40" />
+      ) : !provenPattern.data ? null : provenPattern.data.candidates.length === 0 ? (
+        <Empty title="No proven-pattern candidates">
+          No unused field matched a high-fitness Alpha's field closely enough.
+        </Empty>
+      ) : (
+        <div className="flex flex-col gap-2 border-t pt-4">
+          <div className="text-sm font-medium">Proven-Pattern Batch</div>
+          <div className="text-sm text-muted-foreground">
+            {provenPattern.data.candidates.length} candidates from{' '}
+            {provenPattern.data.provenAlphasExamined} proven Alphas &middot;{' '}
+            {provenPattern.data.poolSize} unsubmitted Alphas in this market
+          </div>
+          <Button size="sm" onClick={() => addTask.mutate()} disabled={addTask.isPending}>
+            Add All as Task
+          </Button>
+          {lastTaskId !== null && (
+            <Button size="sm" variant="ghost" onClick={() => setShowEligibility(true)}>
+              Check Power Pool Eligibility
+            </Button>
+          )}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left">
+                  <th className="pr-4">Proven Alpha</th>
+                  <th className="pr-4">Fitness</th>
+                  <th className="pr-4">Matched Field</th>
+                  <th className="pr-4">Description</th>
+                  <th className="pr-4">Similarity</th>
+                  <th className="pr-4">Expression</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {provenPattern.data.candidates.map((c, i) => (
+                  <tr key={`${c.provenAlphaId}-${c.matchedFieldId}-${i}`} className="border-t">
+                    <td className="pr-4 font-mono">{c.provenAlphaId}</td>
+                    <td className="pr-4">{c.provenFitness?.toFixed(2)}</td>
+                    <td className="pr-4 font-mono">{c.matchedFieldId}</td>
+                    <td className="pr-4">{c.matchedFieldDescription}</td>
+                    <td className="pr-4">{(c.similarity * 100).toFixed(0)}%</td>
+                    <td className="pr-4 font-mono">{c.newExpression}</td>
+                    <td>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(c.newExpression)
+                          toast.success('Copied')
+                        }}
+                      >
+                        Copy
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <Dialog
+        open={inspecting !== null}
+        onOpenChange={(open) => !open && setInspecting(null)}
+        title={inspecting ?? ''}
+      >
+        {evidence.isPending ? (
+          <Skeleton className="h-24" />
+        ) : evidence.isError ? (
+          <ErrorNotice error={evidence.error} title="Could not load evidence" />
+        ) : !evidence.data || evidence.data.performance.length === 0 ? (
+          <Empty title="No evidence yet">No community graph data for this field.</Empty>
+        ) : (
+          <div className="flex flex-col gap-3 p-4 text-sm">
+            <div>
+              <div className="font-medium">Performance by scope</div>
+              {evidence.data.performance.map((p) => (
+                <div key={p.scope} className="flex justify-between">
+                  <span>{p.scope}</span>
+                  <span>
+                    sharpe {p.meanSharpe?.toFixed(2) ?? '-'} &middot; fitness{' '}
+                    {p.meanFitness?.toFixed(2) ?? '-'} &middot; n={p.n}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {evidence.data.neutralizationWorks.length > 0 && (
+              <div>
+                <div className="font-medium">Neutralizations that work</div>
+                {evidence.data.neutralizationWorks.map((w) => (
+                  <div key={w.neutralization} className="flex justify-between">
+                    <span>{w.neutralization}</span>
+                    <span>n={w.n}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </Dialog>
+      <Dialog
+        open={showEligibility}
+        onOpenChange={setShowEligibility}
+        title="Power Pool Eligibility"
+      >
+        {eligibility.isPending ? (
+          <Skeleton className="h-24" />
+        ) : eligibility.isError ? (
+          <ErrorNotice error={eligibility.error} title="Could not check eligibility" />
+        ) : !eligibility.data || eligibility.data.candidates.length === 0 ? (
+          <Empty title="No results yet">Nothing to check.</Empty>
+        ) : (
+          <div className="flex flex-col gap-2 p-4 text-sm">
+            <div className="text-muted-foreground">
+              {eligibility.data.checked} checked, {eligibility.data.skipped} skipped
+            </div>
+            {eligibility.data.candidates.map((c) => (
+              <div key={c.alphaId} className="flex flex-col gap-1 border-t pt-2">
+                <div className="flex justify-between font-mono">
+                  <span>{c.alphaId}</span>
+                  <span className={c.eligibleOnKnownCriteria ? 'text-green-500' : 'text-red-500'}>
+                    {c.eligibleOnKnownCriteria ? 'Eligible' : 'Not eligible'}
+                  </span>
+                </div>
+                <div className="text-muted-foreground">
+                  sharpe {c.sharpe?.toFixed(2) ?? '-'} &middot; ops {c.operators ?? '-'} &middot;
+                  fields {c.fields ?? '-'} &middot; pp-correlation{' '}
+                  {c.powerPoolCorrelation ?? 'pending'}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Dialog>
+    </Panel>
   )
 }

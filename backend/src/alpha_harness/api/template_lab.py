@@ -321,6 +321,7 @@ async def add_task(body: TemplateTask, state: State) -> AddedTask:
             cores=body.cores,
             dataset_ids=body.dataset_ids,
             n_startup_trials=startup_trials(len(plan["space"]["fields"]), size, per_round),
+            visualization=body.visualization,
         ),
         simulations=size,
         batch_size=per_round,

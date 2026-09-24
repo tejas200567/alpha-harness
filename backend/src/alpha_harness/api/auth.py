@@ -81,6 +81,28 @@ async def _answer(state: State, info: SessionInfo) -> Session:
     return Session.model_validate(info.to_dict())
 
 
+class CookieLoginRequest(BaseModel):
+    """Restore a session from a cookie pasted out of an already-signed-in browser."""
+
+    cookie: str = Field(min_length=1, max_length=4096)
+    email: str | None = Field(default=None, description="Label only, not used for auth")
+
+
+@router.post("/cookie")
+async def login_cookie(payload: CookieLoginRequest, state: State) -> Session:
+    """Sign in using a pasted BRAIN session cookie instead of email+password."""
+    info = await state.auth.login_with_cookie(payload.cookie)
+
+    if info.authenticated:
+        state.engine.configure_from_permissions(info.permissions)
+        try:
+            await state.metadata.refresh_metadata()
+        except Exception:
+            log.warning("auth.metadata_refresh_failed", exc_info=True)
+    await state.hub.broadcast(TOPIC_SESSION, info.to_dict())
+    return Session.model_validate(info.to_dict())
+
+
 @router.post("/login")
 async def login(payload: LoginRequest, state: State) -> Session:
     """Sign in to BRAIN.

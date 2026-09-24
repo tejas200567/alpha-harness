@@ -41,3 +41,79 @@ export const templateLab = {
   addTask: (body: TemplateLabRequest & { simulations: number }) =>
     http.post<Schemas['AddedTask']>(`${B}/tasks`, body),
 }
+
+/** Catalog-scoped, not Template Lab's own -- classifies fields by their real description
+ * and routes each to the best-matching existing template. Free; queues nothing. */
+export interface DescAwareSweepRequest {
+  region: string
+  delay: number
+  universe: string
+  search?: string
+  dataset_ids?: string[]
+  limit?: number
+}
+
+export const descriptionAwareSweep = (req: DescAwareSweepRequest) => {
+  const { region, delay, universe, ...body } = req
+  return http.post<Schemas['DescAwareSweepResult']>(
+    `/api/catalog/description-aware-sweep${qs({ region, delay, universe })}`,
+    body,
+  )
+}
+
+export type FieldIntelligence = Schemas['FieldIntelligence']
+
+export const fieldIntelligence = (fieldId: string) =>
+  http.get<FieldIntelligence>(`/api/catalog/fields/${fieldId}/intelligence`)
+
+export interface DescAwareTaskCandidate {
+  field_id: string
+  expression: string
+}
+
+export interface DescAwareTaskRequest {
+  candidates: DescAwareTaskCandidate[]
+  cores?: number
+}
+
+export const descriptionAwareSweepTask = (
+  region: string,
+  delay: number,
+  universe: string,
+  body: DescAwareTaskRequest,
+) =>
+  http.post<{ id: number; name: string }>(
+    `/api/catalog/description-aware-sweep/task${qs({ region, delay, universe })}`,
+    body,
+  )
+
+export type TaskPowerPoolResult = Schemas['TaskPowerPoolResult']
+
+export const taskPowerPoolEligibility = (studyId: number) =>
+  http.get<TaskPowerPoolResult>(`/api/alphas/tasks/${studyId}/power-pool-eligibility`)
+
+export type HighImpactBatchResult = Schemas['HighImpactBatchResult']
+
+export const highImpactBatch = (
+  region: string,
+  delay: number,
+  universe: string,
+  topN = 6,
+  perCategoryLimit = 20,
+) =>
+  http.get<HighImpactBatchResult>(
+    `/api/catalog/high-impact-batch${qs({ region, delay, universe, topN, perCategoryLimit })}`,
+  )
+
+export type ProvenPatternBatchResult = Schemas['ProvenPatternBatchResult']
+
+export const provenPatternBatch = (
+  region: string,
+  delay: number,
+  universe: string,
+  topN = 10,
+  minFitness = 1.5,
+) =>
+  http.get<ProvenPatternBatchResult>(
+    `/api/catalog/proven-pattern-batch${qs({ region, delay, universe, topN, minFitness })}`,
+  )

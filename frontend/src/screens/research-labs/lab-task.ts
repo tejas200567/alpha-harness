@@ -23,6 +23,7 @@ export interface LabDraft {
   vectorOperators: string[] | null
   /** Empty leaves the lab on its own four group neutralizations. */
   neutralizations: string[]
+  visualization: boolean
 }
 
 export const LAB_DEFAULTS: LabDraft = {
@@ -35,6 +36,7 @@ export const LAB_DEFAULTS: LabDraft = {
   decay: 0,
   vectorOperators: null,
   neutralizations: [],
+  visualization: false,
 }
 
 export const MAX_SIMULATIONS = 100_000
@@ -143,6 +145,7 @@ export function labBody(draft: LabDraft, vectorOperators: string[]) {
     neutralizations: draft.neutralizations,
     decay: draft.decay,
     cores: draft.cores,
+    visualization: draft.visualization,
   }
 }
 

@@ -2,8 +2,15 @@
  *  screens read as one pattern. */
 
 import { Link } from '@tanstack/react-router'
-import { ListChecksIcon, type LucideIcon, SlidersHorizontalIcon, UnlinkIcon } from 'lucide-react'
+import {
+  CombineIcon,
+  ListChecksIcon,
+  type LucideIcon,
+  SlidersHorizontalIcon,
+  UnlinkIcon,
+} from 'lucide-react'
 import { HUB_CARD, HubCardBody } from '@/screens/research-labs'
+
 import { TOOL_TABS } from '@/shell/nav'
 import { Page, PageHeader } from '@/ui/kit'
 
@@ -11,6 +18,7 @@ const ICONS: Record<(typeof TOOL_TABS)[number]['tab'], LucideIcon> = {
   'settings-sampler': SlidersHorizontalIcon,
   'submission-planner': ListChecksIcon,
   'correlation-breaker': UnlinkIcon,
+  superalpha: CombineIcon,
 }
 
 /** What each one is for, since a name alone does not say when to reach for it. */
@@ -18,6 +26,7 @@ const ABOUT: Record<(typeof TOOL_TABS)[number]['tab'], string> = {
   'settings-sampler': 'Sweep one Alpha across Simulation Settings to find where it works best.',
   'submission-planner': 'Pick which Alphas to submit, and in what order.',
   'correlation-breaker': 'Re-shape an Alpha that is already in the Production Pool.',
+  superalpha: 'Combine several of your own Alphas into one through BRAIN\u2019s SUPER type.',
 }
 
 /** Each tool's own search params. Both take one and default it to nothing, and a `Link`
@@ -26,6 +35,7 @@ const SEARCH = {
   'settings-sampler': { alpha: undefined },
   'submission-planner': { task: undefined },
   'correlation-breaker': { alpha: undefined },
+  superalpha: {},
 } as const
 
 export function ToolsScreen() {
