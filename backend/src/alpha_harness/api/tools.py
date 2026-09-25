@@ -864,6 +864,11 @@ class RaFromTask(_Body):
     #: One expression per field set, the best-scoring: variants of one field succeed
     #: or fail together, so each costs RA quota for little new information.
     distinct_fields: bool = True
+    #: Only this exact expression, e.g. one near-miss to tune; may come from an RA task.
+    expression: str | None = None
+    #: Re-run each expression under each of these instead of its own settings.
+    neutralization_sweep: list[str] = _Field(default_factory=list)
+    decay_sweep: list[int] = _Field(default_factory=list)
     #: Report what would be queued and spend nothing. On unless turned off.
     dry_run: bool = True
 
@@ -904,6 +909,8 @@ async def raa_from_task(body: RaFromTask, state: State) -> RaFromTaskResult:
         Trial.state == TrialState.COMPLETE,
         score.is_not(None),
     ]
+    if body.expression is not None:
+        filters.append(Trial.expression == body.expression)
     if body.min_score is not None:
         filters.append(score >= body.min_score)
     if body.max_score is not None:
@@ -933,7 +940,9 @@ async def raa_from_task(body: RaFromTask, state: State) -> RaFromTaskResult:
         if len(requests) >= body.top:
             break
         settings = settings or {}
-        if not expression or settings.get("region") == "ALL":
+        if not expression:
+            continue
+        if body.expression is None and settings.get("region") == "ALL":
             continue
         if expression in seen:
             duplicates += 1
@@ -956,17 +965,20 @@ async def raa_from_task(body: RaFromTask, state: State) -> RaFromTaskResult:
         if found["problems"]:
             one_region += 1
             continue
-        neutralization = str(settings.get("neutralization") or "SUBINDUSTRY")
-        neutralizations.add(neutralization)
-        requests.append(
-            region_agnostic.build_request(
-                expression=expression,
-                universe=body.universe,
-                neutralization=neutralization,
-                decay=int(settings.get("decay") or 0),
-                truncation=float(settings.get("truncation") or 0.08),
-            )
-        )
+        own_neutralization = str(settings.get("neutralization") or "SUBINDUSTRY")
+        own_decay = int(settings.get("decay") or 0)
+        for neutralization in body.neutralization_sweep or [own_neutralization]:
+            for decay in body.decay_sweep or [own_decay]:
+                neutralizations.add(neutralization)
+                requests.append(
+                    region_agnostic.build_request(
+                        expression=expression,
+                        universe=body.universe,
+                        neutralization=neutralization,
+                        decay=decay,
+                        truncation=float(settings.get("truncation") or 0.08),
+                    )
+                )
         sample.append(expression)
 
     task = None

@@ -4509,6 +4509,8 @@ export interface components {
              * @default 2
              */
             cores: number;
+            /** Decay Sweep */
+            decay_sweep?: number[];
             /**
              * Distinct Fields
              * @default true
@@ -4519,10 +4521,14 @@ export interface components {
              * @default true
              */
             dry_run: boolean;
+            /** Expression */
+            expression?: string | null;
             /** Max Score */
             max_score?: number | null;
             /** Min Score */
             min_score?: number | null;
+            /** Neutralization Sweep */
+            neutralization_sweep?: string[];
             /** Study Id */
             study_id: number;
             /**
